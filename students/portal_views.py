@@ -26,7 +26,10 @@ from classes.models import LiveClass
 from .portal_serializers import (
     StudentCourseSerializer,
     StudentLiveClassSerializer,
+    StudentLearningMaterialSerializer,
 )
+from materials.models import LearningMaterial
+
 
 class StudentMyCoursesView(APIView):
     permission_classes = [
@@ -265,6 +268,208 @@ class StudentCourseLiveClassListView(APIView):
 
         return success_response(
             message="Course live classes retrieved successfully",
+            data=serializer.data,
+        )
+        
+        
+        
+class StudentCourseMaterialListView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request, course_uuid):
+        student = request.user.student_profile
+        now = timezone.now()
+
+        course = get_object_or_404(
+            Course,
+            uuid=course_uuid,
+            firm=request.user.firm,
+            is_active=True,
+        )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message=(
+                    "You do not have access "
+                    "to this course."
+                ),
+                errors={},
+                status_code=(
+                    status.HTTP_403_FORBIDDEN
+                ),
+            )
+
+        materials = (
+            LearningMaterial.objects
+            .filter(
+                firm=request.user.firm,
+                course=course,
+                is_active=True,
+            )
+            .filter(
+                Q(available_from__isnull=True)
+                | Q(available_from__lte=now)
+            )
+            .filter(
+                Q(available_until__isnull=True)
+                | Q(available_until__gte=now)
+            )
+            .select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "live_class",
+            )
+            .order_by(
+                "sequence",
+                "created_at",
+            )
+        )
+
+        material_type = (
+            request.query_params.get(
+                "material_type"
+            )
+        )
+
+        if material_type:
+            valid_types = [
+                LearningMaterial.MaterialType.VIDEO,
+                LearningMaterial.MaterialType.PDF,
+                LearningMaterial.MaterialType.DOCUMENT,
+                LearningMaterial.MaterialType.LINK,
+            ]
+
+            if material_type not in valid_types:
+                return error_response(
+                    message="Invalid material type.",
+                    errors={
+                        "material_type": [
+                            (
+                                "Use VIDEO, PDF, "
+                                "DOCUMENT, or LINK."
+                            )
+                        ]
+                    },
+                    status_code=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+            materials = materials.filter(
+                material_type=material_type
+            )
+
+        serializer = (
+            StudentLearningMaterialSerializer(
+                materials,
+                many=True,
+                context={
+                    "request": request
+                },
+            )
+        )
+
+        return success_response(
+            message=(
+                "Course materials "
+                "retrieved successfully"
+            ),
+            data=serializer.data,
+        )
+        
+        
+        
+class StudentMaterialDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(
+        self,
+        request,
+        material_uuid,
+    ):
+        student = request.user.student_profile
+        now = timezone.now()
+
+        material = (
+            LearningMaterial.objects
+            .filter(
+                uuid=material_uuid,
+                firm=request.user.firm,
+                is_active=True,
+            )
+            .filter(
+                Q(available_from__isnull=True)
+                | Q(available_from__lte=now)
+            )
+            .filter(
+                Q(available_until__isnull=True)
+                | Q(available_until__gte=now)
+            )
+            .select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "live_class",
+            )
+            .first()
+        )
+
+        if not material:
+            return error_response(
+                message=(
+                    "Material not found "
+                    "or unavailable."
+                ),
+                errors={},
+                status_code=(
+                    status.HTTP_404_NOT_FOUND
+                ),
+            )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=material.course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message=(
+                    "You do not have access "
+                    "to this material."
+                ),
+                errors={},
+                status_code=(
+                    status.HTTP_403_FORBIDDEN
+                ),
+            )
+
+        serializer = (
+            StudentLearningMaterialSerializer(
+                material,
+                context={
+                    "request": request
+                },
+            )
+        )
+
+        return success_response(
+            message=(
+                "Material retrieved successfully"
+            ),
             data=serializer.data,
         )
         

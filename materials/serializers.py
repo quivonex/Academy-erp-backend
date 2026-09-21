@@ -96,6 +96,7 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "uuid",
             "file_key",
+            "is_active",
             "created_at",
             "updated_at",
         )
@@ -103,26 +104,26 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         start = attrs.get("available_from")
         end = attrs.get("available_until")
-    
+
         if start and end and end <= start:
             raise serializers.ValidationError({
                 "available_until": [
                     "Availability end must be after availability start."
                 ]
             })
-    
+
         material_type = attrs.get(
             "material_type"
         )
-    
+
         uploaded_file = attrs.get(
             "file"
         )
-    
+
         external_url = attrs.get(
             "external_url"
         )
-    
+
         if material_type == LearningMaterial.MaterialType.LINK:
             if not external_url:
                 raise serializers.ValidationError({
@@ -130,12 +131,12 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
                         "External URL is required for LINK material."
                     ]
                 })
-    
+
         elif not uploaded_file:
             raise serializers.ValidationError({
                 "file": [
                     "Please upload a file."
                 ]
             })
-    
+
         return attrs
