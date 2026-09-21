@@ -5,6 +5,8 @@ from rest_framework.exceptions import ValidationError
 from courses.models import Course
 from students.models import Student
 import uuid
+from firms.models import Firm
+
 
 def generate_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -44,35 +46,48 @@ def create_firm_admin(firm, validated_data):
     
 @transaction.atomic
 def register_student(validated_data):
-    course_uuid = validated_data.pop("course_uuid")
-    validated_data.pop("confirm_password")
-    admission_number = (
-    f"WEB-{uuid.uuid4().hex[:10].upper()}"
-)
-    password = validated_data.pop("password")
+    validated_data.pop(
+        "confirm_password",
+        None,
+    )
 
-    try:
-        course = Course.objects.select_related(
-            "firm"
-        ).get(
-            uuid=course_uuid,
-            is_active=True,
-            is_published=True,
-            is_purchasable_online=True,
-            firm__is_active=True,
-        )
+    password = validated_data.pop(
+        "password"
+    )
 
-    except Course.DoesNotExist:
+    firms = Firm.objects.filter(
+        is_active=True
+    )
+
+    if not firms.exists():
         raise ValidationError({
-            "course_uuid": [
-                "Course is not available for online registration."
+            "firm": [
+                "No active academy is configured."
             ]
         })
 
+    if firms.count() > 1:
+        raise ValidationError({
+            "firm": [
+                "Multiple active academies are configured. "
+                "Please contact the administrator."
+            ]
+        })
+
+    firm = firms.first()
+
     email = validated_data["email"]
     first_name = validated_data["first_name"]
-    last_name = validated_data.get("last_name", "")
-    phone = validated_data.get("phone", "")
+
+    last_name = validated_data.get(
+        "last_name",
+        "",
+    )
+
+    phone = validated_data.get(
+        "phone",
+        "",
+    )
 
     if User.objects.filter(
         email__iexact=email
@@ -83,19 +98,23 @@ def register_student(validated_data):
             ]
         })
 
+    admission_number = (
+        f"WEB-{uuid.uuid4().hex[:10].upper()}"
+    )
+
     user = User.objects.create_user(
         email=email,
         password=password,
         first_name=first_name,
         last_name=last_name,
         phone=phone,
-        firm=course.firm,
+        firm=firm,
         user_type=User.UserType.STUDENT,
         is_active=True,
     )
 
     student = Student.objects.create(
-        firm=course.firm,
+        firm=firm,
         user=user,
         admission_number=admission_number,
         first_name=first_name,
@@ -104,6 +123,6 @@ def register_student(validated_data):
         phone=phone,
         is_active=True,
     )
-    return user, student, course
 
+    return user, student
 

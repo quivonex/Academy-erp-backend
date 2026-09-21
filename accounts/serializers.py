@@ -139,9 +139,10 @@ class FirmAdminCreateSerializer(serializers.ModelSerializer):
     
         
 class StudentRegisterSerializer(serializers.Serializer):
-    course_uuid = serializers.UUIDField()
+    first_name = serializers.CharField(
+        max_length=100
+    )
 
-    first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(
         max_length=100,
         required=False,
@@ -149,6 +150,7 @@ class StudentRegisterSerializer(serializers.Serializer):
     )
 
     email = serializers.EmailField()
+
     phone = serializers.CharField(
         max_length=20,
         required=False,
@@ -158,14 +160,18 @@ class StudentRegisterSerializer(serializers.Serializer):
     password = serializers.CharField(
         write_only=True,
         min_length=8,
+        trim_whitespace=False,
     )
 
     confirm_password = serializers.CharField(
         write_only=True,
         min_length=8,
+        trim_whitespace=False,
     )
 
     def validate_email(self, value):
+        value = value.strip().lower()
+
         if User.objects.filter(
             email__iexact=value
         ).exists():
@@ -173,7 +179,7 @@ class StudentRegisterSerializer(serializers.Serializer):
                 "A user with this email already exists."
             )
 
-        return value.lower()
+        return value
 
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:

@@ -6,6 +6,7 @@ from .views import (
     LoginView,
     LogoutView,
     MeView,
+    StudentRegisterView,
 
 )
 
@@ -16,6 +17,6 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout",),
     path("me/", MeView.as_view(), name="me",),
     
-    
+    path("student/register/", StudentRegisterView.as_view(), name="student-register",),
     
 ]

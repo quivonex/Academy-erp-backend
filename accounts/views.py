@@ -1,7 +1,8 @@
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from common.responses import (
@@ -14,10 +15,14 @@ from .serializers import (
     LogoutSerializer,
     UserSerializer,
     FirmAdminCreateSerializer,
+    StudentRegisterSerializer,
 
 )
 
-from .services import generate_tokens_for_user
+from .services import (
+    generate_tokens_for_user,
+    register_student,
+)
 from accounts.services import (create_firm_admin,)
 
 class LoginView(APIView):
@@ -89,5 +94,43 @@ class MeView(APIView):
         
         
         
+class StudentRegisterView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = StudentRegisterSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Registration failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user, student = register_student(
+                serializer.validated_data
+            )
+
+        except ValidationError as exc:
+            return error_response(
+                message="Registration failed",
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(
+            message="Student account created successfully",
+            data={
+                "user": UserSerializer(user).data,
+                "student_uuid": str(student.uuid),
+                "admission_number": student.admission_number,
+            },
+            status_code=status.HTTP_201_CREATED,
+        )        
         
+
         
