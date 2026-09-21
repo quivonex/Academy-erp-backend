@@ -37,6 +37,7 @@ ALLOWED_HOSTS = ["*"]
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 
+DEFAULT_FIRM_CODE = env("DEFAULT_FIRM_CODE", default="",)
 # DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
 # ALLOWED_HOSTS = env.list(
@@ -68,6 +69,7 @@ INSTALLED_APPS = [
     "teachers",
     "courses",
     "classes",
+    "materials",
     
     
 ]

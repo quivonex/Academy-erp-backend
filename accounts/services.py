@@ -2,10 +2,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import transaction
 from .models import User
 from rest_framework.exceptions import ValidationError
-from courses.models import Course
 from students.models import Student
 import uuid
 from firms.models import Firm
+from django.conf import settings
 
 
 def generate_tokens_for_user(user):
@@ -55,26 +55,28 @@ def register_student(validated_data):
         "password"
     )
 
-    firms = Firm.objects.filter(
-        is_active=True
-    )
+    firm_code = settings.DEFAULT_FIRM_CODE
 
-    if not firms.exists():
+    if not firm_code:
         raise ValidationError({
             "firm": [
-                "No active academy is configured."
+                "Default academy is not configured."
             ]
         })
 
-    if firms.count() > 1:
+    try:
+        firm = Firm.objects.get(
+            code=firm_code,
+            is_active=True,
+            status=Firm.Status.ACTIVE,
+        )
+
+    except Firm.DoesNotExist:
         raise ValidationError({
             "firm": [
-                "Multiple active academies are configured. "
-                "Please contact the administrator."
+                "Configured academy was not found or is inactive."
             ]
         })
-
-    firm = firms.first()
 
     email = validated_data["email"]
     first_name = validated_data["first_name"]
@@ -125,4 +127,6 @@ def register_student(validated_data):
     )
 
     return user, student
+
+
 

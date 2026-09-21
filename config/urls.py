@@ -62,6 +62,7 @@ urlpatterns = [
     
     path("api/v1/public/courses/", include(public_course_urlpatterns),),
 
+    path("api/v1/materials/", include("materials.urls"),),
 ]
 
 
