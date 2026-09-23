@@ -2,7 +2,9 @@ from rest_framework import serializers
 
 from .models import (
     Assignment,
+    AssignmentAnswer,
     AssignmentQuestion,
+    AssignmentSubmission,
 )
 
 
@@ -164,14 +166,11 @@ class AssignmentQuestionSerializer(
                     errors
                 )
 
-            attrs["correct_option"] = (
-                correct_option
-            )
+            attrs["correct_option"] = correct_option
 
         return attrs
-        
-        
-        
+
+
 class AssignmentPDFImportSerializer(
     serializers.Serializer
 ):
@@ -215,9 +214,8 @@ class AssignmentPDFImportSerializer(
             )
 
         return value
-    
-    
-    
+
+
 class StudentAssignmentQuestionSerializer(
     serializers.ModelSerializer
 ):
@@ -238,8 +236,8 @@ class StudentAssignmentQuestionSerializer(
         )
 
         read_only_fields = fields
-        
-        
+
+
 class StudentAssignmentAnswerSerializer(
     serializers.Serializer
 ):
@@ -261,16 +259,17 @@ class StudentAssignmentSubmitSerializer(
     serializers.Serializer
 ):
     answers = StudentAssignmentAnswerSerializer(
-        many=True
+        many=True,
     )
-    
-    
-    
+
+
 class StudentAssignmentResultSerializer(
     serializers.Serializer
 ):
     total_questions = serializers.IntegerField()
+
     correct_answers = serializers.IntegerField()
+
     wrong_answers = serializers.IntegerField()
 
     marks_obtained = serializers.DecimalField(
@@ -289,5 +288,193 @@ class StudentAssignmentResultSerializer(
     )
 
     status = serializers.CharField()
-    
+
+
+# =========================================================
+# ADMIN / TEACHER - SUBMISSION REVIEW
+# =========================================================
+
+
+class AssignmentSubmissionListSerializer(
+    serializers.ModelSerializer
+):
+    student_uuid = serializers.UUIDField(
+        source="student.uuid",
+        read_only=True,
+    )
+
+    student_name = serializers.CharField(
+        source="student.full_name",
+        read_only=True,
+    )
+
+    admission_number = serializers.CharField(
+        source="student.admission_number",
+        read_only=True,
+    )
+
+    class Meta:
+        model = AssignmentSubmission
+
+        fields = (
+            "uuid",
+            "student_uuid",
+            "student_name",
+            "admission_number",
+            "status",
+            "total_marks_obtained",
+            "submitted_at",
+            "graded_at",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+
+
+class AssignmentAnswerReviewSerializer(
+    serializers.ModelSerializer
+):
+    question_uuid = serializers.UUIDField(
+        source="question.uuid",
+        read_only=True,
+    )
+
+    question_text = serializers.CharField(
+        source="question.question_text",
+        read_only=True,
+    )
+
+    answer_type = serializers.CharField(
+        source="question.answer_type",
+        read_only=True,
+    )
+
+    max_marks = serializers.DecimalField(
+        source="question.marks",
+        max_digits=8,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    class Meta:
+        model = AssignmentAnswer
+
+        fields = (
+            "uuid",
+            "question_uuid",
+            "question_text",
+            "answer_type",
+            "max_marks",
+            "text_answer",
+            "file_key",
+            "selected_option",
+            "marks_obtained",
+            "feedback",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+
+
+class AssignmentSubmissionReviewSerializer(
+    serializers.ModelSerializer
+):
+    assignment_uuid = serializers.UUIDField(
+        source="assignment.uuid",
+        read_only=True,
+    )
+
+    assignment_title = serializers.CharField(
+        source="assignment.title",
+        read_only=True,
+    )
+
+    assignment_max_marks = serializers.DecimalField(
+        source="assignment.max_marks",
+        max_digits=8,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    student_uuid = serializers.UUIDField(
+        source="student.uuid",
+        read_only=True,
+    )
+
+    student_name = serializers.CharField(
+        source="student.full_name",
+        read_only=True,
+    )
+
+    admission_number = serializers.CharField(
+        source="student.admission_number",
+        read_only=True,
+    )
+
+    graded_by_name = serializers.CharField(
+        source="graded_by.full_name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    answers = AssignmentAnswerReviewSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = AssignmentSubmission
+
+        fields = (
+            "uuid",
+            "assignment_uuid",
+            "assignment_title",
+            "assignment_max_marks",
+            "student_uuid",
+            "student_name",
+            "admission_number",
+            "status",
+            "total_marks_obtained",
+            "feedback",
+            "submitted_at",
+            "graded_at",
+            "graded_by_name",
+            "answers",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+
+
+class AssignmentAnswerGradeInputSerializer(
+    serializers.Serializer
+):
+    answer_uuid = serializers.UUIDField()
+
+    marks_obtained = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=0,
+    )
+
+    feedback = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+
+class AssignmentSubmissionGradeSerializer(
+    serializers.Serializer
+):
+    feedback = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    answers = AssignmentAnswerGradeInputSerializer(
+        many=True,
+    )    
     

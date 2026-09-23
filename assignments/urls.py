@@ -1,26 +1,66 @@
 from django.urls import path
 
+from .grading_views import (
+    AssignmentSubmissionDetailView,
+    AssignmentSubmissionGradeView,
+    AssignmentSubmissionListView,
+)
 from .views import (
-    AssignmentListCreateView,
     AssignmentDetailView,
-    AssignmentQuestionListCreateView,
+    AssignmentListCreateView,
     AssignmentPDFImportView,
-    StudentCourseAssignmentListView,
+    AssignmentQuestionListCreateView,
     StudentAssignmentDetailView,
-    StudentAssignmentSubmitView,
     StudentAssignmentResultView,
+    StudentAssignmentSubmitView,
+    StudentCourseAssignmentListView,
 )
 
 
 urlpatterns = [
-    path("", AssignmentListCreateView.as_view(), name="assignment-list-create",),
+    path(
+        "",
+        AssignmentListCreateView.as_view(),
+        name="assignment-list-create",
+    ),
 
-    path("<uuid:assignment_uuid>/", AssignmentDetailView.as_view(), name="assignment-detail",),
+    path(
+        "import-pdf/",
+        AssignmentPDFImportView.as_view(),
+        name="assignment-import-pdf",
+    ),
 
-    path("<uuid:assignment_uuid>/questions/", AssignmentQuestionListCreateView.as_view(), name="assignment-questions",),
+    path(
+        "<uuid:assignment_uuid>/questions/",
+        AssignmentQuestionListCreateView.as_view(),
+        name="assignment-questions",
+    ),
 
-    path("import-pdf/", AssignmentPDFImportView.as_view(), name="assignment-import-pdf",),
+    path(
+        "<uuid:assignment_uuid>/submissions/",
+        AssignmentSubmissionListView.as_view(),
+        name="assignment-submissions",
+    ),
+
+    path(
+        "submissions/<uuid:submission_uuid>/",
+        AssignmentSubmissionDetailView.as_view(),
+        name="assignment-submission-detail",
+    ),
+
+    path(
+        "submissions/<uuid:submission_uuid>/grade/",
+        AssignmentSubmissionGradeView.as_view(),
+        name="assignment-submission-grade",
+    ),
+
+    path(
+        "<uuid:assignment_uuid>/",
+        AssignmentDetailView.as_view(),
+        name="assignment-detail",
+    ),
 ]
+
 
 student_assignment_urlpatterns = [
     path(

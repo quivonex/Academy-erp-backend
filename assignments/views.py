@@ -1233,5 +1233,8 @@ class StudentAssignmentResultView(APIView):
                 "graded_at": (
                     submission.graded_at
                 ),
+                "feedback": (
+                    submission.feedback
+                ),
             },
         )
