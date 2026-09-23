@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "classes",
     "materials",
     "progress",
+    "assignments",
     
     
     
