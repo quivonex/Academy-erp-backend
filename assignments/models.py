@@ -153,6 +153,7 @@ class AssignmentQuestion(models.Model):
     class AnswerType(models.TextChoices):
         TEXT = "TEXT", "Text"
         FILE = "FILE", "File"
+        MCQ = "MCQ", "MCQ"
 
     uuid = models.UUIDField(
         default=uuid.uuid4,
@@ -187,6 +188,27 @@ class AssignmentQuestion(models.Model):
     
     sequence = models.PositiveIntegerField(
         default=1,
+    )
+    
+    option_a = models.TextField(
+    blank=True,
+    )
+
+    option_b = models.TextField(
+        blank=True,
+    )
+
+    option_c = models.TextField(
+        blank=True,
+    )
+
+    option_d = models.TextField(
+        blank=True,
+    )
+
+    correct_option = models.CharField(
+        max_length=1,
+        blank=True,
     )
 
     is_required = models.BooleanField(
@@ -333,6 +355,11 @@ class AssignmentAnswer(models.Model):
     file_key = models.CharField(
         max_length=1000,
         blank=True,
+    )
+    
+    selected_option = models.CharField(
+    max_length=1,
+    blank=True,
     )
 
     marks_obtained = models.DecimalField(

@@ -364,9 +364,14 @@ def import_assignment_from_pdf(
             ]
         })
 
-    parsed_questions = parse_question_answers(
+    parsed_questions = parse_mcq_questions(
         extracted_text
     )
+    
+    if not parsed_questions:
+        parsed_questions = parse_question_answers(
+            extracted_text
+        )
 
     if not parsed_questions:
         raise ValidationError({
@@ -417,14 +422,36 @@ def import_assignment_from_pdf(
                 question_text=item[
                     "question_text"
                 ],
-                answer_text=item[
-                    "answer_text"
-                ],
-                answer_type=(
-                    AssignmentQuestion
-                    .AnswerType.TEXT
+                answer_text=item.get(
+                    "answer_text",
+                    "",
+                ),
+                answer_type=item.get(
+                    "answer_type",
+                    AssignmentQuestion.AnswerType.TEXT,
+                ),
+                option_a=item.get(
+                    "option_a",
+                    "",
+                ),
+                option_b=item.get(
+                    "option_b",
+                    "",
+                ),
+                option_c=item.get(
+                    "option_c",
+                    "",
+                ),
+                option_d=item.get(
+                    "option_d",
+                    "",
+                ),
+                correct_option=item.get(
+                    "correct_option",
+                    "",
                 ),
                 sequence=index,
+                marks=1,
             )
         )
 
@@ -446,3 +473,128 @@ def create_assignment_question(
         **validated_data,
     )
     
+def parse_mcq_questions(text):
+    if not text:
+        return []
+
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
+
+    question_pattern = re.compile(
+        r"""
+        (?:
+            ^|\n
+        )
+        \s*
+        (?:
+            Q(?:uestion)?\s*
+        )?
+        (\d+)
+        [\.\)\:\-]
+        \s*
+        (.*?)
+        (?=
+            \n\s*
+            (?:
+                Q(?:uestion)?\s*
+            )?
+            \d+
+            [\.\)\:\-]
+            |
+            \Z
+        )
+        """,
+        re.IGNORECASE
+        | re.MULTILINE
+        | re.DOTALL
+        | re.VERBOSE,
+    )
+
+    questions = []
+
+    for match in question_pattern.finditer(text):
+        block = match.group(2).strip()
+
+        option_a = re.search(
+            r"(?:^|\n)\s*A[\.\)]\s*(.+)",
+            block,
+            re.IGNORECASE,
+        )
+
+        option_b = re.search(
+            r"(?:^|\n)\s*B[\.\)]\s*(.+)",
+            block,
+            re.IGNORECASE,
+        )
+
+        option_c = re.search(
+            r"(?:^|\n)\s*C[\.\)]\s*(.+)",
+            block,
+            re.IGNORECASE,
+        )
+
+        option_d = re.search(
+            r"(?:^|\n)\s*D[\.\)]\s*(.+)",
+            block,
+            re.IGNORECASE,
+        )
+
+        if not all([
+            option_a,
+            option_b,
+            option_c,
+            option_d,
+        ]):
+            continue
+
+        first_option_start = min(
+            option_a.start(),
+            option_b.start(),
+            option_c.start(),
+            option_d.start(),
+        )
+
+        question_text = block[
+            :first_option_start
+        ].strip()
+
+        answer_match = re.search(
+            r"""
+            (?:
+                Answer
+                |
+                Ans
+                |
+                Correct\s*Answer
+            )
+            \s*[:\.\-]?\s*
+            ([ABCD])
+            """,
+            block,
+            re.IGNORECASE | re.VERBOSE,
+        )
+
+        correct_option = ""
+
+        if answer_match:
+            correct_option = (
+                answer_match.group(1).upper()
+            )
+
+        questions.append({
+            "question_text": question_text,
+            "answer_type": (
+                AssignmentQuestion
+                .AnswerType.MCQ
+            ),
+            "option_a": option_a.group(1).strip(),
+            "option_b": option_b.group(1).strip(),
+            "option_c": option_c.group(1).strip(),
+            "option_d": option_d.group(1).strip(),
+            "correct_option": correct_option,
+            "answer_text": "",
+        })
+
+    return questions
+
+

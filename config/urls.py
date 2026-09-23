@@ -30,6 +30,9 @@ from courses.urls import (
     public_course_urlpatterns,
     
 )
+from assignments.urls import (
+    student_assignment_urlpatterns,
+)
 
 from teachers.urls import staff_urlpatterns
 
@@ -67,6 +70,8 @@ urlpatterns = [
     path("api/v1/student/", include("progress.urls"),),
     
     path("api/v1/assignments/", include("assignments.urls"),),
+    
+    path("api/v1/student/", include(student_assignment_urlpatterns),),
 
 ]
 

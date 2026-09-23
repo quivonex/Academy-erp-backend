@@ -104,6 +104,11 @@ class AssignmentQuestionSerializer(
             "answer_type",
             "marks",
             "answer_text",
+            "option_a",
+            "option_b",
+            "option_c",
+            "option_d",
+            "correct_option",
             "sequence",
             "is_required",
             "created_at",
@@ -112,7 +117,58 @@ class AssignmentQuestionSerializer(
         read_only_fields = (
             "uuid",
             "created_at",
-        )        
+        )
+
+    def validate(self, attrs):
+        answer_type = attrs.get(
+            "answer_type",
+            AssignmentQuestion.AnswerType.TEXT,
+        )
+
+        if (
+            answer_type
+            == AssignmentQuestion.AnswerType.MCQ
+        ):
+            required_options = [
+                "option_a",
+                "option_b",
+                "option_c",
+                "option_d",
+            ]
+
+            errors = {}
+
+            for field in required_options:
+                if not attrs.get(field):
+                    errors[field] = [
+                        "This option is required for MCQ."
+                    ]
+
+            correct_option = attrs.get(
+                "correct_option",
+                "",
+            ).upper()
+
+            if correct_option not in [
+                "A",
+                "B",
+                "C",
+                "D",
+            ]:
+                errors["correct_option"] = [
+                    "Use A, B, C, or D."
+                ]
+
+            if errors:
+                raise serializers.ValidationError(
+                    errors
+                )
+
+            attrs["correct_option"] = (
+                correct_option
+            )
+
+        return attrs
         
         
         
@@ -160,5 +216,78 @@ class AssignmentPDFImportSerializer(
 
         return value
     
+    
+    
+class StudentAssignmentQuestionSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = AssignmentQuestion
+
+        fields = (
+            "uuid",
+            "question_text",
+            "answer_type",
+            "marks",
+            "option_a",
+            "option_b",
+            "option_c",
+            "option_d",
+            "sequence",
+            "is_required",
+        )
+
+        read_only_fields = fields
+        
+        
+class StudentAssignmentAnswerSerializer(
+    serializers.Serializer
+):
+    question_uuid = serializers.UUIDField()
+
+    text_answer = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    selected_option = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=1,
+    )
+
+
+class StudentAssignmentSubmitSerializer(
+    serializers.Serializer
+):
+    answers = StudentAssignmentAnswerSerializer(
+        many=True
+    )
+    
+    
+    
+class StudentAssignmentResultSerializer(
+    serializers.Serializer
+):
+    total_questions = serializers.IntegerField()
+    correct_answers = serializers.IntegerField()
+    wrong_answers = serializers.IntegerField()
+
+    marks_obtained = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+    )
+
+    max_marks = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+    )
+
+    percentage = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+    )
+
+    status = serializers.CharField()
     
     
