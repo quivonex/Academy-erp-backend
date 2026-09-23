@@ -63,6 +63,8 @@ urlpatterns = [
     path("api/v1/public/courses/", include(public_course_urlpatterns),),
 
     path("api/v1/materials/", include("materials.urls"),),
+    
+    path("api/v1/student/", include("progress.urls"),),
 ]
 
 from django.conf import settings
