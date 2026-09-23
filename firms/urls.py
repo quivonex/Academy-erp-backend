@@ -8,6 +8,8 @@ from .views import (
     FirmDeactivateView,
     FirmDetailView,
     FirmListCreateView,
+    GlobalFirmAdminListView,
+    
 )
 
 
@@ -19,6 +21,7 @@ urlpatterns = [
     path("<uuid:firm_uuid>/deactivate/", FirmDeactivateView.as_view(), name="firm-deactivate",),
     path("<uuid:firm_uuid>/admins/", FirmAdminListView.as_view(), name="firm-admin-list",),
     path("<uuid:firm_uuid>/admins/create/", FirmAdminCreateView.as_view(), name="firm-admin-create",),
-
+    path("firm-admins/", GlobalFirmAdminListView.as_view(), name="global-firm-admin-list",),
+    
 
 ]

@@ -242,3 +242,43 @@ class FirmAdminListView(APIView):
         )
         
         
+class GlobalFirmAdminListView(APIView):
+    """
+    Super Admin can view every Firm Admin
+    across all academies.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        IsSuperAdmin,
+    ]
+
+    def get(self, request):
+        admins = (
+            User.objects
+            .filter(
+                user_type=User.UserType.FIRM_ADMIN,
+                firm__isnull=False,
+            )
+            .select_related("firm")
+            .order_by(
+                "firm__name",
+                "first_name",
+                "last_name",
+            )
+        )
+
+        return success_response(
+            message=(
+                "All firm admins retrieved "
+                "successfully"
+            ),
+            data=UserSerializer(
+                admins,
+                many=True,
+            ).data,
+        )
+        
+        
+
+
