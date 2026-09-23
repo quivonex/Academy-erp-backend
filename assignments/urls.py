@@ -19,10 +19,7 @@ from .views import (
 
 urlpatterns = [
     path(
-        "",
-        AssignmentListCreateView.as_view(),
-        name="assignment-list-create",
-    ),
+        "",AssignmentListCreateView.as_view(),name="assignment-list-create",),
 
     path(
         "import-pdf/",
