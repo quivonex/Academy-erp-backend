@@ -85,6 +85,20 @@ class Assignment(models.Model):
     allow_late_submission = models.BooleanField(
         default=False,
     )
+    
+    source_pdf_key = models.CharField(
+    max_length=1000,
+    blank=True,
+    )
+
+    import_status = models.CharField(
+        max_length=20,
+        default="NONE",
+    )
+
+    import_error = models.TextField(
+        blank=True,
+    )
 
     is_published = models.BooleanField(
         default=False,
@@ -167,6 +181,10 @@ class AssignmentQuestion(models.Model):
         default=0,
     )
 
+    answer_text = models.TextField(
+    blank=True,
+    )
+    
     sequence = models.PositiveIntegerField(
         default=1,
     )
