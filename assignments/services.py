@@ -1,7 +1,10 @@
 from django.db import transaction
-
+import io
+import re
+import uuid
+from django.core.files.storage import default_storage
+from pypdf import PdfReader
 from rest_framework.exceptions import ValidationError
-
 from courses.models import (
     Course,
     Subject,
@@ -141,6 +144,295 @@ def create_assignment(
         created_by=created_by,
         **validated_data,
     )
+
+def extract_pdf_text(uploaded_file):
+    uploaded_file.seek(0)
+
+    reader = PdfReader(uploaded_file)
+
+    pages = []
+
+    for page in reader.pages:
+        text = page.extract_text()
+
+        if text:
+            pages.append(text)
+
+    return "\n".join(pages).strip()
+
+def parse_question_answers(text):
+    if not text:
+        return []
+
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
+
+    pattern = re.compile(
+        r"""
+        (?:
+            ^|\n
+        )
+        \s*
+        (?:
+            Q(?:uestion)?\s*
+        )?
+        (\d+)
+        [\.\)\:\-]
+        \s*
+        (.*?)
+        (?=
+            \n\s*
+            (?:
+                Q(?:uestion)?\s*
+            )?
+            \d+
+            [\.\)\:\-]
+            |
+            \Z
+        )
+        """,
+        re.IGNORECASE
+        | re.MULTILINE
+        | re.DOTALL
+        | re.VERBOSE,
+    )
+
+    questions = []
+
+    for match in pattern.finditer(text):
+        block = match.group(2).strip()
+
+        if not block:
+            continue
+
+        answer_match = re.search(
+            r"""
+            \n?
+            \s*
+            (?:
+                Answer
+                |
+                Ans
+                |
+                Solution
+            )
+            \s*[:\.\-]\s*
+            """,
+            block,
+            re.IGNORECASE | re.VERBOSE,
+        )
+
+        question_text = block
+        answer_text = ""
+
+        if answer_match:
+            question_text = block[
+                :answer_match.start()
+            ].strip()
+
+            answer_text = block[
+                answer_match.end():
+            ].strip()
+
+        if question_text:
+            questions.append({
+                "question_text": question_text,
+                "answer_text": answer_text,
+            })
+
+    return questions
+
+@transaction.atomic
+def import_assignment_from_pdf(
+    *,
+    firm,
+    created_by,
+    validated_data,
+):
+    uploaded_pdf = validated_data.pop(
+        "pdf"
+    )
+
+    course_uuid = validated_data.pop(
+        "course_uuid"
+    )
+
+    subject_uuid = validated_data.pop(
+        "subject_uuid",
+        None,
+    )
+
+    chapter_uuid = validated_data.pop(
+        "chapter_uuid",
+        None,
+    )
+
+    lesson_uuid = validated_data.pop(
+        "lesson_uuid",
+        None,
+    )
+
+    course = get_tenant_object(
+        Course,
+        firm=firm,
+        object_uuid=course_uuid,
+        field_name="course_uuid",
+    )
+
+    subject = None
+    chapter = None
+    lesson = None
+
+    if subject_uuid:
+        subject = get_tenant_object(
+            Subject,
+            firm=firm,
+            object_uuid=subject_uuid,
+            field_name="subject_uuid",
+        )
+
+        if subject.course_id != course.id:
+            raise ValidationError({
+                "subject_uuid": [
+                    "Subject does not belong to this course."
+                ]
+            })
+
+    if chapter_uuid:
+        if not subject:
+            raise ValidationError({
+                "chapter_uuid": [
+                    "subject_uuid is required."
+                ]
+            })
+
+        chapter = get_tenant_object(
+            Chapter,
+            firm=firm,
+            object_uuid=chapter_uuid,
+            field_name="chapter_uuid",
+        )
+
+        if chapter.subject_id != subject.id:
+            raise ValidationError({
+                "chapter_uuid": [
+                    "Chapter does not belong to this subject."
+                ]
+            })
+
+    if lesson_uuid:
+        if not chapter:
+            raise ValidationError({
+                "lesson_uuid": [
+                    "chapter_uuid is required."
+                ]
+            })
+
+        lesson = get_tenant_object(
+            Lesson,
+            firm=firm,
+            object_uuid=lesson_uuid,
+            field_name="lesson_uuid",
+        )
+
+        if lesson.chapter_id != chapter.id:
+            raise ValidationError({
+                "lesson_uuid": [
+                    "Lesson does not belong to this chapter."
+                ]
+            })
+
+    try:
+        extracted_text = extract_pdf_text(
+            uploaded_pdf
+        )
+
+    except Exception as exc:
+        raise ValidationError({
+            "pdf": [
+                f"Unable to read PDF: {str(exc)}"
+            ]
+        })
+
+    if not extracted_text:
+        raise ValidationError({
+            "pdf": [
+                (
+                    "No readable text found in PDF. "
+                    "Scanned PDFs require OCR."
+                )
+            ]
+        })
+
+    parsed_questions = parse_question_answers(
+        extracted_text
+    )
+
+    if not parsed_questions:
+        raise ValidationError({
+            "pdf": [
+                (
+                    "No questions could be detected "
+                    "in this PDF."
+                )
+            ]
+        })
+
+    storage_path = (
+        f"assignments/"
+        f"{firm.uuid}/"
+        f"{course.uuid}/"
+        f"{uuid.uuid4().hex}.pdf"
+    )
+
+    uploaded_pdf.seek(0)
+
+    pdf_key = default_storage.save(
+        storage_path,
+        uploaded_pdf,
+    )
+
+    assignment = Assignment.objects.create(
+        firm=firm,
+        course=course,
+        subject=subject,
+        chapter=chapter,
+        lesson=lesson,
+        created_by=created_by,
+        source_pdf_key=pdf_key,
+        import_status="COMPLETED",
+        is_published=False,
+        **validated_data,
+    )
+
+    question_objects = []
+
+    for index, item in enumerate(
+        parsed_questions,
+        start=1,
+    ):
+        question_objects.append(
+            AssignmentQuestion(
+                assignment=assignment,
+                question_text=item[
+                    "question_text"
+                ],
+                answer_text=item[
+                    "answer_text"
+                ],
+                answer_type=(
+                    AssignmentQuestion
+                    .AnswerType.TEXT
+                ),
+                sequence=index,
+            )
+        )
+
+    AssignmentQuestion.objects.bulk_create(
+        question_objects
+    )
+
+    return assignment
 
 
 @transaction.atomic

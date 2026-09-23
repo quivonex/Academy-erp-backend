@@ -17,10 +17,12 @@ from .models import Assignment
 from .serializers import (
     AssignmentSerializer,
     AssignmentQuestionSerializer,
+    AssignmentPDFImportSerializer,
 )
 from .services import (
     create_assignment,
     create_assignment_question,
+    import_assignment_from_pdf,
 )
 
 
@@ -195,4 +197,61 @@ class AssignmentQuestionListCreateView(APIView):
             ).data,
             status_code=status.HTTP_201_CREATED,
         )
+        
+
+
+class AssignmentPDFImportView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def post(self, request):
+        serializer = AssignmentPDFImportSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="PDF import failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            assignment = import_assignment_from_pdf(
+                firm=request.user.firm,
+                created_by=request.user,
+                validated_data=serializer.validated_data,
+            )
+
+        except ValidationError as exc:
+            return error_response(
+                message="PDF import failed",
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        questions = assignment.questions.all()
+
+        return success_response(
+            message=(
+                "PDF imported successfully. "
+                "Please review questions before publishing."
+            ),
+            data={
+                "assignment": AssignmentSerializer(
+                    assignment
+                ).data,
+                "questions": (
+                    AssignmentQuestionSerializer(
+                        questions,
+                        many=True,
+                    ).data
+                ),
+                "question_count": questions.count(),
+            },
+            status_code=status.HTTP_201_CREATED,
+        )
+        
         

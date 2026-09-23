@@ -103,6 +103,7 @@ class AssignmentQuestionSerializer(
             "question_text",
             "answer_type",
             "marks",
+            "answer_text",
             "sequence",
             "is_required",
             "created_at",
@@ -111,6 +112,53 @@ class AssignmentQuestionSerializer(
         read_only_fields = (
             "uuid",
             "created_at",
-        )
+        )        
         
         
+        
+class AssignmentPDFImportSerializer(
+    serializers.Serializer
+):
+    course_uuid = serializers.UUIDField()
+
+    subject_uuid = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+
+    chapter_uuid = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+
+    lesson_uuid = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+
+    title = serializers.CharField(
+        max_length=255,
+    )
+
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    instructions = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    pdf = serializers.FileField()
+
+    def validate_pdf(self, value):
+        if not value.name.lower().endswith(".pdf"):
+            raise serializers.ValidationError(
+                "Only PDF files are allowed."
+            )
+
+        return value
+    
+    
+    
