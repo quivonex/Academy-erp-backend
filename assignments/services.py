@@ -459,6 +459,22 @@ def import_assignment_from_pdf(
         question_objects
     )
 
+    total_marks = sum(
+        (
+            question.marks
+            for question in question_objects
+        ),
+        0,
+    )
+    
+    assignment.max_marks = total_marks
+    assignment.save(
+        update_fields=[
+            "max_marks",
+            "updated_at",
+        ]
+    )
+
     return assignment
 
 

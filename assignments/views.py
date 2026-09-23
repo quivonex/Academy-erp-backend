@@ -502,6 +502,56 @@ class StudentAssignmentSubmitView(APIView):
                 "answers"
             ]
         )
+        required_questions = list(
+            assignment.questions.filter(
+                is_required=True
+            )
+        )
+
+        required_question_ids = {
+            str(question.uuid)
+            for question in required_questions
+        }
+
+        submitted_question_ids = [
+            str(answer["question_uuid"])
+            for answer in submitted_answers
+        ]
+        if (
+            len(submitted_question_ids)
+            != len(set(submitted_question_ids))
+        ):
+            return error_response(
+                message="Submission failed",
+                errors={
+                    "answers": [
+                        (
+                            "Duplicate question answers "
+                            "are not allowed."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        missing_questions = (
+            required_question_ids
+            - set(submitted_question_ids)
+        )
+        
+        if missing_questions:
+            return error_response(
+                message="Submission failed",
+                errors={
+                    "answers": [
+                        (
+                            "Please answer all required "
+                            "questions before submitting."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         for answer_data in submitted_answers:
             question = get_object_or_404(
