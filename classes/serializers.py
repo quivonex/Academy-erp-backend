@@ -97,4 +97,44 @@ class LiveClassSerializer(serializers.ModelSerializer):
         return attrs
     
     
+class LiveClassUpdateSerializer(serializers.ModelSerializer):
+
+    teacher_uuid = serializers.UUIDField(
+        write_only=True,
+        required=False,
+    )
+
+    class Meta:
+        model = LiveClass
+
+        fields = (
+            "teacher_uuid",
+            "title",
+            "description",
+            "scheduled_start_at",
+            "scheduled_end_at",
+            "meeting_url",
+            "meeting_id",
+            "meeting_password",
+        )
+
+    def validate(self, attrs):
+        start = attrs.get(
+            "scheduled_start_at",
+            self.instance.scheduled_start_at,
+        )
+
+        end = attrs.get(
+            "scheduled_end_at",
+            self.instance.scheduled_end_at,
+        )
+
+        if end <= start:
+            raise serializers.ValidationError({
+                "scheduled_end_at":
+                    "End time must be after start time."
+            })
+
+        return attrs
+    
     

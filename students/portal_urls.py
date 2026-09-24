@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .portal_views import (StudentMyCoursesView, StudentCourseDetailView, StudentLiveClassListView,
-    StudentCourseLiveClassListView,StudentCourseMaterialListView,
+    StudentCourseLiveClassListView,StudentCourseMaterialListView,StudentLiveClassDetailView,
     StudentMaterialDetailView,)
 
 
@@ -17,5 +17,8 @@ urlpatterns = [
     path("courses/<uuid:course_uuid>/materials/", StudentCourseMaterialListView.as_view(), name="student-course-materials",),
     
     path("materials/<uuid:material_uuid>/", StudentMaterialDetailView.as_view(), name="student-material-detail",),
+
+    path("live-classes/<uuid:live_class_uuid>/", StudentLiveClassDetailView.as_view(), name="student-live-class-detail",),
+
 
 ]

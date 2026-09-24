@@ -5,6 +5,7 @@ from .views import (
     LiveClassCompleteView,
     LiveClassListCreateView,
     LiveClassStartView,
+    LiveClassDetailView,
 )
 
 
@@ -16,5 +17,6 @@ urlpatterns = [
 
     path("<uuid:live_class_uuid>/cancel/", LiveClassCancelView.as_view(), name="live-class-cancel",),
     
-    
+    path("<uuid:live_class_uuid>/", LiveClassDetailView.as_view(),name="live-class-detail",),
+
 ]

@@ -1,5 +1,6 @@
 from django.db.models import Q
-
+from django.shortcuts import get_object_or_404
+from django.db import transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -11,9 +12,12 @@ from common.responses import (
     error_response,
     success_response,
 )
-
+from teachers.models import Teacher
 from .models import LiveClass
-from .serializers import LiveClassSerializer
+from .serializers import (
+    LiveClassSerializer,
+    LiveClassUpdateSerializer,
+)
 from .services import (
     create_live_class,
     start_live_class,
@@ -120,10 +124,6 @@ class LiveClassListCreateView(APIView):
         )
         
         
-        
-from django.shortcuts import get_object_or_404
-
-
 class LiveClassActionBaseView(APIView):
     permission_classes = [
         IsAuthenticated,
@@ -207,4 +207,154 @@ class LiveClassCancelView(LiveClassActionBaseView):
         )
         
         
+        
+class LiveClassDetailView(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get_object(self, request, live_class_uuid):
+        return get_object_or_404(
+            LiveClass.objects.select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "teacher",
+            ),
+            uuid=live_class_uuid,
+            firm=request.user.firm,
+        )
+
+    def get(self, request, live_class_uuid):
+        live_class = self.get_object(
+            request,
+            live_class_uuid,
+        )
+
+        return success_response(
+            message="Live class retrieved successfully",
+            data=LiveClassSerializer(live_class).data,
+        )
+
+    def patch(self, request, live_class_uuid):
+    
+        scheduled_editable_fields = {
+            "teacher_uuid",
+            "title",
+            "description",
+            "scheduled_start_at",
+            "scheduled_end_at",
+            "meeting_url",
+            "meeting_id",
+            "meeting_password",
+        }
+    
+        live_editable_fields = {
+            "title",
+            "description",
+            "meeting_url",
+            "meeting_id",
+            "meeting_password",
+        }
+    
+        received_fields = set(request.data.keys())
+    
+        if not received_fields:
+            return error_response(
+                message="Please provide at least one field to update.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+    
+        with transaction.atomic():
+        
+            live_class = get_object_or_404(
+                LiveClass.objects.select_for_update(),
+                uuid=live_class_uuid,
+                firm=request.user.firm,
+            )
+    
+            if live_class.status == LiveClass.Status.SCHEDULED:
+                allowed_fields = scheduled_editable_fields
+    
+            elif live_class.status == LiveClass.Status.LIVE:
+                allowed_fields = live_editable_fields
+    
+            else:
+                return error_response(
+                    message=(
+                        "Completed or cancelled live classes "
+                        "cannot be updated."
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+    
+            invalid_fields = received_fields - allowed_fields
+    
+            if invalid_fields:
+                return error_response(
+                    message=(
+                        "Some fields cannot be updated for "
+                        f"a {live_class.status} live class."
+                    ),
+                    errors={
+                        "fields": [
+                            (
+                                "Not allowed: "
+                                + ", ".join(sorted(invalid_fields))
+                            )
+                        ]
+                    },
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+    
+            serializer = LiveClassUpdateSerializer(
+                live_class,
+                data=request.data,
+                partial=True,
+            )
+    
+            if not serializer.is_valid():
+                return error_response(
+                    message="Live class update failed",
+                    errors=serializer.errors,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+    
+            validated_data = dict(serializer.validated_data)
+    
+            teacher_uuid = validated_data.pop(
+                "teacher_uuid",
+                None,
+            )
+    
+            changed_fields = []
+    
+            if teacher_uuid:
+                teacher = get_object_or_404(
+                    Teacher,
+                    uuid=teacher_uuid,
+                    firm=request.user.firm,
+                    is_active=True,
+                )
+    
+                live_class.teacher = teacher
+                changed_fields.append("teacher")
+    
+            for field, value in validated_data.items():
+                setattr(live_class, field, value)
+                changed_fields.append(field)
+    
+            live_class.save(
+                update_fields=changed_fields + [
+                    "updated_at",
+                ]
+            )
+    
+        return success_response(
+            message="Live class updated successfully",
+            data=LiveClassSerializer(live_class).data,
+        )    
         

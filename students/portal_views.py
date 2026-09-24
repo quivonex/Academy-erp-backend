@@ -213,6 +213,69 @@ class StudentLiveClassListView(APIView):
         )
         
         
+class StudentLiveClassDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request, live_class_uuid):
+        student = request.user.student_profile
+
+        live_class = (
+            LiveClass.objects
+            .filter(
+                uuid=live_class_uuid,
+                firm=request.user.firm,
+                is_active=True,
+            )
+            .exclude(
+                status=LiveClass.Status.CANCELLED
+            )
+            .select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "teacher",
+            )
+            .first()
+        )
+
+        if not live_class:
+            return error_response(
+                message=(
+                    "Live class not found or unavailable."
+                ),
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=live_class.course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message=(
+                    "You do not have access to this "
+                    "live class."
+                ),
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        return success_response(
+            message="Live class retrieved successfully",
+            data=StudentLiveClassSerializer(
+                live_class
+            ).data,
+        )
+
+
+
+
 class StudentCourseLiveClassListView(APIView):
     permission_classes = [
         IsAuthenticated,
