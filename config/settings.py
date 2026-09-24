@@ -45,6 +45,8 @@ DEFAULT_FIRM_CODE = env("DEFAULT_FIRM_CODE", default="",)
 #     default=["127.0.0.1", "localhost"],
 # )
 
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -185,6 +187,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    
+    "DEFAULT_THROTTLE_RATES": {
+    "login": "10/minute",
+    "student_registration": "5/hour",
+    },
 
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",

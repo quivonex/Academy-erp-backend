@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenRefreshView
-
+from rest_framework.throttling import ScopedRateThrottle
 from common.responses import (
     error_response,
     success_response,
@@ -27,7 +27,9 @@ from accounts.services import (create_firm_admin,)
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-
+    throttle_classes = [ScopedRateThrottle,]
+    throttle_scope = "login"
+    
     def post(self, request):
         serializer = LoginSerializer(
             data=request.data,
@@ -97,7 +99,9 @@ class MeView(APIView):
 class StudentRegisterView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-
+    throttle_classes = [ScopedRateThrottle,]
+    throttle_scope = "student_registration"
+    
     def post(self, request):
         serializer = StudentRegisterSerializer(
             data=request.data
