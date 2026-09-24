@@ -18,11 +18,16 @@ def get_object(model, firm, object_uuid, field_name):
         return model.objects.get(
             uuid=object_uuid,
             firm=firm,
+            is_active=True,
         )
+
     except model.DoesNotExist:
         raise ValidationError({
             field_name: [
-                f"Invalid {field_name.replace('_uuid', '')}."
+                (
+                    f"Invalid or inactive "
+                    f"{field_name.replace('_uuid', '')}."
+                )
             ]
         })
 

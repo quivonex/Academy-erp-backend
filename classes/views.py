@@ -130,9 +130,19 @@ class LiveClassActionBaseView(APIView):
         IsFirmAdminOrStaff,
     ]
 
-    def get_live_class(self, request, live_class_uuid):
+    def get_live_class(
+        self,
+        request,
+        live_class_uuid,
+        lock=False,
+    ):
+        queryset = LiveClass.objects
+
+        if lock:
+            queryset = queryset.select_for_update()
+
         return get_object_or_404(
-            LiveClass,
+            queryset,
             uuid=live_class_uuid,
             firm=request.user.firm,
         )
@@ -141,19 +151,26 @@ class LiveClassActionBaseView(APIView):
 class LiveClassStartView(LiveClassActionBaseView):
 
     def patch(self, request, live_class_uuid):
-        live_class = self.get_live_class(
-            request,
-            live_class_uuid,
-        )
-
-        try:
-            live_class = start_live_class(live_class)
-        except ValidationError as exc:
-            return error_response(
-                "Unable to start class",
-                exc.detail,
-                status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            live_class = self.get_live_class(
+                request,
+                live_class_uuid,
+                lock=True,
             )
+
+            try:
+                live_class = start_live_class(
+                    live_class
+                )
+
+            except ValidationError as exc:
+                return error_response(
+                    message="Unable to start class",
+                    errors=exc.detail,
+                    status_code=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
 
         return success_response(
             message="Live class started successfully",
@@ -164,19 +181,26 @@ class LiveClassStartView(LiveClassActionBaseView):
 class LiveClassCompleteView(LiveClassActionBaseView):
 
     def patch(self, request, live_class_uuid):
-        live_class = self.get_live_class(
-            request,
-            live_class_uuid,
-        )
-
-        try:
-            live_class = complete_live_class(live_class)
-        except ValidationError as exc:
-            return error_response(
-                "Unable to complete class",
-                exc.detail,
-                status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            live_class = self.get_live_class(
+                request,
+                live_class_uuid,
+                lock=True,
             )
+
+            try:
+                live_class = complete_live_class(
+                    live_class
+                )
+
+            except ValidationError as exc:
+                return error_response(
+                    message="Unable to complete class",
+                    errors=exc.detail,
+                    status_code=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
 
         return success_response(
             message="Live class completed successfully",
@@ -187,19 +211,26 @@ class LiveClassCompleteView(LiveClassActionBaseView):
 class LiveClassCancelView(LiveClassActionBaseView):
 
     def patch(self, request, live_class_uuid):
-        live_class = self.get_live_class(
-            request,
-            live_class_uuid,
-        )
-
-        try:
-            live_class = cancel_live_class(live_class)
-        except ValidationError as exc:
-            return error_response(
-                "Unable to cancel class",
-                exc.detail,
-                status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            live_class = self.get_live_class(
+                request,
+                live_class_uuid,
+                lock=True,
             )
+
+            try:
+                live_class = cancel_live_class(
+                    live_class
+                )
+
+            except ValidationError as exc:
+                return error_response(
+                    message="Unable to cancel class",
+                    errors=exc.detail,
+                    status_code=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
 
         return success_response(
             message="Live class cancelled successfully",
@@ -240,7 +271,7 @@ class LiveClassDetailView(APIView):
         )
 
     def patch(self, request, live_class_uuid):
-    
+
         scheduled_editable_fields = {
             "teacher_uuid",
             "title",
@@ -251,7 +282,7 @@ class LiveClassDetailView(APIView):
             "meeting_id",
             "meeting_password",
         }
-    
+
         live_editable_fields = {
             "title",
             "description",
@@ -259,29 +290,29 @@ class LiveClassDetailView(APIView):
             "meeting_id",
             "meeting_password",
         }
-    
+
         received_fields = set(request.data.keys())
-    
+
         if not received_fields:
             return error_response(
                 message="Please provide at least one field to update.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-    
+
         with transaction.atomic():
-        
+
             live_class = get_object_or_404(
                 LiveClass.objects.select_for_update(),
                 uuid=live_class_uuid,
                 firm=request.user.firm,
             )
-    
+
             if live_class.status == LiveClass.Status.SCHEDULED:
                 allowed_fields = scheduled_editable_fields
-    
+
             elif live_class.status == LiveClass.Status.LIVE:
                 allowed_fields = live_editable_fields
-    
+
             else:
                 return error_response(
                     message=(
@@ -290,9 +321,9 @@ class LiveClassDetailView(APIView):
                     ),
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-    
+
             invalid_fields = received_fields - allowed_fields
-    
+
             if invalid_fields:
                 return error_response(
                     message=(
@@ -309,29 +340,29 @@ class LiveClassDetailView(APIView):
                     },
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-    
+
             serializer = LiveClassUpdateSerializer(
                 live_class,
                 data=request.data,
                 partial=True,
             )
-    
+
             if not serializer.is_valid():
                 return error_response(
                     message="Live class update failed",
                     errors=serializer.errors,
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-    
+
             validated_data = dict(serializer.validated_data)
-    
+
             teacher_uuid = validated_data.pop(
                 "teacher_uuid",
                 None,
             )
-    
+
             changed_fields = []
-    
+
             if teacher_uuid:
                 teacher = get_object_or_404(
                     Teacher,
@@ -339,20 +370,20 @@ class LiveClassDetailView(APIView):
                     firm=request.user.firm,
                     is_active=True,
                 )
-    
+
                 live_class.teacher = teacher
                 changed_fields.append("teacher")
-    
+
             for field, value in validated_data.items():
                 setattr(live_class, field, value)
                 changed_fields.append(field)
-    
+
             live_class.save(
                 update_fields=changed_fields + [
                     "updated_at",
                 ]
             )
-    
+
         return success_response(
             message="Live class updated successfully",
             data=LiveClassSerializer(live_class).data,
