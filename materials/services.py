@@ -26,15 +26,18 @@ def get_tenant_object(
         return model.objects.get(
             uuid=object_uuid,
             firm=firm,
+            is_active=True,
         )
 
     except model.DoesNotExist:
         raise ValidationError({
             field_name: [
-                f"Invalid {field_name}."
+                (
+                    f"Invalid or inactive "
+                    f"{field_name.replace('_uuid', '')}."
+                )
             ]
         })
-
 
 @transaction.atomic
 def create_material(
