@@ -16,6 +16,7 @@ from .views import (
     StudentAssignmentResultView,
     StudentAssignmentSubmitView,
     StudentCourseAssignmentListView,
+    AssignmentQuestionDetailView,
 )
 
 
@@ -73,6 +74,14 @@ urlpatterns = [
         AssignmentDetailView.as_view(),
         name="assignment-detail",
     ),
+    
+    path(
+    "<uuid:assignment_uuid>/questions/<uuid:question_uuid>/",
+    AssignmentQuestionDetailView.as_view(),
+    name="assignment-question-detail",
+    ),
+    
+    
 ]
 
 

@@ -140,3 +140,82 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
             })
 
         return attrs
+    
+    
+class LearningMaterialUpdateSerializer(
+    serializers.ModelSerializer
+):
+    available_from = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    available_until = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = LearningMaterial
+
+        fields = (
+            "title",
+            "description",
+            "external_url",
+            "duration_seconds",
+            "sequence",
+            "available_from",
+            "available_until",
+            "is_required",
+            "counts_toward_progress",
+        )
+
+    def validate(self, attrs):
+        material = self.instance
+
+        available_from = attrs.get(
+            "available_from",
+            material.available_from,
+        )
+
+        available_until = attrs.get(
+            "available_until",
+            material.available_until,
+        )
+
+        if (
+            available_from
+            and available_until
+            and available_until <= available_from
+        ):
+            raise serializers.ValidationError({
+                "available_until": [
+                    (
+                        "Availability end must be after "
+                        "availability start."
+                    )
+                ]
+            })
+
+        external_url = attrs.get(
+            "external_url",
+            material.external_url,
+        )
+
+        if (
+            material.material_type
+            == LearningMaterial.MaterialType.LINK
+            and not external_url
+        ):
+            raise serializers.ValidationError({
+                "external_url": [
+                    (
+                        "External URL is required for "
+                        "LINK material."
+                    )
+                ]
+            })
+
+        return attrs
+    
+    

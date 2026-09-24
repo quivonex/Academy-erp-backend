@@ -229,6 +229,34 @@ class AssignmentQuestionListCreateView(APIView):
             firm=request.user.firm,
         )
 
+        if assignment.is_published:
+            return error_response(
+                message="Question creation failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Unpublish the assignment "
+                            "before adding questions."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Question creation failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Questions cannot be changed "
+                            "after student submission."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = AssignmentQuestionSerializer(
             data=request.data
         )
@@ -252,6 +280,142 @@ class AssignmentQuestionListCreateView(APIView):
             ).data,
             status_code=status.HTTP_201_CREATED,
         )
+        
+        
+class AssignmentQuestionDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get_object(
+        self,
+        request,
+        assignment_uuid,
+        question_uuid,
+    ):
+        return get_object_or_404(
+            AssignmentQuestion.objects.select_related(
+                "assignment"
+            ),
+            uuid=question_uuid,
+            assignment__uuid=assignment_uuid,
+            assignment__firm=request.user.firm,
+        )
+
+    def patch(
+        self,
+        request,
+        assignment_uuid,
+        question_uuid,
+    ):
+        question = self.get_object(
+            request,
+            assignment_uuid,
+            question_uuid,
+        )
+
+        assignment = question.assignment
+
+        if assignment.is_published:
+            return error_response(
+                message="Question update failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Unpublish the assignment "
+                            "before editing questions."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Question update failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Questions cannot be changed "
+                            "after student submission."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AssignmentQuestionSerializer(
+            question,
+            data=request.data,
+            partial=True,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Question update failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question = serializer.save()
+
+        return success_response(
+            message="Question updated successfully",
+            data=AssignmentQuestionSerializer(
+                question
+            ).data,
+        )
+
+    def delete(
+        self,
+        request,
+        assignment_uuid,
+        question_uuid,
+    ):
+        question = self.get_object(
+            request,
+            assignment_uuid,
+            question_uuid,
+        )
+
+        assignment = question.assignment
+
+        if assignment.is_published:
+            return error_response(
+                message="Question deletion failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Unpublish the assignment "
+                            "before deleting questions."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Question deletion failed",
+                errors={
+                    "assignment": [
+                        (
+                            "Questions cannot be deleted "
+                            "after student submission."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question.delete()
+
+        return success_response(
+            message="Question deleted successfully",
+            data={},
+        )
+        
 
 
 # =========================================================

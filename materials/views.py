@@ -1,5 +1,5 @@
 from django.db.models import Q
-
+from django.core.files.storage import default_storage
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -13,7 +13,8 @@ from common.responses import (
 )
 
 from .models import LearningMaterial
-from .serializers import LearningMaterialSerializer
+from .serializers import (LearningMaterialSerializer,
+    LearningMaterialUpdateSerializer, )
 from .services import create_material
 
 
@@ -113,6 +114,119 @@ class LearningMaterialListCreateView(APIView):
                 material
             ).data,
             status_code=status.HTTP_201_CREATED,
+        )
+        
+        
+class LearningMaterialDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get_object(
+        self,
+        request,
+        material_uuid,
+    ):
+        return get_object_or_404(
+            LearningMaterial.objects.select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "live_class",
+            ),
+            uuid=material_uuid,
+            firm=request.user.firm,
+        )
+
+    def get(
+        self,
+        request,
+        material_uuid,
+    ):
+        material = self.get_object(
+            request,
+            material_uuid,
+        )
+
+        return success_response(
+            message="Material retrieved successfully",
+            data=LearningMaterialSerializer(
+                material
+            ).data,
+        )
+
+    def patch(
+        self,
+        request,
+        material_uuid,
+    ):
+        material = self.get_object(
+            request,
+            material_uuid,
+        )
+
+        serializer = LearningMaterialUpdateSerializer(
+            material,
+            data=request.data,
+            partial=True,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Material update failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        material = serializer.save()
+
+        return success_response(
+            message="Material updated successfully",
+            data=LearningMaterialSerializer(
+                material
+            ).data,
+        )
+
+    def delete(
+        self,
+        request,
+        material_uuid,
+    ):
+        material = self.get_object(
+            request,
+            material_uuid,
+        )
+
+        if material.student_progress.exists():
+            return error_response(
+                message="Material deletion failed",
+                errors={
+                    "material": [
+                        (
+                            "This material cannot be deleted "
+                            "because students have progress "
+                            "records for it."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        file_key = material.file_key
+
+        material.delete()
+
+        if file_key:
+            try:
+                default_storage.delete(file_key)
+            except Exception:
+                pass
+
+        return success_response(
+            message="Material deleted successfully",
+            data={},
         )
         
         
