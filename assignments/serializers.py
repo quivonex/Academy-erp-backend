@@ -6,7 +6,7 @@ from .models import (
     AssignmentQuestion,
     AssignmentSubmission,
 )
-
+MAX_ASSIGNMENT_PDF_SIZE = 10 * 1024 * 1024
 
 class AssignmentSerializer(serializers.ModelSerializer):
     course_uuid = serializers.UUIDField(
@@ -212,9 +212,24 @@ class AssignmentPDFImportSerializer(
             raise serializers.ValidationError(
                 "Only PDF files are allowed."
             )
-
+    
+        if value.size > MAX_ASSIGNMENT_PDF_SIZE:
+            raise serializers.ValidationError(
+                "PDF size must not exceed 10 MB."
+            )
+    
+        current_position = value.tell()
+    
+        value.seek(0)
+        file_header = value.read(5)
+        value.seek(current_position)
+    
+        if file_header != b"%PDF-":
+            raise serializers.ValidationError(
+                "Uploaded file is not a valid PDF."
+            )
+    
         return value
-
 
 class StudentAssignmentQuestionSerializer(
     serializers.ModelSerializer
