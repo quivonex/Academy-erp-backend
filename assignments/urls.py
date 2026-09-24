@@ -9,7 +9,9 @@ from .views import (
     AssignmentDetailView,
     AssignmentListCreateView,
     AssignmentPDFImportView,
+    AssignmentPublishView,
     AssignmentQuestionListCreateView,
+    AssignmentUnpublishView,
     StudentAssignmentDetailView,
     StudentAssignmentResultView,
     StudentAssignmentSubmitView,
@@ -19,7 +21,10 @@ from .views import (
 
 urlpatterns = [
     path(
-        "",AssignmentListCreateView.as_view(),name="assignment-list-create",),
+        "",
+        AssignmentListCreateView.as_view(),
+        name="assignment-list-create",
+    ),
 
     path(
         "import-pdf/",
@@ -49,6 +54,18 @@ urlpatterns = [
         "submissions/<uuid:submission_uuid>/grade/",
         AssignmentSubmissionGradeView.as_view(),
         name="assignment-submission-grade",
+    ),
+
+    path(
+        "<uuid:assignment_uuid>/publish/",
+        AssignmentPublishView.as_view(),
+        name="assignment-publish",
+    ),
+
+    path(
+        "<uuid:assignment_uuid>/unpublish/",
+        AssignmentUnpublishView.as_view(),
+        name="assignment-unpublish",
     ),
 
     path(

@@ -478,3 +478,24 @@ class AssignmentSubmissionGradeSerializer(
         many=True,
     )    
     
+class AssignmentUpdateSerializer(
+    serializers.ModelSerializer
+):
+    due_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = Assignment
+
+        fields = (
+            "title",
+            "description",
+            "instructions",
+            "due_at",
+            "allow_late_submission",
+        )
+        
+        
+        

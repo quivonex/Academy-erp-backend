@@ -33,6 +33,7 @@ from .serializers import (
     AssignmentPDFImportSerializer,
     AssignmentQuestionSerializer,
     AssignmentSerializer,
+    AssignmentUpdateSerializer,
     StudentAssignmentQuestionSerializer,
     StudentAssignmentSubmitSerializer,
 )
@@ -1238,5 +1239,280 @@ class StudentAssignmentResultView(APIView):
                 ),
             },
         )
+        
+
+
+class AssignmentDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get_object(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        return get_object_or_404(
+            Assignment.objects.select_related(
+                "course",
+                "subject",
+                "chapter",
+                "lesson",
+                "created_by",
+            ),
+            uuid=assignment_uuid,
+            firm=request.user.firm,
+        )
+
+    def get(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        assignment = self.get_object(
+            request,
+            assignment_uuid,
+        )
+
+        return success_response(
+            message="Assignment retrieved successfully",
+            data=AssignmentSerializer(
+                assignment
+            ).data,
+        )
+
+    def patch(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        assignment = self.get_object(
+            request,
+            assignment_uuid,
+        )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Assignment update failed",
+                errors={
+                    "assignment": [
+                        (
+                            "This assignment cannot be "
+                            "edited because students have "
+                            "already submitted it."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AssignmentUpdateSerializer(
+            assignment,
+            data=request.data,
+            partial=True,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Assignment update failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment = serializer.save()
+
+        return success_response(
+            message="Assignment updated successfully",
+            data=AssignmentSerializer(
+                assignment
+            ).data,
+        )
+
+    def delete(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        assignment = self.get_object(
+            request,
+            assignment_uuid,
+        )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Assignment deletion failed",
+                errors={
+                    "assignment": [
+                        (
+                            "This assignment cannot be "
+                            "deleted because students have "
+                            "already submitted it."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment.delete()
+
+        return success_response(
+            message="Assignment deleted successfully",
+            data={},
+        )
+        
+        
+        
+        
+        
+class AssignmentPublishView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def patch(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        assignment = get_object_or_404(
+            Assignment,
+            uuid=assignment_uuid,
+            firm=request.user.firm,
+        )
+
+        if assignment.is_published:
+            return error_response(
+                message="Assignment is already published.",
+                errors={},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not assignment.is_active:
+            return error_response(
+                message="Assignment publishing failed",
+                errors={
+                    "assignment": [
+                        "Inactive assignment cannot be published."
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        questions = list(
+            assignment.questions.all()
+        )
+
+        if not questions:
+            return error_response(
+                message="Assignment publishing failed",
+                errors={
+                    "questions": [
+                        (
+                            "Add at least one question "
+                            "before publishing."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        total_question_marks = sum(
+            (
+                question.marks
+                for question in questions
+            ),
+            Decimal("0.00"),
+        )
+
+        if total_question_marks != assignment.max_marks:
+            return error_response(
+                message="Assignment publishing failed",
+                errors={
+                    "max_marks": [
+                        (
+                            "Assignment max_marks must equal "
+                            "the total marks of all questions. "
+                            f"Question total is "
+                            f"{total_question_marks}."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment.is_published = True
+
+        assignment.save(
+            update_fields=[
+                "is_published",
+                "updated_at",
+            ]
+        )
+
+        return success_response(
+            message="Assignment published successfully",
+            data=AssignmentSerializer(
+                assignment
+            ).data,
+        )
+
+
+class AssignmentUnpublishView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def patch(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        assignment = get_object_or_404(
+            Assignment,
+            uuid=assignment_uuid,
+            firm=request.user.firm,
+        )
+
+        if not assignment.is_published:
+            return error_response(
+                message="Assignment is already unpublished.",
+                errors={},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if assignment.submissions.exists():
+            return error_response(
+                message="Assignment unpublish failed",
+                errors={
+                    "assignment": [
+                        (
+                            "This assignment cannot be "
+                            "unpublished because students "
+                            "have already submitted it."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment.is_published = False
+
+        assignment.save(
+            update_fields=[
+                "is_published",
+                "updated_at",
+            ]
+        )
+
+        return success_response(
+            message="Assignment unpublished successfully",
+            data=AssignmentSerializer(
+                assignment
+            ).data,
+        )
+        
         
         
