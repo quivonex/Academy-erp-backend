@@ -29,7 +29,7 @@ from .portal_serializers import (
     StudentLearningMaterialSerializer,
 )
 from materials.models import LearningMaterial
-
+from common.pagination import StandardResultsSetPagination
 
 class StudentMyCoursesView(APIView):
     permission_classes = [
@@ -64,14 +64,20 @@ class StudentMyCoursesView(APIView):
             .order_by("-enrolled_at")
         )
 
-        serializer = StudentCourseSerializer(
+        paginator = StandardResultsSetPagination()
+
+        page = paginator.paginate_queryset(
             enrollments,
+            request,
+        )
+
+        serializer = StudentCourseSerializer(
+            page,
             many=True,
         )
 
-        return success_response(
-            message="My courses retrieved successfully",
-            data=serializer.data,
+        return paginator.get_paginated_response(
+            serializer.data
         )
         
         
@@ -202,14 +208,20 @@ class StudentLiveClassListView(APIView):
                 status=status_value
             )
 
-        serializer = StudentLiveClassSerializer(
+        paginator = StandardResultsSetPagination()
+
+        page = paginator.paginate_queryset(
             live_classes,
+            request,
+        )
+
+        serializer = StudentLiveClassSerializer(
+            page,
             many=True,
         )
 
-        return success_response(
-            message="Live classes retrieved successfully",
-            data=serializer.data,
+        return paginator.get_paginated_response(
+            serializer.data
         )
         
         
@@ -324,14 +336,20 @@ class StudentCourseLiveClassListView(APIView):
             .order_by("scheduled_start_at")
         )
 
-        serializer = StudentLiveClassSerializer(
+        paginator = StandardResultsSetPagination()
+
+        page = paginator.paginate_queryset(
             live_classes,
+            request,
+        )
+
+        serializer = StudentLiveClassSerializer(
+            page,
             many=True,
         )
 
-        return success_response(
-            message="Course live classes retrieved successfully",
-            data=serializer.data,
+        return paginator.get_paginated_response(
+            serializer.data
         )
         
         
@@ -432,22 +450,23 @@ class StudentCourseMaterialListView(APIView):
                 material_type=material_type
             )
 
-        serializer = (
-            StudentLearningMaterialSerializer(
-                materials,
-                many=True,
-                context={
-                    "request": request
-                },
-            )
+        paginator = StandardResultsSetPagination()
+        
+        page = paginator.paginate_queryset(
+            materials,
+            request,
         )
-
-        return success_response(
-            message=(
-                "Course materials "
-                "retrieved successfully"
-            ),
-            data=serializer.data,
+        
+        serializer = StudentLearningMaterialSerializer(
+            page,
+            many=True,
+            context={
+                "request": request,
+            },
+        )
+        
+        return paginator.get_paginated_response(
+            serializer.data
         )
         
         
