@@ -35,6 +35,8 @@ from assignments.urls import (
 )
 
 from teachers.urls import staff_urlpatterns
+from banners.urls import urlpatterns as banner_urlpatterns
+from banners.public_urls import urlpatterns as public_banner_urlpatterns
 
 urlpatterns = [
     path("admin/", admin.site.urls,),
@@ -72,6 +74,10 @@ urlpatterns = [
     path("api/v1/assignments/", include("assignments.urls"),),
     
     path("api/v1/student/", include(student_assignment_urlpatterns),),
+    
+    path("api/v1/banners/", include(banner_urlpatterns)),
+    path("api/v1/public/banners/", include(public_banner_urlpatterns)),
+
 
 ]
 
