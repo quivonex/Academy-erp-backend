@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/auth_service.dart';
+import 'features/dashboard/dashboard_screen.dart';
+
 void main() {
   runApp(const AcademyErpApp());
 }
@@ -59,8 +62,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
 
   bool _hidePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -69,22 +74,58 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _continueLogin() {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Login screen is ready. Backend connection is next.'),
-      ),
-    );
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await _authService.login(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => DashboardScreen(
+            user: user,
+            onLogout: _authService.logout,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Exception: ', ''),
+          ),
+          backgroundColor: const Color(0xFFB42318),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isDesktop = screenWidth >= 700;
+    final isDesktop = MediaQuery.sizeOf(context).width >= 700;
 
     return Scaffold(
       body: SafeArea(
@@ -196,15 +237,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your password.';
                             }
-                            if (value.length < 6) {
-                              return 'Password must contain at least 6 characters.';
-                            }
                             return null;
                           },
                         ),
                         const SizedBox(height: 28),
                         FilledButton(
-                          onPressed: _continueLogin,
+                          onPressed: _isLoading ? null : _login,
                           style: FilledButton.styleFrom(
                             minimumSize: const Size.fromHeight(54),
                             backgroundColor: const Color(0xFF155EEF),
@@ -212,21 +250,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
+                          child: _isLoading
+                              ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                              : const Text(
                             'Sign in',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Academy ERP securely connects administrators, teachers, and students.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF98A2B3),
                           ),
                         ),
                       ],

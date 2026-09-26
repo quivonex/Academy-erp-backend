@@ -114,6 +114,15 @@ class Course(models.Model):
         db_index=True,
     )
     
+    is_featured = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    featured_order = models.PositiveIntegerField(
+        default=0,
+    )
+    
     access_duration_days = models.PositiveIntegerField(
         null=True,
         blank=True,

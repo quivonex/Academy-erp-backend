@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 
 from rest_framework import status
@@ -29,6 +29,9 @@ from .serializers import (
     LessonSerializer,
     SubjectSerializer,
     PublicCourseSerializer,
+    PublicCourseCategoryQuerySerializer,
+    PublicCourseCategorySerializer,
+    PublicCourseQuerySerializer,
 )
 from .services import (
     create_category,
@@ -643,11 +646,79 @@ class EnrollmentDetailView(TenantDetailView):
         
         
         
+class PublicCourseCategoryListView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        query_serializer = PublicCourseCategoryQuerySerializer(
+            data=request.query_params
+        )
+
+        if not query_serializer.is_valid():
+            return error_response(
+                message="Invalid category filters",
+                errors=query_serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = query_serializer.validated_data
+
+        queryset = (
+            CourseCategory.objects
+            .filter(
+                is_active=True,
+                firm__is_active=True,
+            )
+            .select_related("firm")
+            .annotate(
+                course_count=Count(
+                    "courses",
+                    filter=Q(
+                        courses__is_active=True,
+                        courses__is_published=True,
+                        courses__is_purchasable_online=True,
+                    ),
+                )
+            )
+            .filter(course_count__gt=0)
+            .order_by("name")
+        )
+
+        firm_uuid = filters.get("firm_uuid")
+
+        if firm_uuid:
+            queryset = queryset.filter(
+                firm__uuid=firm_uuid
+            )
+
+        return success_response(
+            message="Public course categories retrieved successfully",
+            data=PublicCourseCategorySerializer(
+                queryset,
+                many=True,
+            ).data,
+        )
+
+
 class PublicCourseListView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request):
+        query_serializer = PublicCourseQuerySerializer(
+            data=request.query_params
+        )
+
+        if not query_serializer.is_valid():
+            return error_response(
+                message="Invalid course filters",
+                errors=query_serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = query_serializer.validated_data
+
         queryset = (
             Course.objects
             .filter(
@@ -660,10 +731,9 @@ class PublicCourseListView(APIView):
                 "firm",
                 "category",
             )
-            .order_by("-created_at")
         )
 
-        search = request.query_params.get("search")
+        search = filters.get("search")
 
         if search:
             queryset = queryset.filter(
@@ -671,6 +741,36 @@ class PublicCourseListView(APIView):
                 | Q(code__icontains=search)
                 | Q(description__icontains=search)
             )
+
+        category_uuid = filters.get("category_uuid")
+
+        if category_uuid:
+            queryset = queryset.filter(
+                category__uuid=category_uuid
+            )
+
+        firm_uuid = filters.get("firm_uuid")
+
+        if firm_uuid:
+            queryset = queryset.filter(
+                firm__uuid=firm_uuid
+            )
+
+        if filters.get("featured") is True:
+            queryset = queryset.filter(
+                is_featured=True
+            )
+
+        if filters.get("is_free") is True:
+            queryset = queryset.filter(
+                price=0
+            )
+
+        queryset = queryset.order_by(
+            "-is_featured",
+            "featured_order",
+            "-created_at",
+        )
 
         paginator = StandardResultsSetPagination()
 
@@ -687,7 +787,29 @@ class PublicCourseListView(APIView):
         return paginator.get_paginated_response(
             serializer.data
         )
-        
+
+
+class PublicCourseDetailView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, course_uuid):
+        course = get_object_or_404(
+            Course.objects.select_related(
+                "firm",
+                "category",
+            ),
+            uuid=course_uuid,
+            is_active=True,
+            is_published=True,
+            is_purchasable_online=True,
+            firm__is_active=True,
+        )
+
+        return success_response(
+            message="Course retrieved successfully",
+            data=PublicCourseSerializer(course).data,
+        )        
         
         
 class PublicCourseDetailView(APIView):

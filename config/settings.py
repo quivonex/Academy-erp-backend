@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     "materials",
     "progress",
     "assignments",
+    "banners",
+    
     
     
     
