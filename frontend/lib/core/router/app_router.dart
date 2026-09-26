@@ -19,7 +19,7 @@ import '../../features/student_portal/presentation/course_learning_screen.dart';
 import '../../features/student_portal/presentation/material_detail_screen.dart';
 import '../../features/student_portal/presentation/live_class_detail_screen.dart';
 import '../../features/student_portal/presentation/student_assignment_screen.dart';
-
+import '../../features/student_portal/presentation/all_live_classes_screen.dart';
 import '../session/session_controller.dart';
 import '../session/user_role.dart';
 import '../widgets/admin_shell.dart';
@@ -129,6 +129,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               materialUuid: state.pathParameters[
                   'materialUuid']!,
             ),
+          ),
+          GoRoute(
+            path: '/student/live-classes',
+            builder: (context, state) =>
+                const AllLiveClassesScreen(),
           ),
           GoRoute(
             path:

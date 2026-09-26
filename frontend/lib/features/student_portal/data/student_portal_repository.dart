@@ -325,18 +325,24 @@ class StudentPortalRepository {
 
   Future<List<Map<String, dynamic>>> allLiveClasses({
     String? status,
+    int page = 1,
   }) =>
       _request(() async {
         final response = await _dio.get(
           ApiUrls.studentLiveClasses,
           queryParameters: {
             if (status != null) 'status': status,
-            'page_size': 100,
+            'page': page,
+            'page_size': 20,
           },
         );
 
         return _items(response.data)
-            .map((item) => Map<String, dynamic>.from(item as Map))
+            .map(
+              (item) => Map<String, dynamic>.from(
+                item as Map,
+              ),
+            )
             .toList();
       });
 

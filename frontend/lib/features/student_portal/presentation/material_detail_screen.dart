@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/open_external_link.dart';
 
 import '../data/student_portal_repository.dart';
 
@@ -139,6 +140,19 @@ class _MaterialDetailScreenState
               const Text('Content URL'),
               const SizedBox(height: 8),
               SelectableText(url),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => openExternalLink(
+                  context,
+                  url,
+                ),
+                icon: const Icon(Icons.open_in_new),
+                label: Text(
+                  material['material_type'] == 'VIDEO'
+                      ? 'Watch video'
+                      : 'Open material',
+                ),
+              ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () async {

@@ -229,77 +229,58 @@ class _StudentAssignmentScreenState
     );
   }
 
-  Widget _questionCard(
-      Map<String, dynamic> question,
-      ) {
-    final uuid =
-        question['uuid']?.toString() ?? '';
-
+  Widget _questionCard(Map<String, dynamic> question) {
+    final uuid = question['uuid']?.toString() ?? '';
     final type = question['answer_type']
-        ?.toString()
-        .toUpperCase() ??
+            ?.toString()
+            .toUpperCase() ??
         '';
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              question['question_text']
-                  ?.toString() ??
-                  '',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium,
+              question['question_text']?.toString() ?? '',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 10),
-            if (type == 'MCQ')
-              for (final option in [
-                'A',
-                'B',
-                'C',
-                'D',
-              ])
-                if (question[
-                'option_${option.toLowerCase()}']
-                    ?.toString()
-                    .isNotEmpty ==
+
+            if (type == 'MCQ') ...[
+              for (final option in ['A', 'B', 'C', 'D'])
+                if (question['option_${option.toLowerCase()}']
+                        ?.toString()
+                        .isNotEmpty ==
                     true)
                   RadioListTile<String>(
                     value: option,
-                    groupValue:
-                    _mcqAnswers[uuid],
+                    groupValue: _mcqAnswers[uuid],
                     title: Text(
                       '$option. '
-                          '${question['option_${option.toLowerCase()}']}',
+                      '${question['option_${option.toLowerCase()}']}',
                     ),
                     onChanged: (value) {
                       if (value == null) return;
-
-                      setState(() {
-                        _mcqAnswers[uuid] =
-                            value;
-                      });
+                      setState(() => _mcqAnswers[uuid] = value);
                     },
-                  )
-                else
-                  TextField(
-                    controller:
-                    _textControllers.putIfAbsent(
-                      uuid,
-                          () =>
-                          TextEditingController(),
-                    ),
-                    maxLines: 4,
-                    decoration:
-                    const InputDecoration(
-                      labelText:
-                      'Your answer',
-                    ),
                   ),
+            ] else if (type == 'TEXT') ...[
+              TextField(
+                controller: _textControllers.putIfAbsent(
+                  uuid,
+                  TextEditingController.new,
+                ),
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Your answer',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ] else ...[
+              const Text('Unsupported question type.'),
+            ],
           ],
         ),
       ),

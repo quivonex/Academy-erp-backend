@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/open_external_link.dart';
 
 import '../data/student_portal_repository.dart';
 
@@ -106,6 +107,17 @@ class _LiveClassDetailScreenState
                 meetingUrl.isNotEmpty) ...[
               const SizedBox(height: 12),
               SelectableText(meetingUrl),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => openExternalLink(
+                  context,
+                  meetingUrl,
+                ),
+                icon: const Icon(
+                  Icons.video_call_outlined,
+                ),
+                label: const Text('Join live class'),
+              ),
               OutlinedButton.icon(
                 onPressed: () async {
                   await Clipboard.setData(
