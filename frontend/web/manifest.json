@@ -1,6 +1,6 @@
 {
-    "name": "academy_erp_frontend",
-    "short_name": "academy_erp_frontend",
+    "name": "edusphere_admin",
+    "short_name": "edusphere_admin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
