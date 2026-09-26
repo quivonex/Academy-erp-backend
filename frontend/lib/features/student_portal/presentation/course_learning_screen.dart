@@ -67,86 +67,99 @@ class _CourseLearningScreenState
 
         final course = snapshot.data!;
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              course.name,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(course.description),
-            const SizedBox(height: 20),
-            _progressCard(),
-            const SizedBox(height: 20),
-            Text(
-              'Study materials',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge,
-            ),
-            _resourceList(
-              future: _materials,
-              emptyMessage:
-              'No study materials available.',
-              titleKey: 'title',
-              onTap: (item) {
-                final uuid = item['uuid']?.toString();
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(_load);
 
-                if (uuid != null) {
-                  context.go(
-                    '/student/materials/$uuid',
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Live classes',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge,
-            ),
-            _resourceList(
-              future: _classes,
-              emptyMessage:
-              'No live classes scheduled.',
-              titleKey: 'title',
-              onTap: (item) {
-                final uuid = item['uuid']?.toString();
+            try {
+              await _course;
+              await _progress;
+            } catch (_) {
+              // खालील FutureBuilders error दाखवतील.
+            }
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                course.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(course.description),
+              const SizedBox(height: 20),
+              _progressCard(),
+              const SizedBox(height: 20),
+              Text(
+                'Study materials',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              _resourceList(
+                future: _materials,
+                emptyMessage:
+                'No study materials available.',
+                titleKey: 'title',
+                onTap: (item) {
+                  final uuid = item['uuid']?.toString();
 
-                if (uuid != null) {
-                  context.go(
-                    '/student/live-classes/$uuid',
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Assignments',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge,
-            ),
-            _resourceList(
-              future: _assignments,
-              emptyMessage:
-              'No assignments available.',
-              titleKey: 'title',
-              onTap: (item) {
-                final uuid = item['uuid']?.toString();
+                  if (uuid != null) {
+                    context.go(
+                      '/student/materials/$uuid',
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Live classes',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              _resourceList(
+                future: _classes,
+                emptyMessage:
+                'No live classes scheduled.',
+                titleKey: 'title',
+                onTap: (item) {
+                  final uuid = item['uuid']?.toString();
 
-                if (uuid != null) {
-                  context.go(
-                    '/student/assignments/$uuid',
-                  );
-                }
-              },
-            ),
-          ],
+                  if (uuid != null) {
+                    context.go(
+                      '/student/live-classes/$uuid',
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Assignments',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              _resourceList(
+                future: _assignments,
+                emptyMessage:
+                'No assignments available.',
+                titleKey: 'title',
+                onTap: (item) {
+                  final uuid = item['uuid']?.toString();
+
+                  if (uuid != null) {
+                    context.go(
+                      '/student/assignments/$uuid',
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         );
       },
     );
@@ -156,22 +169,83 @@ class _CourseLearningScreenState
     return FutureBuilder<Map<String, dynamic>>(
       future: _progress,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const SizedBox.shrink();
+        if (snapshot.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Could not load progress: '
+                '${snapshot.error}',
+              ),
+            ),
+          );
         }
 
-        final value = snapshot.data![
-        'completion_percentage'] ??
+        if (!snapshot.hasData) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(),
+            ),
+          );
+        }
+
+        final data = snapshot.data!;
+
+        final total =
+            (data['total_materials'] as num?)?.toInt() ??
+                0;
+
+        final completed =
+            (data['completed_materials'] as num?)
+                    ?.toInt() ??
+                0;
+
+        final rawPercentage = double.tryParse(
+              data['completion_percentage']
+                      ?.toString() ??
+                  '0',
+            ) ??
             0;
+
+        final percentage =
+            rawPercentage.clamp(0.0, 100.0).toDouble();
 
         return Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Course completion: $value%',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium,
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Course Progress',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge,
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: percentage / 100,
+                  minHeight: 8,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${percentage.toStringAsFixed(0)}% completed',
+                ),
+                Text(
+                  '$completed of $total materials completed',
+                ),
+                if (total == 0) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No materials are currently counted '
+                    'toward progress.',
+                  ),
+                ],
+              ],
             ),
           ),
         );

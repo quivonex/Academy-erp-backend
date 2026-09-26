@@ -181,31 +181,59 @@ class _MaterialDetailScreenState
             const SizedBox(height: 24),
             FutureBuilder<Map<String, dynamic>>(
               future: _progress,
-              builder: (context, progress) {
-                if (!progress.hasData) {
-                  return const SizedBox.shrink();
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text(
+                    'Could not load progress: '
+                    '${snapshot.error}',
+                  );
                 }
 
-                final completed =
-                    progress.data!['is_completed'] ==
-                        true;
+                if (!snapshot.hasData) {
+                  return const LinearProgressIndicator();
+                }
 
-                return Text(
-                  completed
-                      ? 'Status: Completed'
-                      : 'Status: In progress',
+                final progress = snapshot.data!;
+
+                final completed =
+                    progress['is_completed'] == true;
+
+                final percentage =
+                    progress['completion_percentage']
+                            ?.toString() ??
+                        '0';
+
+                return Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      completed
+                          ? 'Status: Completed'
+                          : 'Progress: $percentage%',
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed:
+                          completed || _saving
+                              ? null
+                              : _markCompleted,
+                      icon: Icon(
+                        completed
+                            ? Icons.check_circle
+                            : Icons.task_alt,
+                      ),
+                      label: Text(
+                        completed
+                            ? 'Completed'
+                            : _saving
+                                ? 'Saving...'
+                                : 'Mark as completed',
+                      ),
+                    ),
+                  ],
                 );
               },
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed:
-              _saving ? null : _markCompleted,
-              child: Text(
-                _saving
-                    ? 'Saving...'
-                    : 'Mark as completed',
-              ),
             ),
           ],
         );
