@@ -48,15 +48,11 @@ class _StudentAssignmentScreenState
     super.dispose();
   }
 
-  Future<void> _submit(
-      List<dynamic> questions,
-      ) async {
-    final answers =
-    <Map<String, dynamic>>[];
+  Future<void> _submit(List<dynamic> questions) async {
+    final answers = <Map<String, dynamic>>[];
 
     for (final raw in questions) {
-      final question =
-      Map<String, dynamic>.from(
+      final question = Map<String, dynamic>.from(
         raw as Map,
       );
 
@@ -66,13 +62,26 @@ class _StudentAssignmentScreenState
       if (uuid.isEmpty) continue;
 
       final type = question['answer_type']
-          ?.toString()
-          .toUpperCase() ??
+              ?.toString()
+              .toUpperCase() ??
           '';
 
+      final required =
+          question['is_required'] == true;
+
       if (type == 'MCQ') {
-        final selected =
-        _mcqAnswers[uuid];
+        final selected = _mcqAnswers[uuid];
+
+        if (selected == null && required) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please answer all required MCQ questions.',
+              ),
+            ),
+          );
+          return;
+        }
 
         if (selected != null) {
           answers.add({
@@ -80,11 +89,22 @@ class _StudentAssignmentScreenState
             'selected_option': selected,
           });
         }
-      } else {
+      } else if (type == 'TEXT') {
         final text = _textControllers[uuid]
-            ?.text
-            .trim() ??
+                ?.text
+                .trim() ??
             '';
+
+        if (text.isEmpty && required) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please answer all required text questions.',
+              ),
+            ),
+          );
+          return;
+        }
 
         if (text.isNotEmpty) {
           answers.add({
@@ -96,15 +116,13 @@ class _StudentAssignmentScreenState
     }
 
     if (answers.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
             'Answer at least one question.',
           ),
         ),
       );
-
       return;
     }
 
@@ -114,31 +132,26 @@ class _StudentAssignmentScreenState
       await ref
           .read(studentPortalRepositoryProvider)
           .submitAssignment(
-        assignmentUuid:
-        widget.assignmentUuid,
-        answers: answers,
-      );
+            assignmentUuid:
+                widget.assignmentUuid,
+            answers: answers,
+          );
 
       if (!mounted) return;
 
       context.go(
         '/student/assignments/'
-            '${widget.assignmentUuid}/result',
+        '${widget.assignmentUuid}/result',
       );
     } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text('$error'),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$error')),
       );
     } finally {
       if (mounted) {
-        setState(
-              () => _submitting = false,
-        );
+        setState(() => _submitting = false);
       }
     }
   }
@@ -289,7 +302,7 @@ class _StudentAssignmentScreenState
 }
 
 class StudentAssignmentResultScreen
-    extends ConsumerWidget {
+    extends ConsumerStatefulWidget {
   const StudentAssignmentResultScreen({
     super.key,
     required this.assignmentUuid,
@@ -298,86 +311,217 @@ class StudentAssignmentResultScreen
   final String assignmentUuid;
 
   @override
-  Widget build(
-      BuildContext context,
-      WidgetRef ref,
-      ) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: ref
-          .read(studentPortalRepositoryProvider)
-          .assignmentResult(
-        assignmentUuid,
-      ),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Could not load result: '
-                  '${snapshot.error}',
-            ),
-          );
-        }
+  ConsumerState<StudentAssignmentResultScreen>
+      createState() =>
+          _StudentAssignmentResultScreenState();
+}
 
-        if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+class _StudentAssignmentResultScreenState
+    extends ConsumerState<
+        StudentAssignmentResultScreen> {
+  late Future<Map<String, dynamic>> _result;
 
-        final result = snapshot.data!;
-        final graded =
-            result['status'] == 'GRADED';
+  @override
+  void initState() {
+    super.initState();
+    _result = _fetchResult();
+  }
 
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text(
-              'Assignment result',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall,
-            ),
-            const SizedBox(height: 20),
-            if (!graded)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Result is not available yet.',
-                  ),
+  Future<Map<String, dynamic>> _fetchResult() {
+    return ref
+        .read(studentPortalRepositoryProvider)
+        .assignmentResult(
+          widget.assignmentUuid,
+        );
+  }
+
+  Future<void> _refresh() async {
+    final next = _fetchResult();
+
+    setState(() => _result = next);
+
+    try {
+      await next;
+    } catch (_) {
+      // FutureBuilder error दाखवेल.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _result,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState !=
+              ConnectionState.done) {
+            return ListView(
+              physics:
+                  const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 100),
+                Center(
+                  child: CircularProgressIndicator(),
                 ),
-              )
-            else ...[
+              ],
+            );
+          }
+
+          if (snapshot.hasError) {
+            return ListView(
+              physics:
+                  const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text(
+                  'Could not load result: '
+                  '${snapshot.error}',
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: _refresh,
+                  child: const Text('Retry'),
+                ),
+              ],
+            );
+          }
+
+          final result = snapshot.data!;
+
+          final graded = result['status']
+                  ?.toString()
+                  .toUpperCase() ==
+              'GRADED';
+
+          return ListView(
+            physics:
+                const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            children: [
               Text(
-                'Marks: '
-                    '${result['marks_obtained']}'
-                    ' / ${result['max_marks']}',
+                'Assignment Result',
                 style: Theme.of(context)
                     .textTheme
-                    .titleLarge,
+                    .headlineSmall,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Percentage: '
-                    '${result['percentage']}%',
-              ),
-              Text(
-                'Correct answers: '
-                    '${result['correct_answers']}',
-              ),
-              Text(
-                'Wrong answers: '
-                    '${result['wrong_answers']}',
-              ),
-              if (result['feedback'] != null)
-                Text(
-                  'Feedback: '
-                      '${result['feedback']}',
+              const SizedBox(height: 20),
+
+              if (!graded) ...[
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Submission received',
+                          style: TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Your result is not available yet. '
+                          'Check again after the academy '
+                          'completes grading.',
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh),
+                  label:
+                      const Text('Check result again'),
+                ),
+              ] else ...[
+                Card(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Marks',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${result['marks_obtained'] ?? 0}'
+                          ' / '
+                          '${result['max_marks'] ?? 0}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Percentage: '
+                          '${result['percentage'] ?? 0}%',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(
+                          Icons.check_circle_outline,
+                        ),
+                        title: const Text(
+                          'Correct MCQ answers',
+                        ),
+                        trailing: Text(
+                          '${result['correct_answers'] ?? 0}',
+                        ),
+                      ),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.cancel_outlined,
+                        ),
+                        title: const Text(
+                          'Wrong MCQ answers',
+                        ),
+                        trailing: Text(
+                          '${result['wrong_answers'] ?? 0}',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (result['feedback']
+                        ?.toString()
+                        .isNotEmpty ==
+                    true) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.all(16),
+                      child: Text(
+                        'Feedback: '
+                        '${result['feedback']}',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ],
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

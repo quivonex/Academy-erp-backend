@@ -18,11 +18,13 @@ class StudentShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected =
-    location.startsWith('/student/live-classes')
-        ? 2
-        : location.startsWith('/student/courses')
-            ? 1
-            : 0;
+    location.startsWith('/student/profile')
+        ? 3
+        : location.startsWith('/student/live-classes')
+            ? 2
+            : location.startsWith('/student/courses')
+                ? 1
+                : 0;
     final session = ref.watch(sessionControllerProvider);
 
     return Scaffold(
@@ -69,12 +71,19 @@ class StudentShell extends ConsumerWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: selected,
         onDestinationSelected: (index) {
-          if (index == 0) {
-            context.go('/explore');
-          } else if (index == 1) {
-            context.go('/student/courses');
-          } else {
-            context.go('/student/live-classes');
+          switch (index) {
+            case 0:
+              context.go('/explore');
+              break;
+            case 1:
+              context.go('/student/courses');
+              break;
+            case 2:
+              context.go('/student/live-classes');
+              break;
+            case 3:
+              context.go('/student/profile');
+              break;
           }
         },
         destinations: const [
@@ -89,6 +98,10 @@ class StudentShell extends ConsumerWidget {
           NavigationDestination(
             icon: Icon(Icons.video_camera_front_outlined),
             label: 'Classes',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
           ),
         ],
       ),
