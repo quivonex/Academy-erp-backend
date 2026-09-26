@@ -15,6 +15,10 @@ import '../../features/student_portal/presentation/student_register_screen.dart'
 import '../../features/student_portal/presentation/student_shell.dart';
 import '../../features/students/presentation/student_profile_screen.dart';
 import '../../features/students/presentation/students_directory_screen.dart';
+import '../../features/student_portal/presentation/course_learning_screen.dart';
+import '../../features/student_portal/presentation/material_detail_screen.dart';
+import '../../features/student_portal/presentation/live_class_detail_screen.dart';
+import '../../features/student_portal/presentation/student_assignment_screen.dart';
 
 import '../session/session_controller.dart';
 import '../session/user_role.dart';
@@ -106,14 +110,52 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/student/courses',
             builder: (context, state) =>
-            const MyCoursesScreen(),
+                const MyCoursesScreen(),
             routes: [
               GoRoute(
                 path: ':courseUuid',
                 builder: (context, state) =>
-                    MyCourseDetailScreen(
-                      uuid: state.pathParameters['courseUuid']!,
-                    ),
+                    CourseLearningScreen(
+                  courseUuid: state.pathParameters[
+                      'courseUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/student/materials/:materialUuid',
+            builder: (context, state) =>
+                MaterialDetailScreen(
+              materialUuid: state.pathParameters[
+                  'materialUuid']!,
+            ),
+          ),
+          GoRoute(
+            path:
+                '/student/live-classes/:liveClassUuid',
+            builder: (context, state) =>
+                LiveClassDetailScreen(
+              liveClassUuid: state.pathParameters[
+                  'liveClassUuid']!,
+            ),
+          ),
+          GoRoute(
+            path:
+                '/student/assignments/:assignmentUuid',
+            builder: (context, state) =>
+                StudentAssignmentScreen(
+              assignmentUuid: state.pathParameters[
+                  'assignmentUuid']!,
+            ),
+            routes: [
+              GoRoute(
+                path: 'result',
+                builder: (context, state) =>
+                    StudentAssignmentResultScreen(
+                  assignmentUuid:
+                      state.pathParameters[
+                          'assignmentUuid']!,
+                ),
               ),
             ],
           ),

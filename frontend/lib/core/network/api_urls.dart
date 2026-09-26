@@ -39,4 +39,31 @@ class ApiUrls {
       '/student/courses/$uuid/materials/';
   static String myCourseClasses(String uuid) =>
       '/student/courses/$uuid/live-classes/';
+  static const String publicBanners = '/public/banners/';
+
+  static String studentMaterial(String uuid) =>
+      '/student/materials/$uuid/';
+
+  static String materialProgress(String uuid) =>
+      '/student/materials/$uuid/progress/';
+
+  static String courseProgress(String uuid) =>
+      '/student/courses/$uuid/progress/';
+
+  static const String studentLiveClasses = '/student/live-classes/';
+
+  static String studentLiveClass(String uuid) =>
+      '/student/live-classes/$uuid/';
+
+  static String courseAssignments(String courseUuid) =>
+      '/student/courses/$courseUuid/assignments/';
+
+  static String assignmentDetail(String uuid) =>
+      '/student/assignments/$uuid/';
+
+  static String assignmentSubmit(String uuid) =>
+      '/student/assignments/$uuid/submit/';
+
+  static String assignmentResult(String uuid) =>
+      '/student/assignments/$uuid/result/';
 }

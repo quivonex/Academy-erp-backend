@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,201 +7,329 @@ import 'package:go_router/go_router.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../data/student_portal_repository.dart';
+import 'home_banners.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
 
   @override
-  ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
+  ConsumerState<ExploreScreen> createState() =>
+      _ExploreScreenState();
 }
 
-class _ExploreScreenState extends ConsumerState<ExploreScreen> {
-  final search = TextEditingController();
+class _ExploreScreenState
+    extends ConsumerState<ExploreScreen> {
+  final TextEditingController _searchController =
+  TextEditingController();
 
-  String? categoryUuid;
-  late Future<List<PublicCourse>> courses;
-  late Future<List<CourseCategory>> categories;
+  Timer? _searchTimer;
+
+  List<CourseCategory> _categories = [];
+  List<PublicCourse> _courses = [];
+
+  String? _selectedCategoryUuid;
+  String? _error;
+
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+
+  int _page = 1;
+  int _requestId = 0;
 
   @override
   void initState() {
     super.initState();
 
-    courses = ref.read(studentPortalRepositoryProvider).publicCourses();
-    categories = ref.read(studentPortalRepositoryProvider).categories();
+    _loadCategories();
+    _loadCourses(reset: true);
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final result = await ref
+          .read(studentPortalRepositoryProvider)
+          .categories();
+
+      if (!mounted) return;
+
+      setState(() => _categories = result);
+    } catch (_) {
+      // Categories fail झाल्या तरी course list दिसेल.
+    }
+  }
+
+  Future<void> _loadCourses({
+    required bool reset,
+  }) async {
+    if (!reset && (_loadingMore || !_hasMore)) {
+      return;
+    }
+
+    final requestId = ++_requestId;
+    final requestedPage = reset ? 1 : _page + 1;
+
+    setState(() {
+      _error = null;
+
+      if (reset) {
+        _loading = true;
+        _loadingMore = false;
+        _courses = [];
+        _hasMore = true;
+      } else {
+        _loadingMore = true;
+      }
+    });
+
+    try {
+      final result = await ref
+          .read(studentPortalRepositoryProvider)
+          .publicCourses(
+        search: _searchController.text,
+        categoryUuid:
+        _selectedCategoryUuid,
+        page: requestedPage,
+      );
+
+      if (!mounted || requestId != _requestId) {
+        return;
+      }
+
+      setState(() {
+        if (reset) {
+          _courses = result;
+        } else {
+          _courses.addAll(result);
+        }
+
+        _page = requestedPage;
+        _hasMore = result.length == 20;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestId != _requestId) {
+        return;
+      }
+
+      setState(() {
+        _error = error.toString();
+        _loading = false;
+        _loadingMore = false;
+      });
+    }
+  }
+
+  void _onSearchChanged(String _) {
+    _searchTimer?.cancel();
+
+    _searchTimer = Timer(
+      const Duration(milliseconds: 400),
+          () => _loadCourses(reset: true),
+    );
   }
 
   @override
   void dispose() {
-    search.dispose();
-    super.dispose();
-  }
+    _searchTimer?.cancel();
+    _searchController.dispose();
 
-  void reload() {
-    setState(() {
-      courses = ref.read(studentPortalRepositoryProvider).publicCourses(
-        search: search.text,
-        categoryUuid: categoryUuid,
-      );
-    });
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isStudent =
-        ref.watch(sessionControllerProvider).role == UserRole.student;
+    final isStudent = ref
+        .watch(sessionControllerProvider)
+        .role ==
+        UserRole.student;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Explore courses'),
         actions: [
           TextButton(
-            onPressed: () =>
-                context.go(isStudent ? '/student/courses' : '/login'),
-            child: Text(isStudent ? 'My Courses' : 'Sign in'),
+            onPressed: () => context.go(
+              isStudent
+                  ? '/student/courses'
+                  : '/login',
+            ),
+            child: Text(
+              isStudent
+                  ? 'My Courses'
+                  : 'Sign in',
+            ),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          reload();
-          await courses;
+          await Future.wait([
+            _loadCategories(),
+            _loadCourses(reset: true),
+          ]);
         },
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          physics:
+          const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
           children: [
+            const HomeBanners(),
+            const SizedBox(height: 22),
             Text(
-              'Learn something new',
-              style: Theme.of(context).textTheme.headlineMedium,
+              'Find your next course',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium,
             ),
             const SizedBox(height: 8),
             const Text(
-              'Browse available courses and find the right one for you.',
+              'Explore courses available at the academy.',
             ),
             const SizedBox(height: 20),
             TextField(
-              controller: search,
-              onSubmitted: (_) => reload(),
+              controller: _searchController,
+              onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 labelText: 'Search courses',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  onPressed: reload,
-                  icon: const Icon(Icons.arrow_forward),
+                prefixIcon:
+                const Icon(Icons.search),
+                suffixIcon:
+                _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchController
+                        .clear();
+                    _searchTimer
+                        ?.cancel();
+                    _loadCourses(
+                      reset: true,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.close,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<CourseCategory>>(
-              future: categories,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const SizedBox.shrink();
-
-                return Wrap(
-                  spacing: 8,
-                  children: [
-                    ChoiceChip(
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Padding(
+                    padding:
+                    const EdgeInsets.only(
+                      right: 8,
+                    ),
+                    child: ChoiceChip(
                       label: const Text('All'),
-                      selected: categoryUuid == null,
+                      selected:
+                      _selectedCategoryUuid ==
+                          null,
                       onSelected: (_) {
-                        categoryUuid = null;
-                        reload();
+                        _selectedCategoryUuid =
+                        null;
+                        _loadCourses(
+                          reset: true,
+                        );
                       },
                     ),
-                    for (final category in snapshot.data!)
-                      ChoiceChip(
-                        label: Text(category.name),
-                        selected: categoryUuid == category.uuid,
+                  ),
+                  for (final category
+                  in _categories)
+                    Padding(
+                      padding:
+                      const EdgeInsets.only(
+                        right: 8,
+                      ),
+                      child: ChoiceChip(
+                        label:
+                        Text(category.name),
+                        selected:
+                        _selectedCategoryUuid ==
+                            category.uuid,
                         onSelected: (_) {
-                          categoryUuid = category.uuid;
-                          reload();
+                          _selectedCategoryUuid =
+                              category.uuid;
+                          _loadCourses(
+                            reset: true,
+                          );
                         },
                       ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<PublicCourse>>(
-              future: courses,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Column(
-                    children: [
-                      Text('Could not load courses: ${snapshot.error}'),
-                      TextButton(
-                        onPressed: reload,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  );
-                }
-
-                final items = snapshot.data ?? [];
-
-                if (items.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text('No courses found.'),
                     ),
-                  );
-                }
-
-                return LayoutBuilder(
-                  builder: (context, constraints) => Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final course in items)
-                        SizedBox(
-                          width: constraints.maxWidth > 650
-                              ? (constraints.maxWidth - 12) / 2
-                              : constraints.maxWidth,
-                          child: Card(
-                            child: InkWell(
-                              onTap: () =>
-                                  context.go('/explore/${course.uuid}'),
-                              child: Padding(
-                                padding: const EdgeInsets.all(18),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (course.isFeatured)
-                                      const Chip(label: Text('Featured')),
-                                    Text(
-                                      course.name,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(course.categoryName ?? course.code),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      course.description,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      '₹${course.price}  •  '
-                                          '${course.deliveryMode}',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+                ],
+              ),
             ),
+            const SizedBox(height: 20),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(28),
+                child: Center(
+                  child:
+                  CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null &&
+                _courses.isEmpty) ...[
+              Text(
+                'Could not load courses: $_error',
+              ),
+              TextButton(
+                onPressed: () =>
+                    _loadCourses(reset: true),
+                child: const Text('Retry'),
+              ),
+            ] else if (_courses.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(28),
+                child: Center(
+                  child: Text(
+                    'No courses found.',
+                  ),
+                ),
+              )
+            else ...[
+                for (final course in _courses)
+                  _CourseCard(course: course),
+                if (_error != null)
+                  Padding(
+                    padding:
+                    const EdgeInsets.all(8),
+                    child: Text(
+                      'Could not load more: $_error',
+                    ),
+                  ),
+                if (_hasMore)
+                  Padding(
+                    padding:
+                    const EdgeInsets.only(
+                      top: 12,
+                    ),
+                    child: OutlinedButton(
+                      onPressed: _loadingMore
+                          ? null
+                          : () => _loadCourses(
+                        reset: false,
+                      ),
+                      child: _loadingMore
+                          ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child:
+                        CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                          : const Text(
+                        'Load more courses',
+                      ),
+                    ),
+                  ),
+              ],
           ],
         ),
       ),
@@ -207,7 +337,80 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 }
 
-class PublicCourseDetailScreen extends ConsumerWidget {
+class _CourseCard extends StatelessWidget {
+  const _CourseCard({
+    required this.course,
+  });
+
+  final PublicCourse course;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(
+        bottom: 12,
+      ),
+      child: InkWell(
+        borderRadius:
+        BorderRadius.circular(12),
+        onTap: () => context.go(
+          '/explore/${course.uuid}',
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+            children: [
+              if (course.isFeatured)
+                const Chip(
+                  label: Text('Featured'),
+                ),
+              Text(
+                course.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                course.categoryName ??
+                    course.code,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                course.description,
+                maxLines: 2,
+                overflow:
+                TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    '₹${course.price}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium,
+                  ),
+                  const Spacer(),
+                  Text(course.deliveryMode),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.chevron_right,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PublicCourseDetailScreen
+    extends ConsumerStatefulWidget {
   const PublicCourseDetailScreen({
     super.key,
     required this.uuid,
@@ -216,59 +419,107 @@ class PublicCourseDetailScreen extends ConsumerWidget {
   final String uuid;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PublicCourseDetailScreen>
+  createState() =>
+      _PublicCourseDetailScreenState();
+}
+
+class _PublicCourseDetailScreenState
+    extends ConsumerState<
+        PublicCourseDetailScreen> {
+  late Future<PublicCourse> _course;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _course = ref
+        .read(studentPortalRepositoryProvider)
+        .publicCourse(widget.uuid);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Course details'),
+        title: const Text(
+          'Course details',
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/explore'),
+          icon: const Icon(
+            Icons.arrow_back,
+          ),
+          onPressed: () =>
+              context.go('/explore'),
         ),
       ),
       body: FutureBuilder<PublicCourse>(
-        future: ref.read(studentPortalRepositoryProvider).publicCourse(uuid),
+        future: _course,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.hasError) {
             return Center(
-              child: snapshot.hasError
-                  ? Text('Could not load course: ${snapshot.error}')
-                  : const CircularProgressIndicator(),
+              child: Text(
+                'Could not load course: '
+                    '${snapshot.error}',
+              ),
+            );
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(
+              child:
+              CircularProgressIndicator(),
             );
           }
 
           final course = snapshot.data!;
 
           return ListView(
-            padding: const EdgeInsets.all(24),
+            padding:
+            const EdgeInsets.all(20),
             children: [
               Text(
                 course.name,
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineMedium,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Text(
-                '${course.categoryName ?? course.code}  •  '
-                    '${course.deliveryMode}',
+                course.categoryName ??
+                    course.code,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Text(
                 course.description.isEmpty
-                    ? 'Course description is not available.'
+                    ? 'Description is not available.'
                     : course.description,
               ),
               const SizedBox(height: 20),
-              Text('Price: ₹${course.price}'),
-              if (course.durationMonths != null)
-                Text('Duration: ${course.durationMonths} months'),
-              const SizedBox(height: 22),
+              Text(
+                'Price: ₹${course.price}',
+              ),
+              Text(
+                'Mode: ${course.deliveryMode}',
+              ),
+              if (course.durationMonths !=
+                  null)
+                Text(
+                  'Duration: '
+                      '${course.durationMonths} months',
+                ),
+              const SizedBox(height: 24),
               const Text(
-                'To access the lessons, sign in and contact your academy '
+                'To access lessons, sign in '
+                    'and contact your academy '
                     'about enrollment.',
               ),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: () => context.go('/login'),
-                child: const Text('Sign in'),
+                onPressed: () =>
+                    context.go('/login'),
+                child:
+                const Text('Sign in'),
               ),
             ],
           );
