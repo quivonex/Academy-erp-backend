@@ -7,7 +7,7 @@ import 'token_storage.dart';
 /// Android emulator with a server on the host PC can use http://10.0.2.2:8000/api/v1.
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://192.168.31.86:8000/api/v1',
+  defaultValue: 'http://192.168.31.91:8000/api/v1',
 );
 
 /// Builds the single Dio instance used by every repository.

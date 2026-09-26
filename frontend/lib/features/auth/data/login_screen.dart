@@ -5,6 +5,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import 'login_model.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -175,6 +176,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                           : const Text('Sign In'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => context.go('/register'),
+                      child: const Text('Create student account'),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/explore'),
+                      child: const Text('Explore courses'),
                     ),
                   ],
                 ),

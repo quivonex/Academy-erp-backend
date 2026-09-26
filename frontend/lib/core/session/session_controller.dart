@@ -50,10 +50,16 @@ class SessionController extends Notifier<SessionState> {
   }
 
   SessionState _fromUser(Map<String, dynamic> user) {
-    final role = UserRole.fromApi(user['user_type'].toString());
-    if (!role.isEnterpriseShell) {
-      throw const ApiException('This app is for academy administrators.');
+    final role = UserRole.fromApi(
+      user['user_type'].toString(),
+    );
+
+    if (role != UserRole.student && !role.isEnterpriseShell) {
+      throw const ApiException(
+        'This app currently supports students and academy admins.',
+      );
     }
+
     return SessionState(
       isLoading: false,
       isAuthenticated: true,

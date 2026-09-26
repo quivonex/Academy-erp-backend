@@ -2,115 +2,183 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/academies/presentation/academies_list_screen.dart';
-import '../../features/attendance/presentation/attendance_marking_screen.dart';
 import '../../features/auth/data/login_screen.dart';
 import '../../features/courses/presentation/course_detail_screen.dart';
 import '../../features/courses/presentation/courses_list_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
-import '../../features/enrollment/presentation/enrollment_wizard_screen.dart';
 import '../../features/firms/presentation/all_firm_admins_screen.dart';
 import '../../features/firms/presentation/firm_detail_screen.dart';
 import '../../features/firms/presentation/firms_list_screen.dart';
+import '../../features/student_portal/presentation/explore_screen.dart';
+import '../../features/student_portal/presentation/my_courses_screen.dart';
+import '../../features/student_portal/presentation/student_register_screen.dart';
+import '../../features/student_portal/presentation/student_shell.dart';
 import '../../features/students/presentation/student_profile_screen.dart';
 import '../../features/students/presentation/students_directory_screen.dart';
+
 import '../session/session_controller.dart';
+import '../session/user_role.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/nav_item.dart';
 
-/// Returns true if [role] is allowed to view [location] per kAllNavItems.
-bool _roleCanAccess(String location, dynamic role) {
-  final matching = kAllNavItems.where((item) => location.startsWith(item.route));
+bool _roleCanAccess(String location, UserRole? role) {
+  if (role == null) return false;
+
+  final matching = kAllNavItems.where(
+        (item) => location.startsWith(item.route),
+  );
+
   if (matching.isEmpty) return true;
+
   return matching.any((item) => item.visibleTo(role));
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/dashboard',
+    initialLocation: '/explore',
     refreshListenable: _SessionRefreshListenable(ref),
     redirect: (context, state) {
       final session = ref.read(sessionControllerProvider);
-      final goingToLogin = state.matchedLocation == '/login';
+      final location = state.matchedLocation;
+      final goingToLogin = location == '/login';
+
+      final isPublic = goingToLogin ||
+          location == '/register' ||
+          location.startsWith('/explore');
 
       if (session.isLoading) return null;
 
       if (!session.isAuthenticated) {
-        return goingToLogin ? null : '/login';
+        return isPublic ? null : '/login';
       }
-      if (goingToLogin) {
+
+      if (goingToLogin || location == '/register') {
+        return session.role == UserRole.student
+            ? '/student/courses'
+            : '/dashboard';
+      }
+
+      if (session.role == UserRole.student) {
+        return isPublic || location.startsWith('/student/')
+            ? null
+            : '/student/courses';
+      }
+
+      if (location.startsWith('/student/')) {
         return '/dashboard';
       }
-      if (!_roleCanAccess(state.matchedLocation, session.role)) {
+
+      if (!_roleCanAccess(location, session.role)) {
         return '/dashboard';
       }
+
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/explore',
+        builder: (context, state) => const ExploreScreen(),
+        routes: [
+          GoRoute(
+            path: ':courseUuid',
+            builder: (context, state) =>
+                PublicCourseDetailScreen(
+                  uuid: state.pathParameters['courseUuid']!,
+                ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) =>
+        const StudentRegisterScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
       ),
       ShellRoute(
-        builder: (context, state, child) {
-          return AdminShell(currentRoute: state.matchedLocation, child: child);
-        },
+        builder: (context, state, child) => StudentShell(
+          location: state.matchedLocation,
+          child: child,
+        ),
+        routes: [
+          GoRoute(
+            path: '/student/courses',
+            builder: (context, state) =>
+            const MyCoursesScreen(),
+            routes: [
+              GoRoute(
+                path: ':courseUuid',
+                builder: (context, state) =>
+                    MyCourseDetailScreen(
+                      uuid: state.pathParameters['courseUuid']!,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      ShellRoute(
+        builder: (context, state, child) => AdminShell(
+          currentRoute: state.matchedLocation,
+          child: child,
+        ),
         routes: [
           GoRoute(
             path: '/dashboard',
-            builder: (context, state) => const DashboardScreen(),
-          ),
-          GoRoute(
-            path: '/academies',
-            builder: (context, state) => const AcademiesListScreen(),
+            builder: (context, state) =>
+            const DashboardScreen(),
           ),
           GoRoute(
             path: '/students',
-            builder: (context, state) => const StudentsDirectoryScreen(),
+            builder: (context, state) =>
+            const StudentsDirectoryScreen(),
             routes: [
               GoRoute(
                 path: ':studentUuid',
-                builder: (context, state) => StudentProfileScreen(
-                  studentUuid: state.pathParameters['studentUuid']!,
-                ),
+                builder: (context, state) =>
+                    StudentProfileScreen(
+                      studentUuid:
+                      state.pathParameters['studentUuid']!,
+                    ),
               ),
             ],
           ),
           GoRoute(
             path: '/courses',
-            builder: (context, state) => const CoursesListScreen(),
+            builder: (context, state) =>
+            const CoursesListScreen(),
             routes: [
               GoRoute(
                 path: ':courseUuid',
-                builder: (context, state) => CourseDetailScreen(
-                  courseUuid: state.pathParameters['courseUuid']!,
-                ),
+                builder: (context, state) =>
+                    CourseDetailScreen(
+                      courseUuid:
+                      state.pathParameters['courseUuid']!,
+                    ),
               ),
             ],
           ),
           GoRoute(
-            path: '/attendance',
-            builder: (context, state) => const AttendanceMarkingScreen(),
-          ),
-          GoRoute(
-            path: '/enrollment',
-            builder: (context, state) => const EnrollmentWizardScreen(),
-          ),
-          GoRoute(
             path: '/firms',
-            builder: (context, state) => const FirmsListScreen(),
+            builder: (context, state) =>
+            const FirmsListScreen(),
             routes: [
               GoRoute(
                 path: ':firmUuid',
-                builder: (context, state) => FirmDetailScreen(
-                  firmUuid: state.pathParameters['firmUuid']!,
-                ),
+                builder: (context, state) =>
+                    FirmDetailScreen(
+                      firmUuid:
+                      state.pathParameters['firmUuid']!,
+                    ),
               ),
             ],
           ),
           GoRoute(
             path: '/firm-admins',
-            builder: (context, state) => const AllFirmAdminsScreen(),
+            builder: (context, state) =>
+            const AllFirmAdminsScreen(),
           ),
         ],
       ),
@@ -118,10 +186,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Bridges Riverpod's provider changes into a Listenable so GoRouter
-/// re-evaluates `redirect` whenever auth state changes (login/logout).
 class _SessionRefreshListenable extends ChangeNotifier {
   _SessionRefreshListenable(Ref ref) {
-    ref.listen(sessionControllerProvider, (_, __) => notifyListeners());
+    ref.listen(
+      sessionControllerProvider,
+          (_, __) => notifyListeners(),
+    );
   }
 }

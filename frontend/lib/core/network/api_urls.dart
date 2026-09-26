@@ -27,4 +27,16 @@ class ApiUrls {
   static String studentEnableLogin(String uuid) => '/students/$uuid/enable-login/';
   static const String courses = '/courses/';
   static String courseDetail(String uuid) => '/courses/$uuid/';
+  static const String studentRegister = '/auth/student/register/';
+
+  static const String publicCourses = '/public/courses/';
+  static const String publicCategories = '/public/courses/categories/';
+  static String publicCourse(String uuid) => '/public/courses/$uuid/';
+
+  static const String myCourses = '/student/courses/';
+  static String myCourse(String uuid) => '/student/courses/$uuid/';
+  static String myCourseMaterials(String uuid) =>
+      '/student/courses/$uuid/materials/';
+  static String myCourseClasses(String uuid) =>
+      '/student/courses/$uuid/live-classes/';
 }
