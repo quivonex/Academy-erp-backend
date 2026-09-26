@@ -184,7 +184,7 @@ class _AllLiveClassesScreenState extends ConsumerState<AllLiveClassesScreen> {
                     final uuid = item['uuid']?.toString();
 
                     if (uuid != null && uuid.isNotEmpty) {
-                      context.go(
+                      context.push(
                         '/student/live-classes/$uuid',
                       );
                     }

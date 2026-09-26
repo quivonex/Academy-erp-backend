@@ -15,27 +15,58 @@ class StudentShell extends ConsumerWidget {
   final Widget child;
   final String location;
 
+  String? get _backFallback {
+    if (location.startsWith('/student/courses/')) {
+      return '/student/courses';
+    }
+
+    if (location.startsWith('/student/live-classes/')) {
+      return '/student/live-classes';
+    }
+
+    if (location.startsWith('/student/assignments/') &&
+        location.endsWith('/result')) {
+      return location.substring(
+        0,
+        location.length - '/result'.length,
+      );
+    }
+
+    if (location.startsWith('/student/materials/') ||
+        location.startsWith('/student/assignments/')) {
+      return '/student/courses';
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected =
-    location.startsWith('/student/profile')
+    final backFallback = _backFallback;
+
+    final selected = location.startsWith('/student/profile')
         ? 3
         : location.startsWith('/student/live-classes')
-            ? 2
-            : location.startsWith('/student/courses')
-                ? 1
-                : 0;
+        ? 2
+        : 1;
+
     final session = ref.watch(sessionControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
-        leading: location.startsWith('/student/courses/')
-            ? IconButton(
+        leading: backFallback == null
+            ? null
+            : IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () =>
-              context.go('/student/courses'),
-        )
-            : null,
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(backFallback);
+            }
+          },
+        ),
         title: const Text('Academy Learning'),
         actions: [
           PopupMenuButton<String>(

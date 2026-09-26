@@ -186,7 +186,7 @@ class _MyCoursesScreenState
                     trailing: const Icon(
                       Icons.chevron_right,
                     ),
-                    onTap: () => context.go(
+                    onTap: () => context.push(
                       '/student/courses/'
                           '${course.courseUuid}',
                     ),

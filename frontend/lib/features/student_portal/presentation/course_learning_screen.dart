@@ -108,7 +108,7 @@ class _CourseLearningScreenState
                   final uuid = item['uuid']?.toString();
 
                   if (uuid != null) {
-                    context.go(
+                    context.push(
                       '/student/materials/$uuid',
                     );
                   }
@@ -130,7 +130,7 @@ class _CourseLearningScreenState
                   final uuid = item['uuid']?.toString();
 
                   if (uuid != null) {
-                    context.go(
+                    context.push(
                       '/student/live-classes/$uuid',
                     );
                   }
@@ -152,7 +152,7 @@ class _CourseLearningScreenState
                   final uuid = item['uuid']?.toString();
 
                   if (uuid != null) {
-                    context.go(
+                    context.push(
                       '/student/assignments/$uuid',
                     );
                   }
