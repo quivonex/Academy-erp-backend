@@ -475,7 +475,16 @@ class _PublicCourseDetailScreenState
           ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: () => context.go('/login'),
+            onPressed: () {
+              final loginPath = Uri(
+                path: '/login',
+                queryParameters: {
+                  'returnTo': '/explore/${widget.uuid}',
+                },
+              );
+
+              context.go(loginPath.toString());
+            },
             child: const Text('Sign in'),
           ),
         ],

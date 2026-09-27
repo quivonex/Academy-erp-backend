@@ -8,7 +8,12 @@ import 'login_model.dart';
 import 'package:go_router/go_router.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.returnTo,
+  });
+
+  final String? returnTo;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -179,7 +184,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: () => context.go('/register'),
+                      onPressed: () {
+                        final returnTo = widget.returnTo;
+
+                        if (returnTo == null) {
+                          context.go('/register');
+                          return;
+                        }
+
+                        context.go(
+                          Uri(
+                            path: '/register',
+                            queryParameters: {'returnTo': returnTo},
+                          ).toString(),
+                        );
+                      },
                       child: const Text('Create student account'),
                     ),
                     TextButton(

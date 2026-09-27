@@ -6,7 +6,12 @@ import '../../../core/network/api_exception.dart';
 import '../data/student_portal_repository.dart';
 
 class StudentRegisterScreen extends ConsumerStatefulWidget {
-  const StudentRegisterScreen({super.key});
+  const StudentRegisterScreen({
+    super.key,
+    this.returnTo,
+  });
+
+  final String? returnTo;
 
   @override
   ConsumerState<StudentRegisterScreen> createState() =>
@@ -67,7 +72,16 @@ class _StudentRegisterScreenState
           ),
         );
 
-        context.go('/login');
+        final returnTo = widget.returnTo;
+
+        context.go(
+          returnTo == null
+              ? '/login'
+              : Uri(
+                  path: '/login',
+                  queryParameters: {'returnTo': returnTo},
+                ).toString(),
+        );
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => error = e.message);
