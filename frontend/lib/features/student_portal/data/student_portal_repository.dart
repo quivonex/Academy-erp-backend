@@ -217,23 +217,45 @@ class StudentPortalRepository {
     );
   });
 
-  Future<List<Map<String, dynamic>>> materials(String uuid) =>
+  Future<List<Map<String, dynamic>>> _allPages(String path) =>
       _request(() async {
-        final response = await _dio.get(ApiUrls.myCourseMaterials(uuid));
+        final items = <Map<String, dynamic>>[];
+        var page = 1;
 
-        return _items(response.data)
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
+        while (true) {
+          final response = await _dio.get(
+            path,
+            queryParameters: {
+              'page': page,
+              'page_size': 100,
+            },
+          );
+
+          items.addAll(
+            _items(response.data).map(
+              (item) => Map<String, dynamic>.from(item as Map),
+            ),
+          );
+
+          final body = response.data;
+          final data = body is Map ? body['data'] : null;
+          final next = data is Map ? data['next'] : null;
+
+          if (next == null || next.toString().isEmpty) {
+            break;
+          }
+
+          page++;
+        }
+
+        return items;
       });
+
+  Future<List<Map<String, dynamic>>> materials(String uuid) =>
+      _allPages(ApiUrls.myCourseMaterials(uuid));
 
   Future<List<Map<String, dynamic>>> classes(String uuid) =>
-      _request(() async {
-        final response = await _dio.get(ApiUrls.myCourseClasses(uuid));
-
-        return _items(response.data)
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
-      });
+      _allPages(ApiUrls.myCourseClasses(uuid));
   Future<List<Map<String, dynamic>>> banners({
     String? firmUuid,
   }) =>

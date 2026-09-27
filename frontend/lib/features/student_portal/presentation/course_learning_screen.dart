@@ -156,6 +156,7 @@ class _CourseLearningScreenState
                 emptyMessage:
                 'No assignments available.',
                 titleKey: 'title',
+                subtitleBuilder: _assignmentSubtitle,
                 onTap: (item) {
                   final uuid = item['uuid']?.toString();
 
@@ -261,11 +262,38 @@ class _CourseLearningScreenState
     );
   }
 
+  String _assignmentSubtitle(Map<String, dynamic> assignment) {
+    final dueAt = DateTime.tryParse(
+      assignment['due_at']?.toString() ?? '',
+    );
+    final marks = assignment['max_marks']?.toString();
+    final marksLabel =
+        marks == null || marks.isEmpty ? '' : ' · $marks marks';
+
+    if (dueAt == null) {
+      return 'No due date$marksLabel';
+    }
+
+    final localDueAt = dueAt.toLocal();
+    final date = MaterialLocalizations.of(context)
+        .formatMediumDate(localDueAt);
+
+    if (DateTime.now().isAfter(dueAt)) {
+      if (assignment['allow_late_submission'] == true) {
+        return 'Late submissions allowed · Due $date$marksLabel';
+      }
+      return 'Deadline passed · Due $date$marksLabel';
+    }
+
+    return 'Due $date$marksLabel';
+  }
+
   Widget _resourceList({
     required Future<List<Map<String, dynamic>>>
     future,
     required String emptyMessage,
     required String titleKey,
+    String Function(Map<String, dynamic>)? subtitleBuilder,
     required void Function(Map<String, dynamic>)
     onTap,
   }) {
@@ -305,10 +333,9 @@ class _CourseLearningScreenState
                         'Untitled',
                   ),
                   subtitle: Text(
-                    item['material_type']
-                        ?.toString() ??
-                        item['status']
-                            ?.toString() ??
+                    subtitleBuilder?.call(item) ??
+                        item['material_type']?.toString() ??
+                        item['status']?.toString() ??
                         '',
                   ),
                   trailing:
