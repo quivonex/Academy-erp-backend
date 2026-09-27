@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/utils/open_external_link.dart';
 import '../data/student_portal_repository.dart';
 
@@ -25,10 +28,22 @@ class _LiveClassDetailScreenState
   Future<List<Map<String, dynamic>>>? _classMaterials;
   String? _materialsCourseUuid;
 
+  Timer? _statusTimer;
+  bool _polling = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) {
+        if (mounted) {
+          _pollClass();
+        }
+      },
+    );
   }
 
   void _load() {
@@ -37,7 +52,59 @@ class _LiveClassDetailScreenState
 
     _classData = ref
         .read(studentPortalRepositoryProvider)
-        .liveClass(widget.liveClassUuid);
+        .liveClass(widget.liveClassUuid)
+        .then((data) {
+      final status = _text(data, 'status').toUpperCase();
+
+      if (status == 'COMPLETED' || status == 'CANCELLED') {
+        _statusTimer?.cancel();
+      }
+
+      return data;
+    });
+  }
+
+  Future<void> _pollClass() async {
+    if (_polling) return;
+
+    _polling = true;
+
+    try {
+      final latest = await ref
+          .read(studentPortalRepositoryProvider)
+          .liveClass(widget.liveClassUuid);
+
+      if (!mounted) return;
+
+      final status = _text(latest, 'status').toUpperCase();
+
+      if (status == 'COMPLETED' || status == 'CANCELLED') {
+        _statusTimer?.cancel();
+      }
+
+      setState(() {
+        _classData = Future.value(latest);
+      });
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 && mounted) {
+        _statusTimer?.cancel();
+
+        setState(() {
+          _classData =
+              Future<Map<String, dynamic>>.error(error);
+        });
+      }
+    } catch (_) {
+      // Keep the currently displayed class during a temporary network error.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _loadClassMaterials(
