@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -359,34 +361,71 @@ class StudentAssignmentResultScreen
 }
 
 class _StudentAssignmentResultScreenState
-    extends ConsumerState<
-        StudentAssignmentResultScreen> {
+    extends ConsumerState<StudentAssignmentResultScreen> {
   late Future<Map<String, dynamic>> _result;
+  Timer? _pollTimer;
+  bool _requestInFlight = false;
+  bool _graded = false;
 
   @override
   void initState() {
     super.initState();
     _result = _fetchResult();
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted && !_graded) {
+        _reload(silent: true);
+      }
+    });
   }
 
-  Future<Map<String, dynamic>> _fetchResult() {
-    return ref
-        .read(studentPortalRepositoryProvider)
-        .assignmentResult(
-          widget.assignmentUuid,
-        );
-  }
-
-  Future<void> _refresh() async {
-    final next = _fetchResult();
-
-    setState(() => _result = next);
+  Future<Map<String, dynamic>> _fetchResult() async {
+    _requestInFlight = true;
 
     try {
-      await next;
-    } catch (_) {
-      // FutureBuilder error दाखवेल.
+      final data = await ref
+          .read(studentPortalRepositoryProvider)
+          .assignmentResult(widget.assignmentUuid);
+
+      _graded = data['status']?.toString().toUpperCase() == 'GRADED';
+
+      if (_graded) {
+        _pollTimer?.cancel();
+      }
+
+      return data;
+    } finally {
+      _requestInFlight = false;
     }
+  }
+
+  Future<void> _reload({required bool silent}) async {
+    if (!mounted || _requestInFlight) return;
+
+    final next = _fetchResult();
+
+    if (!silent) {
+      setState(() => _result = next);
+    }
+
+    try {
+      final data = await next;
+
+      if (silent && mounted) {
+        setState(() => _result = Future.value(data));
+      }
+    } catch (_) {
+      // Manual refresh displays the error through FutureBuilder.
+      // A background refresh keeps the current result visible.
+    }
+  }
+
+  Future<void> _refresh() => _reload(silent: false);
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   @override
