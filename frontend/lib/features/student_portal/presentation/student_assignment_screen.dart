@@ -126,9 +126,36 @@ class _StudentAssignmentScreenState
       return;
     }
 
+    if (_submitting) return;
+
     setState(() => _submitting = true);
 
     try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Submit assignment?'),
+          content: Text(
+            'You have answered ${answers.length} of '
+            '${questions.length} questions. '
+            'You cannot change your answers after submission.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(false),
+              child: const Text('Review answers'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
       await ref
           .read(studentPortalRepositoryProvider)
           .submitAssignment(
@@ -189,6 +216,15 @@ class _StudentAssignmentScreenState
                 'submission_status'] ==
                     'GRADED';
 
+        final dueAt = DateTime.tryParse(
+          assignment['due_at']?.toString() ?? '',
+        );
+
+        final deadlinePassed =
+            dueAt != null &&
+            DateTime.now().isAfter(dueAt) &&
+            assignment['allow_late_submission'] != true;
+
         return ListView(
           padding: const EdgeInsets.all(18),
           children: [
@@ -225,8 +261,14 @@ class _StudentAssignmentScreenState
                   ),
                 ),
               const SizedBox(height: 16),
+              if (deadlinePassed) ...[
+                const Text(
+                  'The submission deadline has passed.',
+                ),
+                const SizedBox(height: 12),
+              ],
               FilledButton(
-                onPressed: _submitting
+                onPressed: _submitting || deadlinePassed
                     ? null
                     : () => _submit(questions),
                 child: Text(
