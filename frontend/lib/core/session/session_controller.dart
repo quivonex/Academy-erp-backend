@@ -33,6 +33,7 @@ class SessionController extends Notifier<SessionState> {
   late final TokenStorage _tokenStorage;
   late final Dio _authDio;
   late final AuthService _authService;
+  Future<String?>? _refreshInFlight;
 
   @override
   SessionState build() {
@@ -126,7 +127,7 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  Future<String?> refreshAccessToken() async {
+  Future<String?> _refreshAccessTokenOnce() async {
     final refresh = await _tokenStorage.readRefreshToken();
     if (refresh == null) return null;
     try {
@@ -137,6 +138,25 @@ class SessionController extends Notifier<SessionState> {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> refreshAccessToken() {
+    final runningRefresh = _refreshInFlight;
+
+    if (runningRefresh != null) {
+      return runningRefresh;
+    }
+
+    final refresh = _refreshAccessTokenOnce();
+    _refreshInFlight = refresh;
+
+    refresh.whenComplete(() {
+      if (identical(_refreshInFlight, refresh)) {
+        _refreshInFlight = null;
+      }
+    });
+
+    return refresh;
   }
 
   Future<void> logout() async {
