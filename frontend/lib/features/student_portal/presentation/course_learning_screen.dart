@@ -104,14 +104,22 @@ class _CourseLearningScreenState
                 emptyMessage:
                 'No study materials available.',
                 titleKey: 'title',
-                onTap: (item) {
+                onTap: (item) async {
                   final uuid = item['uuid']?.toString();
 
-                  if (uuid != null) {
-                    context.push(
-                      '/student/materials/$uuid',
-                    );
-                  }
+                  if (uuid == null || uuid.isEmpty) return;
+
+                  await context.push<void>(
+                    '/student/materials/$uuid',
+                  );
+
+                  if (!mounted) return;
+
+                  setState(() {
+                    _progress = ref
+                        .read(studentPortalRepositoryProvider)
+                        .courseProgress(widget.courseUuid);
+                  });
                 },
               ),
               const SizedBox(height: 20),

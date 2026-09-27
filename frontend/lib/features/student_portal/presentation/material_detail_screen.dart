@@ -198,6 +198,17 @@ class _MaterialDetailScreenState
                 final completed =
                     progress['is_completed'] == true;
 
+                final materialType =
+                    material['material_type']?.toString().toUpperCase() ?? '';
+
+                final rawDuration = material['duration_seconds'];
+                final durationSeconds = rawDuration is num
+                    ? rawDuration.toInt()
+                    : int.tryParse(rawDuration?.toString() ?? '') ?? 0;
+
+                final requiresWatchedTime =
+                    materialType == 'VIDEO' && durationSeconds > 0;
+
                 final percentage =
                     progress['completion_percentage']
                             ?.toString() ??
@@ -213,24 +224,29 @@ class _MaterialDetailScreenState
                           : 'Progress: $percentage%',
                     ),
                     const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed:
-                          completed || _saving
-                              ? null
-                              : _markCompleted,
-                      icon: Icon(
-                        completed
-                            ? Icons.check_circle
-                            : Icons.task_alt,
+                    if (requiresWatchedTime && !completed)
+                      const Text(
+                        'Video progress requires playback tracking. '
+                        'Watching in an external app cannot report watched time.',
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: completed || _saving
+                            ? null
+                            : _markCompleted,
+                        icon: Icon(
+                          completed
+                              ? Icons.check_circle
+                              : Icons.task_alt,
+                        ),
+                        label: Text(
+                          completed
+                              ? 'Completed'
+                              : _saving
+                                  ? 'Saving...'
+                                  : 'Mark as completed',
+                        ),
                       ),
-                      label: Text(
-                        completed
-                            ? 'Completed'
-                            : _saving
-                                ? 'Saving...'
-                                : 'Mark as completed',
-                      ),
-                    ),
                   ],
                 );
               },
