@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/open_external_link.dart';
+import 'tracked_video_player.dart';
 
 import '../data/student_portal_repository.dart';
 
@@ -141,18 +142,29 @@ class _MaterialDetailScreenState
               const SizedBox(height: 8),
               SelectableText(url),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => openExternalLink(
-                  context,
-                  url,
+              if (material['material_type'] == 'VIDEO')
+                TrackedVideoPlayer(
+                  materialUuid: widget.materialUuid,
+                  url: url,
+                  onProgressChanged: () {
+                    if (!mounted) return;
+
+                    setState(() {
+                      _progress = ref
+                          .read(studentPortalRepositoryProvider)
+                          .materialProgress(widget.materialUuid);
+                    });
+                  },
+                )
+              else
+                FilledButton.icon(
+                  onPressed: () => openExternalLink(
+                    context,
+                    url,
+                  ),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open material'),
                 ),
-                icon: const Icon(Icons.open_in_new),
-                label: Text(
-                  material['material_type'] == 'VIDEO'
-                      ? 'Watch video'
-                      : 'Open material',
-                ),
-              ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () async {
@@ -226,8 +238,7 @@ class _MaterialDetailScreenState
                     const SizedBox(height: 12),
                     if (requiresWatchedTime && !completed)
                       const Text(
-                        'Video progress requires playback tracking. '
-                        'Watching in an external app cannot report watched time.',
+                        'Play the video above to update your progress.',
                       )
                     else
                       FilledButton.icon(
