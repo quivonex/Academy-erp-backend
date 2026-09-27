@@ -26,6 +26,7 @@ from .serializers import (
     CourseCategorySerializer,
     CourseSerializer,
     EnrollmentSerializer,
+    BulkEnrollmentByAdmissionDateSerializer,
     LessonSerializer,
     SubjectSerializer,
     PublicCourseSerializer,
@@ -34,6 +35,7 @@ from .serializers import (
     PublicCourseQuerySerializer,
 )
 from .services import (
+    bulk_assign_course_by_admission_date,
     create_category,
     create_chapter,
     create_course,
@@ -47,7 +49,6 @@ from .services import (
     get_teacher,
     update_instance,
 )
-
 
 def validation_error_response(exc):
     return error_response(
@@ -439,6 +440,58 @@ class EnrollmentListCreateView(APIView):
                 enrollment
             ).data,
             message="Student enrolled successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+        
+        
+class BulkEnrollmentByAdmissionDateView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def post(self, request):
+        serializer = BulkEnrollmentByAdmissionDateSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Bulk course assignment failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = bulk_assign_course_by_admission_date(
+                firm=request.user.firm,
+                granted_by=request.user,
+                validated_data=serializer.validated_data,
+            )
+        except ValidationError as exc:
+            return validation_error_response(exc)
+
+        return success_response(
+            message="Course assigned to students successfully",
+            data={
+                "course_uuid": str(result["course"].uuid),
+                "course_name": result["course"].name,
+                "joined_date_from": result["joined_date_from"],
+                "joined_date_to": result["joined_date_to"],
+                "grant_access": result["grant_access"],
+                "matched_students_count": result["matched_count"],
+                "created_enrollments_count": len(
+                    result["created_enrollments"]
+                ),
+                "skipped_students_count": len(
+                    result["skipped_students"]
+                ),
+                "created_enrollments": EnrollmentSerializer(
+                    result["created_enrollments"],
+                    many=True,
+                ).data,
+                "skipped_students": result["skipped_students"],
+            },
             status_code=status.HTTP_201_CREATED,
         )
         

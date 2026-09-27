@@ -349,6 +349,7 @@ class Lesson(models.Model):
 class Enrollment(models.Model):
 
     class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending Access"
         ACTIVE = "ACTIVE", "Active"
         COMPLETED = "COMPLETED", "Completed"
         CANCELLED = "CANCELLED", "Cancelled"

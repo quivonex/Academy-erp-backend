@@ -1,6 +1,6 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-
+from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -41,8 +41,13 @@ class StudentListCreateView(APIView):
             firm=request.user.firm,
         )
 
-        search = request.query_params.get(
-            "search"
+        search = request.query_params.get("search")
+        is_active = request.query_params.get("is_active")
+        joined_date_from = request.query_params.get(
+            "joined_date_from"
+        )
+        joined_date_to = request.query_params.get(
+            "joined_date_to"
         )
 
         if search:
@@ -54,24 +59,65 @@ class StudentListCreateView(APIView):
                 | Q(phone__icontains=search)
             )
 
-        is_active = request.query_params.get(
-            "is_active"
-        )
-
         if is_active is not None:
             if is_active.lower() == "true":
-                students = students.filter(
-                    is_active=True
-                )
+                students = students.filter(is_active=True)
 
             elif is_active.lower() == "false":
-                students = students.filter(
-                    is_active=False
+                students = students.filter(is_active=False)
+
+            else:
+                return error_response(
+                    message="Invalid active status filter",
+                    errors={
+                        "is_active": [
+                            "Use either true or false."
+                        ]
+                    },
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
-        students = students.order_by(
-            "-created_at"
-        )
+        if joined_date_from:
+            parsed_joined_date_from = parse_date(
+                joined_date_from
+            )
+
+            if not parsed_joined_date_from:
+                return error_response(
+                    message="Invalid admission date filter",
+                    errors={
+                        "joined_date_from": [
+                            "Use date format YYYY-MM-DD."
+                        ]
+                    },
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            students = students.filter(
+                joined_date__gte=parsed_joined_date_from
+            )
+
+        if joined_date_to:
+            parsed_joined_date_to = parse_date(
+                joined_date_to
+            )
+
+            if not parsed_joined_date_to:
+                return error_response(
+                    message="Invalid admission date filter",
+                    errors={
+                        "joined_date_to": [
+                            "Use date format YYYY-MM-DD."
+                        ]
+                    },
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            students = students.filter(
+                joined_date__lte=parsed_joined_date_to
+            )
+
+        students = students.order_by("-created_at")
 
         paginator = StandardResultsSetPagination()
 
@@ -101,11 +147,9 @@ class StudentListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        admission_number = (
-            serializer.validated_data[
-                "admission_number"
-            ]
-        )
+        admission_number = serializer.validated_data[
+            "admission_number"
+        ]
 
         if Student.objects.filter(
             firm=request.user.firm,
@@ -115,10 +159,7 @@ class StudentListCreateView(APIView):
                 message="Student creation failed",
                 errors={
                     "admission_number": [
-                        (
-                            "A student with this admission "
-                            "number already exists."
-                        )
+                        "A student with this admission number already exists."
                     ]
                 },
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -134,6 +175,7 @@ class StudentListCreateView(APIView):
             data=StudentSerializer(student).data,
             status_code=status.HTTP_201_CREATED,
         )
+        
 
 
 class StudentDetailView(APIView):

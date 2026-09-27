@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-
+from datetime import timedelta
+from django.utils import timezone
 from students.models import Student
 from teachers.models import Teacher
 from .models import (
@@ -243,3 +244,131 @@ def update_instance(instance, validated_data):
 
     return instance
 
+@transaction.atomic
+def bulk_assign_course_by_admission_date(
+    *,
+    firm,
+    granted_by,
+    validated_data,
+):
+    course_uuid = validated_data["course_uuid"]
+    joined_date_from = validated_data["joined_date_from"]
+    joined_date_to = (
+        validated_data.get("joined_date_to")
+        or joined_date_from
+    )
+    grant_access = validated_data["grant_access"]
+
+    course = get_course(
+        firm=firm,
+        course_uuid=course_uuid,
+    )
+
+    if not course.is_active:
+        raise ValidationError({
+            "course_uuid": [
+                "Inactive course cannot be assigned."
+            ]
+        })
+
+    students = (
+        Student.objects
+        .filter(
+            firm=firm,
+            is_active=True,
+            joined_date__gte=joined_date_from,
+            joined_date__lte=joined_date_to,
+        )
+        .order_by("first_name", "last_name")
+    )
+
+    matched_students = list(students)
+
+    if not matched_students:
+        raise ValidationError({
+            "joined_date_from": [
+                "No active students were found for the selected "
+                "admission date range."
+            ]
+        })
+
+    student_ids = [
+        student.id for student in matched_students
+    ]
+
+    enrolled_student_ids = set(
+        Enrollment.objects.filter(
+            firm=firm,
+            course=course,
+            student_id__in=student_ids,
+        ).values_list("student_id", flat=True)
+    )
+
+    now = timezone.now()
+
+    requested_start_at = validated_data.get(
+        "access_start_at"
+    )
+    requested_end_at = validated_data.get(
+        "access_end_at"
+    )
+
+    if grant_access:
+        access_start_at = requested_start_at or now
+
+        if requested_end_at:
+            access_end_at = requested_end_at
+        elif course.access_duration_days:
+            access_end_at = (
+                access_start_at
+                + timedelta(days=course.access_duration_days)
+            )
+        else:
+            access_end_at = None
+
+        enrollment_status = Enrollment.Status.ACTIVE
+    else:
+        access_start_at = None
+        access_end_at = None
+        enrollment_status = Enrollment.Status.PENDING
+
+    new_enrollments = []
+    skipped_students = []
+
+    for student in matched_students:
+        if student.id in enrolled_student_ids:
+            skipped_students.append({
+                "student_uuid": str(student.uuid),
+                "student_name": student.full_name,
+                "admission_number": student.admission_number,
+                "reason": "Student is already enrolled in this course.",
+            })
+            continue
+
+        new_enrollments.append(
+            Enrollment(
+                firm=firm,
+                student=student,
+                course=course,
+                source=Enrollment.Source.FIRM_GRANTED,
+                granted_by=granted_by,
+                status=enrollment_status,
+                access_start_at=access_start_at,
+                access_end_at=access_end_at,
+            )
+        )
+
+    created_enrollments = Enrollment.objects.bulk_create(
+        new_enrollments
+    )
+
+    return {
+        "course": course,
+        "joined_date_from": joined_date_from,
+        "joined_date_to": joined_date_to,
+        "grant_access": grant_access,
+        "matched_count": len(matched_students),
+        "created_enrollments": created_enrollments,
+        "skipped_students": skipped_students,
+    }
+    

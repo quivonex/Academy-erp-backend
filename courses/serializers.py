@@ -241,6 +241,58 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return attrs
     
 
+class BulkEnrollmentByAdmissionDateSerializer(serializers.Serializer):
+    course_uuid = serializers.UUIDField()
+
+    joined_date_from = serializers.DateField()
+    joined_date_to = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
+
+    grant_access = serializers.BooleanField(
+        default=True,
+    )
+
+    access_start_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    access_end_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        joined_date_from = attrs["joined_date_from"]
+        joined_date_to = attrs.get("joined_date_to")
+
+        access_start_at = attrs.get("access_start_at")
+        access_end_at = attrs.get("access_end_at")
+
+        if joined_date_to and joined_date_to < joined_date_from:
+            raise serializers.ValidationError({
+                "joined_date_to": (
+                    "Admission end date must be on or after "
+                    "admission start date."
+                )
+            })
+
+        if (
+            access_start_at
+            and access_end_at
+            and access_end_at <= access_start_at
+        ):
+            raise serializers.ValidationError({
+                "access_end_at": (
+                    "Access end time must be after access start time."
+                )
+            })
+
+        return attrs
+    
+    
 
 class PublicCourseSerializer(serializers.ModelSerializer):
     firm_uuid = serializers.UUIDField(

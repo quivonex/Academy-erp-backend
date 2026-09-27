@@ -89,6 +89,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             "full_name",
             "email",
             "phone",
+            "joined_date",
             "gender",
             "is_active",
             "created_at",
