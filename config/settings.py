@@ -75,8 +75,7 @@ INSTALLED_APPS = [
     "progress",
     "assignments",
     "banners",
-    
-    
+    "payments",
     
     
 ]
