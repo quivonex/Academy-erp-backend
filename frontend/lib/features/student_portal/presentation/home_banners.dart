@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/open_external_link.dart';
 import '../data/student_portal_repository.dart';
 
 class HomeBanners extends ConsumerStatefulWidget {
@@ -151,6 +152,20 @@ class _HomeBannersState extends ConsumerState<HomeBanners> {
               banner['course_uuid']
                   ?.toString();
 
+              final actionUrl =
+                  banner['action_url']?.toString().trim() ?? '';
+              final actionLabel =
+                  banner['action_label']?.toString().trim() ?? '';
+
+              final actionUri = Uri.tryParse(actionUrl);
+              final hasExternalAction = actionUri != null &&
+                  (actionUri.scheme == 'http' ||
+                      actionUri.scheme == 'https') &&
+                  actionUri.host.isNotEmpty;
+
+              final hasCourse =
+                  courseUuid != null && courseUuid.isNotEmpty;
+
               return Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 4,
@@ -158,12 +173,11 @@ class _HomeBannersState extends ConsumerState<HomeBanners> {
                 child: Card(
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: courseUuid != null &&
-                        courseUuid.isNotEmpty
-                        ? () => context.go(
-                      '/explore/$courseUuid',
-                    )
-                        : null,
+                    onTap: hasCourse
+                        ? () => context.push('/explore/$courseUuid')
+                        : hasExternalAction
+                            ? () => openExternalLink(context, actionUrl)
+                            : null,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -249,6 +263,30 @@ class _HomeBannersState extends ConsumerState<HomeBanners> {
                                   Colors.white,
                                 ),
                               ),
+                              if (hasCourse || hasExternalAction) ...[
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.92),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    actionLabel.isNotEmpty
+                                        ? actionLabel
+                                        : hasCourse
+                                            ? 'View course'
+                                            : 'Learn more',
+                                    style: const TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
