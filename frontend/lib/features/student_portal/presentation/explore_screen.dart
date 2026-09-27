@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../data/student_portal_repository.dart';
@@ -425,6 +426,7 @@ class PublicCourseDetailScreen extends ConsumerStatefulWidget {
 class _PublicCourseDetailScreenState
     extends ConsumerState<PublicCourseDetailScreen> {
   late Future<PublicCourse> _course;
+  Future<bool>? _hasAccess;
 
   @override
   void initState() {
@@ -432,10 +434,110 @@ class _PublicCourseDetailScreenState
     _loadCourse();
   }
 
+  @override
+  void didUpdateWidget(covariant PublicCourseDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.uuid != widget.uuid) {
+      _loadCourse();
+      _hasAccess = null;
+    }
+  }
+
   void _loadCourse() {
     _course = ref
         .read(studentPortalRepositoryProvider)
         .publicCourse(widget.uuid);
+  }
+
+  Future<bool> _checkAccess() async {
+    try {
+      await ref
+          .read(studentPortalRepositoryProvider)
+          .myCourse(widget.uuid);
+      return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return false;
+      rethrow;
+    }
+  }
+
+  Widget _courseAction({
+    required bool isAuthenticated,
+    required bool isStudent,
+  }) {
+    if (!isAuthenticated) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Sign in with a student account to check your course access.',
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => context.go('/login'),
+            child: const Text('Sign in'),
+          ),
+        ],
+      );
+    }
+
+    if (!isStudent) {
+      return const Text(
+        'Course learning is available to student accounts.',
+      );
+    }
+
+    return FutureBuilder<bool>(
+      future: _hasAccess ??= _checkAccess(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Could not check course access: ${snapshot.error}'),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() => _hasAccess = _checkAccess());
+                },
+                child: const Text('Try again'),
+              ),
+            ],
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (snapshot.data == true) {
+          return FilledButton(
+            onPressed: () => context.go(
+              '/student/courses/${widget.uuid}',
+            ),
+            child: const Text('Continue learning'),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'You do not have access to this course yet. '
+              'Contact the academy for enrollment.',
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => context.go('/student/courses'),
+              child: const Text('View my courses'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -515,24 +617,13 @@ class _PublicCourseDetailScreenState
               Text('Price: ₹${course.price}'),
               Text('Mode: ${course.deliveryMode}'),
               if (course.durationMonths != null)
-                Text('Duration: ${course.durationMonths} months'),
+                Text(
+                  'Duration: ${course.durationMonths} months',
+                ),
               const SizedBox(height: 24),
-              Text(
-                isStudent
-                    ? 'Enrollment आणि course access साठी '
-                        'academy शी संपर्क करा. आधीच enrolled '
-                        'असल्यास My Courses मध्ये course दिसेल.'
-                    : 'Course access साठी sign in करा आणि '
-                        'enrollment बद्दल academy शी संपर्क करा.',
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => context.go(
-                  isStudent ? '/student/courses' : '/login',
-                ),
-                child: Text(
-                  isStudent ? 'My Courses' : 'Sign in',
-                ),
+              _courseAction(
+                isAuthenticated: session.isAuthenticated,
+                isStudent: isStudent,
               ),
             ],
           );
