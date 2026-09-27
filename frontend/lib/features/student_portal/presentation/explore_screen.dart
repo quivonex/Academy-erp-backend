@@ -353,7 +353,7 @@ class _CourseCard extends StatelessWidget {
       child: InkWell(
         borderRadius:
         BorderRadius.circular(12),
-        onTap: () => context.go(
+        onTap: () => context.push(
           '/explore/${course.uuid}',
         ),
         child: Padding(
@@ -409,8 +409,7 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-class PublicCourseDetailScreen
-    extends ConsumerStatefulWidget {
+class PublicCourseDetailScreen extends ConsumerStatefulWidget {
   const PublicCourseDetailScreen({
     super.key,
     required this.uuid,
@@ -419,20 +418,21 @@ class PublicCourseDetailScreen
   final String uuid;
 
   @override
-  ConsumerState<PublicCourseDetailScreen>
-  createState() =>
+  ConsumerState<PublicCourseDetailScreen> createState() =>
       _PublicCourseDetailScreenState();
 }
 
 class _PublicCourseDetailScreenState
-    extends ConsumerState<
-        PublicCourseDetailScreen> {
+    extends ConsumerState<PublicCourseDetailScreen> {
   late Future<PublicCourse> _course;
 
   @override
   void initState() {
     super.initState();
+    _loadCourse();
+  }
 
+  void _loadCourse() {
     _course = ref
         .read(studentPortalRepositoryProvider)
         .publicCourse(widget.uuid);
@@ -440,17 +440,23 @@ class _PublicCourseDetailScreenState
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionControllerProvider);
+    final isStudent = session.isAuthenticated &&
+        session.role == UserRole.student;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Course details',
-        ),
+        title: const Text('Course details'),
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back,
-          ),
-          onPressed: () =>
-              context.go('/explore'),
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back to Explore',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/explore');
+            }
+          },
         ),
       ),
       body: FutureBuilder<PublicCourse>(
@@ -458,37 +464,47 @@ class _PublicCourseDetailScreenState
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
-              child: Text(
-                'Could not load course: '
-                    '${snapshot.error}',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Could not load course: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(_loadCourse),
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
             );
           }
 
           if (!snapshot.hasData) {
             return const Center(
-              child:
-              CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             );
           }
 
           final course = snapshot.data!;
 
           return ListView(
-            padding:
-            const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             children: [
+              if (course.isFeatured)
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(label: Text('Featured')),
+                ),
               Text(
                 course.name,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium,
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 12),
-              Text(
-                course.categoryName ??
-                    course.code,
-              ),
+              Text(course.categoryName ?? course.code),
               const SizedBox(height: 16),
               Text(
                 course.description.isEmpty
@@ -496,30 +512,27 @@ class _PublicCourseDetailScreenState
                     : course.description,
               ),
               const SizedBox(height: 20),
-              Text(
-                'Price: ₹${course.price}',
-              ),
-              Text(
-                'Mode: ${course.deliveryMode}',
-              ),
-              if (course.durationMonths !=
-                  null)
-                Text(
-                  'Duration: '
-                      '${course.durationMonths} months',
-                ),
+              Text('Price: ₹${course.price}'),
+              Text('Mode: ${course.deliveryMode}'),
+              if (course.durationMonths != null)
+                Text('Duration: ${course.durationMonths} months'),
               const SizedBox(height: 24),
-              const Text(
-                'To access lessons, sign in '
-                    'and contact your academy '
-                    'about enrollment.',
+              Text(
+                isStudent
+                    ? 'Enrollment आणि course access साठी '
+                        'academy शी संपर्क करा. आधीच enrolled '
+                        'असल्यास My Courses मध्ये course दिसेल.'
+                    : 'Course access साठी sign in करा आणि '
+                        'enrollment बद्दल academy शी संपर्क करा.',
               ),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: () =>
-                    context.go('/login'),
-                child:
-                const Text('Sign in'),
+                onPressed: () => context.go(
+                  isStudent ? '/student/courses' : '/login',
+                ),
+                child: Text(
+                  isStudent ? 'My Courses' : 'Sign in',
+                ),
               ),
             ],
           );
