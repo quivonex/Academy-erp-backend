@@ -104,6 +104,10 @@ class _CourseLearningScreenState
                 emptyMessage:
                 'No study materials available.',
                 titleKey: 'title',
+                subtitleBuilder: (item) => _resourceSubtitle(
+                  item,
+                  typeKey: 'material_type',
+                ),
                 onTap: (item) async {
                   final uuid = item['uuid']?.toString();
 
@@ -134,6 +138,10 @@ class _CourseLearningScreenState
                 emptyMessage:
                 'No live classes scheduled.',
                 titleKey: 'title',
+                subtitleBuilder: (item) => _resourceSubtitle(
+                  item,
+                  typeKey: 'status',
+                ),
                 onTap: (item) {
                   final uuid = item['uuid']?.toString();
 
@@ -172,6 +180,28 @@ class _CourseLearningScreenState
         );
       },
     );
+  }
+
+  String _resourceSubtitle(
+    Map<String, dynamic> item, {
+    required String typeKey,
+  }) {
+    final parts = <String>[];
+
+    for (final key in [
+      typeKey,
+      'subject_name',
+      'chapter_title',
+      'lesson_title',
+    ]) {
+      final value = item[key]?.toString().trim();
+
+      if (value != null && value.isNotEmpty) {
+        parts.add(value);
+      }
+    }
+
+    return parts.isEmpty ? 'Course content' : parts.join(' · ');
   }
 
   Widget _progressCard() {
