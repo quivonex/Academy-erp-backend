@@ -6,8 +6,7 @@ import 'tracked_video_player.dart';
 
 import '../data/student_portal_repository.dart';
 
-class MaterialDetailScreen
-    extends ConsumerStatefulWidget {
+class MaterialDetailScreen extends ConsumerStatefulWidget {
   const MaterialDetailScreen({
     super.key,
     required this.materialUuid,
@@ -16,8 +15,7 @@ class MaterialDetailScreen
   final String materialUuid;
 
   @override
-  ConsumerState<MaterialDetailScreen>
-  createState() =>
+  ConsumerState<MaterialDetailScreen> createState() =>
       _MaterialDetailScreenState();
 }
 
@@ -43,6 +41,23 @@ class _MaterialDetailScreenState
     _progress = api.materialProgress(
       widget.materialUuid,
     );
+  }
+
+  void _retryMaterial() {
+    final api = ref.read(studentPortalRepositoryProvider);
+
+    setState(() {
+      _material = api.material(widget.materialUuid);
+      _progress = api.materialProgress(widget.materialUuid);
+    });
+  }
+
+  void _retryProgress() {
+    setState(() {
+      _progress = ref
+          .read(studentPortalRepositoryProvider)
+          .materialProgress(widget.materialUuid);
+    });
   }
 
   Future<void> _markCompleted() async {
@@ -93,9 +108,21 @@ class _MaterialDetailScreenState
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text(
-              'Could not load material: '
-                  '${snapshot.error}',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Could not load material: ${snapshot.error}',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: _retryMaterial,
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
           );
         }
@@ -107,37 +134,33 @@ class _MaterialDetailScreenState
         }
 
         final material = snapshot.data!;
-        final url =
-        material['content_url']?.toString();
+        final url = material['content_url']?.toString() ?? '';
+        final contentUri = Uri.tryParse(url);
+
+        final hasContent = contentUri != null &&
+            (contentUri.scheme == 'http' ||
+                contentUri.scheme == 'https') &&
+            contentUri.host.isNotEmpty;
 
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              material['title']
-                  ?.toString() ??
-                  'Study material',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall,
+              material['title']?.toString() ?? 'Study material',
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
-              material['description']
-                  ?.toString() ??
-                  '',
+              material['description']?.toString() ?? '',
             ),
             const SizedBox(height: 12),
             Chip(
               label: Text(
-                material['material_type']
-                    ?.toString() ??
-                    'MATERIAL',
+                material['material_type']?.toString() ?? 'MATERIAL',
               ),
             ),
             const SizedBox(height: 20),
-            if (url != null &&
-                url.isNotEmpty) ...[
+            if (hasContent) ...[
               const Text('Content URL'),
               const SizedBox(height: 8),
               SelectableText(url),
@@ -173,8 +196,7 @@ class _MaterialDetailScreenState
                   );
 
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(
+                    ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
                           'Link copied',
@@ -195,9 +217,17 @@ class _MaterialDetailScreenState
               future: _progress,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Text(
-                    'Could not load progress: '
-                    '${snapshot.error}',
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Could not load progress: ${snapshot.error}',
+                      ),
+                      TextButton(
+                        onPressed: _retryProgress,
+                        child: const Text('Retry progress'),
+                      ),
+                    ],
                   );
                 }
 
@@ -207,8 +237,7 @@ class _MaterialDetailScreenState
 
                 final progress = snapshot.data!;
 
-                final completed =
-                    progress['is_completed'] == true;
+                final completed = progress['is_completed'] == true;
 
                 final materialType =
                     material['material_type']?.toString().toUpperCase() ?? '';
@@ -222,13 +251,10 @@ class _MaterialDetailScreenState
                     materialType == 'VIDEO' && durationSeconds > 0;
 
                 final percentage =
-                    progress['completion_percentage']
-                            ?.toString() ??
-                        '0';
+                    progress['completion_percentage']?.toString() ?? '0';
 
                 return Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
                       completed
@@ -242,13 +268,11 @@ class _MaterialDetailScreenState
                       )
                     else
                       FilledButton.icon(
-                        onPressed: completed || _saving
+                        onPressed: completed || _saving || !hasContent
                             ? null
                             : _markCompleted,
                         icon: Icon(
-                          completed
-                              ? Icons.check_circle
-                              : Icons.task_alt,
+                          completed ? Icons.check_circle : Icons.task_alt,
                         ),
                         label: Text(
                           completed

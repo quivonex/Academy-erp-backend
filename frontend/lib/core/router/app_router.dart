@@ -59,6 +59,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (goingToLogin || location == '/register') {
+        final returnTo = state.uri.queryParameters['returnTo'];
+
+        final courseDetailPath = RegExp(
+          r'^/explore/[0-9a-fA-F]{8}-'
+          r'[0-9a-fA-F]{4}-'
+          r'[0-9a-fA-F]{4}-'
+          r'[0-9a-fA-F]{4}-'
+          r'[0-9a-fA-F]{12}$',
+        );
+
+        if (session.role == UserRole.student &&
+            returnTo != null &&
+            courseDetailPath.hasMatch(returnTo)) {
+          return returnTo;
+        }
+
         return session.role == UserRole.student
             ? '/student/courses'
             : '/dashboard';
@@ -96,12 +112,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) =>
-        const StudentRegisterScreen(),
+        builder: (context, state) => StudentRegisterScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
       ),
       GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => LoginScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
       ),
       ShellRoute(
         builder: (context, state, child) => StudentShell(

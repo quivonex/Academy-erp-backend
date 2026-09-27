@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/utils/open_external_link.dart';
 import '../data/student_portal_repository.dart';
 
@@ -21,17 +25,110 @@ class LiveClassDetailScreen extends ConsumerStatefulWidget {
 class _LiveClassDetailScreenState
     extends ConsumerState<LiveClassDetailScreen> {
   late Future<Map<String, dynamic>> _classData;
+  Future<List<Map<String, dynamic>>>? _classMaterials;
+  String? _materialsCourseUuid;
+
+  Timer? _statusTimer;
+  bool _polling = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) {
+        if (mounted) {
+          _pollClass();
+        }
+      },
+    );
   }
 
   void _load() {
+    _classMaterials = null;
+    _materialsCourseUuid = null;
+
     _classData = ref
         .read(studentPortalRepositoryProvider)
-        .liveClass(widget.liveClassUuid);
+        .liveClass(widget.liveClassUuid)
+        .then((data) {
+      final status = _text(data, 'status').toUpperCase();
+
+      if (status == 'COMPLETED' || status == 'CANCELLED') {
+        _statusTimer?.cancel();
+      }
+
+      return data;
+    });
+  }
+
+  Future<void> _pollClass() async {
+    if (_polling) return;
+
+    _polling = true;
+
+    try {
+      final latest = await ref
+          .read(studentPortalRepositoryProvider)
+          .liveClass(widget.liveClassUuid);
+
+      if (!mounted) return;
+
+      final status = _text(latest, 'status').toUpperCase();
+
+      if (status == 'COMPLETED' || status == 'CANCELLED') {
+        _statusTimer?.cancel();
+      }
+
+      setState(() {
+        _classData = Future.value(latest);
+      });
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 && mounted) {
+        _statusTimer?.cancel();
+
+        setState(() {
+          _classData =
+              Future<Map<String, dynamic>>.error(error);
+        });
+      }
+    } catch (_) {
+      // Keep the currently displayed class during a temporary network error.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadClassMaterials(
+    String courseUuid,
+  ) {
+    if (_classMaterials == null ||
+        _materialsCourseUuid != courseUuid) {
+      _materialsCourseUuid = courseUuid;
+
+      _classMaterials = ref
+          .read(studentPortalRepositoryProvider)
+          .materials(courseUuid)
+          .then(
+            (items) => items
+                .where(
+                  (material) =>
+                      material['live_class_uuid']?.toString() ==
+                      widget.liveClassUuid,
+                )
+                .toList(),
+          );
+    }
+
+    return _classMaterials!;
   }
 
   Future<void> _refresh() async {
@@ -194,6 +291,85 @@ class _LiveClassDetailScreenState
               ] else if (status == 'COMPLETED') ...[
                 const SizedBox(height: 20),
                 const Text('This live class has ended.'),
+                const SizedBox(height: 20),
+                Text(
+                  'Class recordings and materials',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                if (_text(item, 'course_uuid').isEmpty)
+                  const Text('Class materials are unavailable.')
+                else
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _loadClassMaterials(
+                      _text(item, 'course_uuid'),
+                    ),
+                    builder: (context, materialsSnapshot) {
+                      if (materialsSnapshot.hasError) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Could not load class materials: '
+                              '${materialsSnapshot.error}',
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _classMaterials = null;
+                                });
+                              },
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        );
+                      }
+
+                      if (!materialsSnapshot.hasData) {
+                        return const LinearProgressIndicator();
+                      }
+
+                      final materials = materialsSnapshot.data!;
+
+                      if (materials.isEmpty) {
+                        return const Text(
+                          'No recording or material is available for this class yet.',
+                        );
+                      }
+
+                      return Column(
+                        children: [
+                          for (final material in materials)
+                            Card(
+                              child: ListTile(
+                                leading: Icon(
+                                  material['material_type'] == 'VIDEO'
+                                      ? Icons.play_circle_outline
+                                      : Icons.description_outlined,
+                                ),
+                                title: Text(
+                                  material['title']?.toString() ??
+                                      'Class material',
+                                ),
+                                subtitle: Text(
+                                  material['material_type']?.toString() ??
+                                      'MATERIAL',
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  final uuid =
+                                      material['uuid']?.toString() ?? '';
+
+                                  if (uuid.isNotEmpty) {
+                                    context.push('/student/materials/$uuid');
+                                  }
+                                },
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
               ] else if (status == 'CANCELLED') ...[
                 const SizedBox(height: 20),
                 const Text('This live class was cancelled.'),

@@ -4,18 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../data/student_portal_repository.dart';
 
-class MyCoursesScreen
-    extends ConsumerStatefulWidget {
+class MyCoursesScreen extends ConsumerStatefulWidget {
   const MyCoursesScreen({super.key});
 
   @override
-  ConsumerState<MyCoursesScreen> createState() =>
-      _MyCoursesScreenState();
+  ConsumerState<MyCoursesScreen> createState() => _MyCoursesScreenState();
 }
 
-class _MyCoursesScreenState
-    extends ConsumerState<MyCoursesScreen> {
+class _MyCoursesScreenState extends ConsumerState<MyCoursesScreen> {
   final List<MyCourse> _courses = [];
+
+  final Map<String, Future<Map<String, dynamic>>> _progressFutures = {};
 
   bool _loading = true;
   bool _loadingMore = false;
@@ -32,17 +31,26 @@ class _MyCoursesScreenState
     _loadCourses(reset: true);
   }
 
+  Future<Map<String, dynamic>> _progressFor(
+    String courseUuid,
+  ) {
+    return _progressFutures.putIfAbsent(
+      courseUuid,
+      () => ref
+          .read(studentPortalRepositoryProvider)
+          .courseProgress(courseUuid),
+    );
+  }
+
   Future<void> _loadCourses({
     required bool reset,
   }) async {
-    if (!reset &&
-        (_loadingMore || !_hasMore)) {
+    if (!reset && (_loadingMore || !_hasMore)) {
       return;
     }
 
     final requestId = ++_requestId;
-    final requestedPage =
-    reset ? 1 : _page + 1;
+    final requestedPage = reset ? 1 : _page + 1;
 
     setState(() {
       _error = null;
@@ -52,6 +60,7 @@ class _MyCoursesScreenState
         _loadingMore = false;
         _hasMore = true;
         _courses.clear();
+        _progressFutures.clear();
       } else {
         _loadingMore = true;
       }
@@ -62,8 +71,7 @@ class _MyCoursesScreenState
           .read(studentPortalRepositoryProvider)
           .myCourses(page: requestedPage);
 
-      if (!mounted ||
-          requestId != _requestId) {
+      if (!mounted || requestId != _requestId) {
         return;
       }
 
@@ -75,8 +83,7 @@ class _MyCoursesScreenState
         _loadingMore = false;
       });
     } catch (error) {
-      if (!mounted ||
-          requestId != _requestId) {
+      if (!mounted || requestId != _requestId) {
         return;
       }
 
@@ -88,44 +95,100 @@ class _MyCoursesScreenState
     }
   }
 
+  Widget _courseProgress(String courseUuid) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _progressFor(courseUuid),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return TextButton(
+            onPressed: () {
+              setState(() {
+                _progressFutures.remove(courseUuid);
+              });
+            },
+            child: const Text('Progress unavailable · Retry'),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          );
+        }
+
+        final data = snapshot.data!;
+
+        final percentage = (num.tryParse(
+                  data['completion_percentage']?.toString() ?? '',
+                ) ??
+                0)
+            .toDouble()
+            .clamp(0.0, 100.0)
+            .toDouble();
+
+        final completed = int.tryParse(
+              data['completed_materials']?.toString() ?? '',
+            ) ??
+            0;
+
+        final total = int.tryParse(
+              data['total_materials']?.toString() ?? '',
+            ) ??
+            0;
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(
+                value: percentage / 100,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${percentage.toStringAsFixed(0)}% complete'
+                ' · $completed of $total materials',
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () =>
-          _loadCourses(reset: true),
+      onRefresh: () => _loadCourses(reset: true),
       child: ListView(
-        physics:
-        const AlwaysScrollableScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Text(
             'My Courses',
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium,
+            style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           const Text(
             'Courses you currently have access to.',
           ),
           const SizedBox(height: 20),
-
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32),
               child: Center(
-                child:
-                CircularProgressIndicator(),
+                child: CircularProgressIndicator(),
               ),
             )
-          else if (_courses.isEmpty &&
-              _error != null) ...[
+          else if (_courses.isEmpty && _error != null) ...[
             Text(
               'Could not load courses: $_error',
             ),
             TextButton(
-              onPressed: () =>
-                  _loadCourses(reset: true),
+              onPressed: () => _loadCourses(reset: true),
               child: const Text('Retry'),
             ),
           ] else if (_courses.isEmpty)
@@ -134,95 +197,89 @@ class _MyCoursesScreenState
                 padding: EdgeInsets.all(20),
                 child: Text(
                   'No active courses yet. '
-                      'Contact your academy to get access.',
+                  'Contact your academy to get access.',
                 ),
               ),
             )
           else ...[
-              for (final course in _courses)
-                Card(
-                  margin: const EdgeInsets.only(
-                    bottom: 12,
-                  ),
-                  child: ListTile(
-                    contentPadding:
-                    const EdgeInsets.all(16),
-                    leading: const Icon(
-                      Icons.menu_book_outlined,
-                      size: 30,
-                    ),
-                    title: Text(
-                      course.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium,
-                    ),
-                    subtitle: Padding(
-                      padding:
-                      const EdgeInsets.only(
-                        top: 8,
-                      ),
-                      child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            course.categoryName ??
-                                course.code,
-                          ),
-                          const SizedBox(
-                            height: 4,
-                          ),
-                          Text(
-                            course.accessEndAt ==
-                                null
-                                ? 'Access active'
-                                : 'Access until '
-                                '${course.accessEndAt}',
-                          ),
-                        ],
-                      ),
-                    ),
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                    ),
-                    onTap: () => context.push(
-                      '/student/courses/'
-                          '${course.courseUuid}',
-                    ),
-                  ),
+            for (final course in _courses)
+              Card(
+                margin: const EdgeInsets.only(
+                  bottom: 12,
                 ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(16),
+                  leading: const Icon(
+                    Icons.menu_book_outlined,
+                    size: 30,
+                  ),
+                  title: Text(
+                    course.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(
+                      top: 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          course.categoryName ?? course.code,
+                        ),
+                        const SizedBox(
+                          height: 4,
+                        ),
+                        Text(
+                          course.accessEndAt == null
+                              ? 'Access active'
+                              : 'Access until '
+                                  '${course.accessEndAt}',
+                        ),
+                        _courseProgress(course.courseUuid),
+                      ],
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                  ),
+                  onTap: () async {
+                    await context.push<void>(
+                      '/student/courses/${course.courseUuid}',
+                    );
 
-              if (_error != null)
-                Padding(
-                  padding:
-                  const EdgeInsets.all(8),
-                  child: Text(
-                    'Could not load more: $_error',
-                  ),
-                ),
+                    if (!mounted) return;
 
-              if (_hasMore)
-                OutlinedButton(
-                  onPressed: _loadingMore
-                      ? null
-                      : () => _loadCourses(
-                    reset: false,
-                  ),
-                  child: _loadingMore
-                      ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child:
-                    CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : const Text(
-                    'Load more courses',
-                  ),
+                    setState(() {
+                      _progressFutures.remove(course.courseUuid);
+                    });
+                  },
                 ),
-            ],
+              ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  'Could not load more: $_error',
+                ),
+              ),
+            if (_hasMore)
+              OutlinedButton(
+                onPressed:
+                    _loadingMore ? null : () => _loadCourses(reset: false),
+                child: _loadingMore
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Load more courses',
+                      ),
+              ),
+          ],
         ],
       ),
     );
