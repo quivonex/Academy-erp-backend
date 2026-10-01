@@ -263,11 +263,18 @@ class StudentAssignmentAnswerSerializer(
         allow_blank=True,
     )
 
+    file_key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=1000,
+    )
+
     selected_option = serializers.CharField(
         required=False,
         allow_blank=True,
         max_length=1,
     )
+    
 
 
 class StudentAssignmentSubmitSerializer(

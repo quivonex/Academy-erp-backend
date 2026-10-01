@@ -973,16 +973,29 @@ class StudentAssignmentSubmitView(APIView):
 
             elif (
                 question.answer_type
-                == AssignmentQuestion.AnswerType.TEXT
+                == AssignmentQuestion.AnswerType.FILE
             ):
-                text_answer = (
+                file_key = (
                     answer_data
-                    .get(
-                        "text_answer",
-                        "",
-                    )
+                    .get("file_key", "")
                     .strip()
                 )
+
+                if question.is_required and not file_key:
+                    return error_response(
+                        message="Submission failed",
+                        errors={
+                            "file_key": [
+                                (
+                                    "File upload is required "
+                                    "for this question."
+                                )
+                            ]
+                        },
+                        status_code=(
+                            status.HTTP_400_BAD_REQUEST
+                        ),
+                    )
 
                 if (
                     question.is_required
@@ -1091,20 +1104,21 @@ class StudentAssignmentSubmitView(APIView):
                     )
 
                     wrong_answers += 1
+                    
+                    file_key = (
+                answer_data
+                .get("file_key", "")
+                .strip()
+            )
 
             AssignmentAnswer.objects.update_or_create(
                 submission=submission,
                 question=question,
                 defaults={
-                    "text_answer": (
-                        text_answer
-                    ),
-                    "selected_option": (
-                        selected_option
-                    ),
-                    "marks_obtained": (
-                        marks_obtained
-                    ),
+                    "text_answer": text_answer,
+                    "file_key": file_key,
+                    "selected_option": selected_option,
+                    "marks_obtained": marks_obtained,
                 },
             )
 
