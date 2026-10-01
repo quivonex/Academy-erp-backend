@@ -900,14 +900,10 @@ class StudentAssignmentSubmitView(APIView):
 
         for answer_data in submitted_answers:
             question_uuid = str(
-                answer_data[
-                    "question_uuid"
-                ]
+                answer_data["question_uuid"]
             )
 
-            question = question_map[
-                question_uuid
-            ]
+            question = question_map[question_uuid]
 
             if (
                 question.answer_type
@@ -915,10 +911,7 @@ class StudentAssignmentSubmitView(APIView):
             ):
                 selected_option = (
                     answer_data
-                    .get(
-                        "selected_option",
-                        "",
-                    )
+                    .get("selected_option", "")
                     .strip()
                     .upper()
                 )
@@ -939,14 +932,8 @@ class StudentAssignmentSubmitView(APIView):
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
-
-                # Important:
-                # Never auto-grade an MCQ if
-                # correct answer was not configured.
 
                 if question.correct_option not in [
                     "A",
@@ -959,16 +946,38 @@ class StudentAssignmentSubmitView(APIView):
                         errors={
                             "assignment": [
                                 (
-                                    "The answer key for "
-                                    "one or more MCQ "
-                                    "questions is missing. "
-                                    "Please contact the academy."
+                                    "The answer key for one "
+                                    "or more MCQ questions "
+                                    "is missing. Please "
+                                    "contact the academy."
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            elif (
+                question.answer_type
+                == AssignmentQuestion.AnswerType.TEXT
+            ):
+                text_answer = (
+                    answer_data
+                    .get("text_answer", "")
+                    .strip()
+                )
+
+                if question.is_required and not text_answer:
+                    return error_response(
+                        message="Submission failed",
+                        errors={
+                            "text_answer": [
+                                (
+                                    "Answer is required "
+                                    "for this question."
+                                )
+                            ]
+                        },
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
 
             elif (
@@ -992,34 +1001,13 @@ class StudentAssignmentSubmitView(APIView):
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
-                    )
-
-                if (
-                    question.is_required
-                    and not text_answer
-                ):
-                    return error_response(
-                        message="Submission failed",
-                        errors={
-                            "text_answer": [
-                                (
-                                    "Answer is required "
-                                    "for this question."
-                                )
-                            ]
-                        },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
 
         # ---------------------------------------------
         # CREATE / GET SUBMISSION
         # ---------------------------------------------
-
+        
         submission, created = (
             AssignmentSubmission.objects
             .get_or_create(
