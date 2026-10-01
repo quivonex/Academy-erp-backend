@@ -820,22 +820,14 @@ class StudentAssignmentSubmitView(APIView):
             for answer in submitted_answers
         ]
 
-        if (
-            len(submitted_question_ids)
-            != len(
-                set(
-                    submitted_question_ids
-                )
-            )
+        if len(submitted_question_ids) != len(
+            set(submitted_question_ids)
         ):
             return error_response(
                 message="Submission failed",
                 errors={
                     "answers": [
-                        (
-                            "Duplicate question answers "
-                            "are not allowed."
-                        )
+                        "The same question cannot be submitted more than once."
                     ]
                 },
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1071,36 +1063,32 @@ class StudentAssignmentSubmitView(APIView):
 
         for answer_data in submitted_answers:
             question_uuid = str(
-                answer_data[
-                    "question_uuid"
-                ]
+                answer_data["question_uuid"]
             )
-
-            question = question_map[
-                question_uuid
-            ]
-
+        
+            question = question_map[question_uuid]
+        
             selected_option = (
                 answer_data
-                .get(
-                    "selected_option",
-                    "",
-                )
+                .get("selected_option", "")
                 .strip()
                 .upper()
             )
-
+        
             text_answer = (
                 answer_data
-                .get(
-                    "text_answer",
-                    "",
-                )
+                .get("text_answer", "")
                 .strip()
             )
-
+        
+            file_key = (
+                answer_data
+                .get("file_key", "")
+                .strip()
+            )
+        
             marks_obtained = None
-
+        
             if (
                 question.answer_type
                 == AssignmentQuestion.AnswerType.MCQ
@@ -1109,29 +1097,14 @@ class StudentAssignmentSubmitView(APIView):
                     selected_option
                     == question.correct_option.upper()
                 ):
-                    marks_obtained = (
-                        question.marks
-                    )
-
-                    total_marks += (
-                        question.marks
-                    )
-
+                    marks_obtained = question.marks
+                    total_marks += question.marks
                     correct_answers += 1
-
+        
                 else:
-                    marks_obtained = Decimal(
-                        "0.00"
-                    )
-
+                    marks_obtained = Decimal("0.00")
                     wrong_answers += 1
-                    
-                    file_key = (
-                answer_data
-                .get("file_key", "")
-                .strip()
-            )
-
+        
             AssignmentAnswer.objects.update_or_create(
                 submission=submission,
                 question=question,
