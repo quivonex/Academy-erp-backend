@@ -9,7 +9,9 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-
+import os
+import uuid
+from django.core.files.storage import default_storage
 from common.pagination import StandardResultsSetPagination
 from common.permissions import (
     IsFirmAdminOrStaff,
@@ -36,6 +38,7 @@ from .serializers import (
     AssignmentUpdateSerializer,
     StudentAssignmentQuestionSerializer,
     StudentAssignmentSubmitSerializer,
+    StudentAssignmentFileUploadSerializer,
 )
 from .services import (
     create_assignment,
@@ -1003,7 +1006,37 @@ class StudentAssignmentSubmitView(APIView):
                         },
                         status_code=status.HTTP_400_BAD_REQUEST,
                     )
+                expected_prefix = (
+                    f"assignment_submissions/"
+                    f"{request.user.firm.uuid}/"
+                    f"{student.uuid}/"
+                    f"{assignment.uuid}/"
+                    f"{question.uuid}/"
+                )
 
+                if (
+                    file_key
+                    and (
+                        not file_key.startswith(
+                            expected_prefix
+                        )
+                        or not default_storage.exists(
+                            file_key
+                        )
+                    )
+                ):
+                    return error_response(
+                        message="Submission failed",
+                        errors={
+                            "file_key": [
+                                (
+                                    "Invalid assignment "
+                                    "file upload."
+                                )
+                            ]
+                        },
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
         # ---------------------------------------------
         # CREATE / GET SUBMISSION
         # ---------------------------------------------
@@ -1682,3 +1715,119 @@ class AssignmentUnpublishView(APIView):
         
         
         
+class StudentAssignmentFileUploadView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def post(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        student = request.user.student_profile
+
+        serializer = StudentAssignmentFileUploadSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="File upload failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment = get_object_or_404(
+            Assignment.objects.select_related(
+                "course"
+            ),
+            uuid=assignment_uuid,
+            firm=request.user.firm,
+            is_active=True,
+            is_published=True,
+        )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=assignment.course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message=(
+                    "You do not have access "
+                    "to this assignment."
+                ),
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        question_uuid = serializer.validated_data[
+            "question_uuid"
+        ]
+
+        question = get_object_or_404(
+            AssignmentQuestion,
+            uuid=question_uuid,
+            assignment=assignment,
+        )
+
+        if (
+            question.answer_type
+            != AssignmentQuestion.AnswerType.FILE
+        ):
+            return error_response(
+                message="File upload failed",
+                errors={
+                    "question_uuid": [
+                        (
+                            "This question does not "
+                            "accept a file answer."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file = serializer.validated_data[
+            "file"
+        ]
+
+        extension = os.path.splitext(
+            uploaded_file.name.lower()
+        )[1]
+
+        storage_path = (
+            f"assignment_submissions/"
+            f"{request.user.firm.uuid}/"
+            f"{student.uuid}/"
+            f"{assignment.uuid}/"
+            f"{question.uuid}/"
+            f"{uuid.uuid4().hex}{extension}"
+        )
+
+        file_key = default_storage.save(
+            storage_path,
+            uploaded_file,
+        )
+
+        return success_response(
+            message="Assignment file uploaded successfully",
+            data={
+                "assignment_uuid": str(
+                    assignment.uuid
+                ),
+                "question_uuid": str(
+                    question.uuid
+                ),
+                "file_key": file_key,
+                "original_file_name": uploaded_file.name,
+            },
+            status_code=status.HTTP_201_CREATED,
+        )
+        
+        
+
+

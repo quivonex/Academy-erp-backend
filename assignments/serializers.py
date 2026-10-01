@@ -1,5 +1,5 @@
 from rest_framework import serializers
-
+import os
 from .models import (
     Assignment,
     AssignmentAnswer,
@@ -521,3 +521,52 @@ class AssignmentUpdateSerializer(
         
         
         
+class StudentAssignmentFileUploadSerializer(
+    serializers.Serializer
+):
+    question_uuid = serializers.UUIDField()
+
+    file = serializers.FileField()
+
+    allowed_extensions = {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".jpg",
+        ".jpeg",
+        ".png",
+    }
+
+    max_file_size = 25 * 1024 * 1024
+
+    def validate_file(self, value):
+        if value.size > self.max_file_size:
+            raise serializers.ValidationError(
+                "File size must not exceed 25 MB."
+            )
+
+        extension = os.path.splitext(
+            value.name.lower()
+        )[1]
+
+        if extension not in self.allowed_extensions:
+            raise serializers.ValidationError(
+                (
+                    "Only PDF, DOC, DOCX, JPG, JPEG, "
+                    "and PNG files are allowed."
+                )
+            )
+
+        if extension == ".pdf":
+            current_position = value.tell()
+
+            value.seek(0)
+            file_header = value.read(5)
+            value.seek(current_position)
+
+            if file_header != b"%PDF-":
+                raise serializers.ValidationError(
+                    "Uploaded file is not a valid PDF."
+                )
+
+        return value
