@@ -27,6 +27,69 @@ class ApiUrls {
   static String studentEnableLogin(String uuid) => '/students/$uuid/enable-login/';
   static const String courses = '/courses/';
   static String courseDetail(String uuid) => '/courses/$uuid/';
+
+  // Teachers
+  static const String teachers = '/teachers/';
+  static String teacherDetail(String uuid) => '/teachers/$uuid/';
+  static String teacherActivate(String uuid) => '/teachers/$uuid/activate/';
+  static String teacherDeactivate(String uuid) => '/teachers/$uuid/deactivate/';
+
+  // Enrollments
+  static const String enrollments = '/enrollments/';
+  static String enrollmentDetail(String uuid) => '/enrollments/$uuid/';
+  static const String bulkEnrollmentByAdmissionDate =
+      '/enrollments/bulk-assign-by-admission-date/';
+
+  // Live Classes
+  static const String liveClasses = '/live-classes/';
+  static String liveClassDetail(String uuid) => '/live-classes/$uuid/';
+  static String liveClassStart(String uuid) => '/live-classes/$uuid/start/';
+  static String liveClassComplete(String uuid) => '/live-classes/$uuid/complete/';
+  static String liveClassCancel(String uuid) => '/live-classes/$uuid/cancel/';
+
+  // Materials
+  static const String materials = '/materials/';
+  static String materialDetail(String uuid) => '/materials/$uuid/';
+
+  // Assignments
+  static const String assignments = '/assignments/';
+  static String adminAssignmentDetail(String uuid) =>
+      '/assignments/$uuid/';
+  static String assignmentQuestions(String uuid) =>
+      '/assignments/$uuid/questions/';
+  static String assignmentQuestionDetail(
+    String assignmentUuid,
+    String questionUuid,
+  ) =>
+      '/assignments/$assignmentUuid/questions/$questionUuid/';
+  static String assignmentPublish(String uuid) =>
+      '/assignments/$uuid/publish/';
+  static String assignmentUnpublish(String uuid) =>
+      '/assignments/$uuid/unpublish/';
+  static const String assignmentPdfImport =
+      '/assignments/import-pdf/';
+  static String assignmentSubmissions(String uuid) =>
+      '/assignments/$uuid/submissions/';
+  static String assignmentSubmissionDetail(
+    String submissionUuid,
+  ) =>
+      '/assignments/submissions/$submissionUuid/';
+  static String assignmentSubmissionGrade(
+    String submissionUuid,
+  ) =>
+      '/assignments/submissions/$submissionUuid/grade/';
+
+  // Subjects
+  static const String subjects = '/subjects/';
+  static String subjectDetail(String uuid) => '/subjects/$uuid/';
+
+  // Chapters
+  static const String chapters = '/chapters/';
+  static String chapterDetail(String uuid) => '/chapters/$uuid/';
+
+  // Lessons
+  static const String lessons = '/lessons/';
+  static String lessonDetail(String uuid) => '/lessons/$uuid/';
   static const String studentRegister = '/auth/student/register/';
 
   static const String publicCourses = '/public/courses/';

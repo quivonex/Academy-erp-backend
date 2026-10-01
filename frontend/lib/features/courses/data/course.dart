@@ -1,8 +1,18 @@
 class Course {
-  const Course({required this.uuid, required this.name, required this.code,
-    required this.price, required this.deliveryMode, required this.isActive,
-    required this.isPublished, required this.isPurchasableOnline,
-    this.description = '', this.categoryName, this.durationMonths, this.accessDurationDays});
+  const Course({
+    required this.uuid,
+    required this.name,
+    required this.code,
+    required this.price,
+    required this.deliveryMode,
+    required this.isActive,
+    required this.isPublished,
+    required this.isPurchasableOnline,
+    this.description = '',
+    this.categoryName,
+    this.durationMonths,
+    this.accessDurationDays,
+  });
 
   final String uuid;
   final String name;
@@ -20,7 +30,8 @@ class Course {
   factory Course.fromJson(Map<String, dynamic> json) {
     final category = json['category'];
     return Course(
-      uuid: json['uuid'].toString(), name: json['name']?.toString() ?? '',
+      uuid: json['uuid']?.toString() ?? json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       price: json['price']?.toString() ?? '0.00',
@@ -39,10 +50,29 @@ class CoursePage {
   const CoursePage({required this.results, required this.count});
   final List<Course> results;
   final int count;
+
   factory CoursePage.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] as Map<String, dynamic>;
-    final raw = data['results'] as List<dynamic>? ?? [];
-    return CoursePage(count: data['count'] as int? ?? raw.length,
-      results: raw.map((entry) => Course.fromJson(Map<String, dynamic>.from(entry as Map))).toList());
+    Map<String, dynamic> data = json;
+    if (json['data'] is Map<String, dynamic>) {
+      data = json['data'] as Map<String, dynamic>;
+    }
+
+    List<dynamic> raw = [];
+    if (data['results'] is List) {
+      raw = data['results'] as List<dynamic>;
+    } else if (json['results'] is List) {
+      raw = json['results'] as List<dynamic>;
+    } else if (json['data'] is List) {
+      raw = json['data'] as List<dynamic>;
+    }
+
+    final count = data['count'] as int? ?? json['count'] as int? ?? raw.length;
+
+    return CoursePage(
+      count: count,
+      results: raw
+          .map((entry) => Course.fromJson(Map<String, dynamic>.from(entry as Map)))
+          .toList(),
+    );
   }
 }
