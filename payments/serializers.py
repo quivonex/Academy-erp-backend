@@ -1,8 +1,12 @@
 import os
-
+from decimal import Decimal
 from rest_framework import serializers
 
-from .models import CoursePayment
+from .models import (
+    CoursePayment,
+    EnrollmentFeeAccount,
+    InstallmentPayment,
+)
 
 
 class CoursePaymentSerializer(
@@ -191,4 +195,222 @@ class CoursePaymentReviewSerializer(
     
     
     
-    
+class EnrollmentFeeAccountSerializer(
+    serializers.ModelSerializer
+):
+    enrollment_uuid = serializers.UUIDField(
+        source="enrollment.uuid",
+        read_only=True,
+    )
+
+    student_uuid = serializers.UUIDField(
+        source="enrollment.student.uuid",
+        read_only=True,
+    )
+
+    student_name = serializers.CharField(
+        source="enrollment.student.full_name",
+        read_only=True,
+    )
+
+    admission_number = serializers.CharField(
+        source="enrollment.student.admission_number",
+        read_only=True,
+    )
+
+    course_uuid = serializers.UUIDField(
+        source="enrollment.course.uuid",
+        read_only=True,
+    )
+
+    course_name = serializers.CharField(
+        source="enrollment.course.name",
+        read_only=True,
+    )
+
+    course_code = serializers.CharField(
+        source="enrollment.course.code",
+        read_only=True,
+    )
+
+    created_by_name = serializers.CharField(
+        source="created_by.full_name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = EnrollmentFeeAccount
+
+        fields = (
+            "uuid",
+            "enrollment_uuid",
+            "student_uuid",
+            "student_name",
+            "admission_number",
+            "course_uuid",
+            "course_name",
+            "course_code",
+            "total_amount",
+            "discount_amount",
+            "paid_amount",
+            "balance_amount",
+            "due_date",
+            "status",
+            "notes",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+
+
+class EnrollmentFeeAccountCreateSerializer(
+    serializers.Serializer
+):
+    enrollment_uuid = serializers.UUIDField()
+
+    total_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+    discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=0,
+    )
+
+    due_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
+
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    def validate(self, attrs):
+        total_amount = attrs["total_amount"]
+        discount_amount = attrs["discount_amount"]
+
+        if discount_amount >= total_amount:
+            raise serializers.ValidationError({
+                "discount_amount": [
+                    (
+                        "Discount amount must be less "
+                        "than total amount."
+                    )
+                ]
+            })
+
+        return attrs
+
+
+class InstallmentPaymentSerializer(
+    serializers.ModelSerializer
+):
+    fee_account_uuid = serializers.UUIDField(
+        source="fee_account.uuid",
+        read_only=True,
+    )
+
+    student_name = serializers.CharField(
+        source="fee_account.enrollment.student.full_name",
+        read_only=True,
+    )
+
+    admission_number = serializers.CharField(
+        source=(
+            "fee_account.enrollment.student."
+            "admission_number"
+        ),
+        read_only=True,
+    )
+
+    course_name = serializers.CharField(
+        source="fee_account.enrollment.course.name",
+        read_only=True,
+    )
+
+    recorded_by_name = serializers.CharField(
+        source="recorded_by.full_name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    voided_by_name = serializers.CharField(
+        source="voided_by.full_name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = InstallmentPayment
+
+        fields = (
+            "uuid",
+            "fee_account_uuid",
+            "student_name",
+            "admission_number",
+            "course_name",
+            "amount",
+            "payment_method",
+            "transaction_reference",
+            "payment_date",
+            "notes",
+            "status",
+            "recorded_by_name",
+            "voided_by_name",
+            "voided_at",
+            "void_reason",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+
+
+class InstallmentPaymentCreateSerializer(
+    serializers.Serializer
+):
+    fee_account_uuid = serializers.UUIDField()
+
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0.01,
+    )
+
+    payment_method = serializers.ChoiceField(
+        choices=InstallmentPayment.PaymentMethod.choices,
+    )
+
+    transaction_reference = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100,
+    )
+
+    payment_date = serializers.DateField(
+        required=False,
+    )
+
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+
+class InstallmentPaymentVoidSerializer(
+    serializers.Serializer
+):
+    void_reason = serializers.CharField(
+        min_length=3,
+        max_length=1000,
+    )
