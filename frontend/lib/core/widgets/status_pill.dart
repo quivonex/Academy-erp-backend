@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-
 enum PillTone { success, warning, danger, info, neutral }
 
-/// "Rendered in full pill shape with a 20px or 24px height, a solid 6px
-/// circular dot indicator followed by label text" — DESIGN.md § Status
-/// Badges & Pills.
+/// Status badge from the "Luminous Enterprise" design: full pill, 6px dot,
+/// tinted fill with a matching hairline border, 11px semibold label.
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.label, required this.tone, this.compact = false});
+  const StatusPill({
+    super.key,
+    required this.label,
+    required this.tone,
+    this.compact = false,
+  });
 
   final String label;
   final PillTone tone;
@@ -16,22 +18,41 @@ class StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final (fg, bg) = switch (tone) {
-      PillTone.success => (colors.success, colors.successBg),
-      PillTone.warning => (colors.warning, colors.warningBg),
-      PillTone.danger => (colors.danger, colors.dangerBg),
-      PillTone.info => (colors.info, colors.infoBg),
-      PillTone.neutral => (colors.textMuted, colors.canvas),
+    final (fg, bg, border) = switch (tone) {
+      PillTone.success => (
+          const Color(0xFF059669),
+          const Color(0xFFECFDF5),
+          const Color(0xFFA7F3D0),
+        ),
+      PillTone.warning => (
+          const Color(0xFFD97706),
+          const Color(0xFFFFFBEB),
+          const Color(0xFFFDE68A),
+        ),
+      PillTone.danger => (
+          const Color(0xFFE11D48),
+          const Color(0xFFFFF1F2),
+          const Color(0xFFFECDD3),
+        ),
+      PillTone.info => (
+          const Color(0xFF0284C7),
+          const Color(0xFFF0F9FF),
+          const Color(0xFFBAE6FD),
+        ),
+      PillTone.neutral => (
+          const Color(0xFF64748B),
+          const Color(0xFFF8FAFC),
+          const Color(0xFFE2E8F0),
+        ),
     };
 
     return Container(
-      height: compact ? 20 : 24,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      height: compact ? 22 : 26,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: fg.withOpacity(0.35)),
+        border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -44,10 +65,24 @@ class StatusPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: fg, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.45,
+                ),
           ),
         ],
       ),
     );
   }
+}
+
+/// Maps a firm/admin status string to a pill tone.
+PillTone toneForStatus(String status) {
+  return switch (status.toUpperCase()) {
+    'ACTIVE' => PillTone.success,
+    'SUSPENDED' => PillTone.danger,
+    'PENDING' => PillTone.warning,
+    _ => PillTone.neutral,
+  };
 }

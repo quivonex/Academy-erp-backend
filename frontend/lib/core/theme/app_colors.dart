@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Every color value here is copied verbatim from DESIGN.md so the app and
-/// the original Stitch mockups never drift. Access via:
-///   final colors = Theme.of(context).extension<AppColors>()!;
+/// Premium "Material Indigo EdTech" palette, taken from the Stitch DESIGN.md.
+/// Access via `context.colors.primary` etc.
+///
+/// Field names are unchanged from the previous palette so every existing
+/// screen keeps compiling; a few new tonal tokens were added for the
+/// student-portal redesign.
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.canvas,
@@ -13,6 +16,9 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.textSubtle,
     required this.primary,
     required this.primaryHover,
+    required this.primaryDeep,
+    required this.primaryTonal,
+    required this.primaryTonalBorder,
     required this.secondary,
     required this.accentPurple,
     required this.success,
@@ -25,47 +31,83 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.infoBg,
   });
 
-  final Color canvas; // #F8FAFC — app canvas / Layer 0
-  final Color surface; // #FFFFFF — cards, modals, toolbars
-  final Color borderSubtle; // #E2E8F0 — card/table borders
-  final Color textPrimary; // #0F172A — headers, primary metrics
-  final Color textMuted; // #64748B — metadata, descriptors
-  final Color textSubtle; // #94A3B8 — placeholders, inactive icons
+  final Color canvas; // #F8F7FF — lavender-tinted canvas
+  final Color surface; // #FFFFFF — cards, bars, sheets
+  final Color borderSubtle; // #E6E8F2 — hairline card borders
+  final Color textPrimary; // #131B2E — headings, primary text
+  final Color textMuted; // #525469 — metadata, descriptors
+  final Color textSubtle; // #8E90A6 — placeholders, inactive icons
 
-  final Color primary; // #4F46E5 — focal actions, active states
+  final Color primary; // #4F46E5 — deep indigo
   final Color primaryHover; // #4338CA
-  final Color secondary; // #3B82F6 — links, multi-tenant badges
-  final Color accentPurple; // #8B5CF6 — cross-campus governance metrics
+  final Color primaryDeep; // #3525CD — gradient start, strong CTAs
+  final Color primaryTonal; // #EEF0FF — tonal pills, icon tiles
+  final Color primaryTonalBorder; // #C7D2FE — selected chip border
+  final Color secondary; // #6366F1 — electric periwinkle
+  final Color accentPurple; // #8B5CF6
 
-  final Color success; // #10B981
-  final Color successBg; // #ECFDF5
-  final Color warning; // #F59E0B
+  final Color success; // #047857 — emerald (text-safe)
+  final Color successBg; // #E3F8EF
+  final Color warning; // #B45309 — amber (text-safe)
   final Color warningBg; // #FEF3C7
-  final Color danger; // #EF4444
-  final Color dangerBg; // #FEF2F2
-  final Color info; // #3B82F6
+  final Color danger; // #BA1A1A
+  final Color dangerBg; // #FFE4E1
+  final Color info; // #2563EB
   final Color infoBg; // #EFF6FF
 
   static const light = AppColors(
-    canvas: Color(0xFFF8FAFC),
+    canvas: Color(0xFFF8F7FF),
     surface: Color(0xFFFFFFFF),
-    borderSubtle: Color(0xFFE2E8F0),
-    textPrimary: Color(0xFF0F172A),
-    textMuted: Color(0xFF64748B),
-    textSubtle: Color(0xFF94A3B8),
+    borderSubtle: Color(0xFFE6E8F2),
+    textPrimary: Color(0xFF131B2E),
+    textMuted: Color(0xFF525469),
+    textSubtle: Color(0xFF8E90A6),
     primary: Color(0xFF4F46E5),
     primaryHover: Color(0xFF4338CA),
-    secondary: Color(0xFF3B82F6),
+    primaryDeep: Color(0xFF3525CD),
+    primaryTonal: Color(0xFFEEF0FF),
+    primaryTonalBorder: Color(0xFFC7D2FE),
+    secondary: Color(0xFF6366F1),
     accentPurple: Color(0xFF8B5CF6),
-    success: Color(0xFF10B981),
-    successBg: Color(0xFFECFDF5),
-    warning: Color(0xFFF59E0B),
+    success: Color(0xFF047857),
+    successBg: Color(0xFFE3F8EF),
+    warning: Color(0xFFB45309),
     warningBg: Color(0xFFFEF3C7),
-    danger: Color(0xFFEF4444),
-    dangerBg: Color(0xFFFEF2F2),
-    info: Color(0xFF3B82F6),
+    danger: Color(0xFFBA1A1A),
+    dangerBg: Color(0xFFFFE4E1),
+    info: Color(0xFF2563EB),
     infoBg: Color(0xFFEFF6FF),
   );
+
+  /// Signature indigo gradient used on hero cards and live banners.
+  LinearGradient get heroGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [primaryDeep, primary, secondary],
+      );
+
+  /// Soft ambient shadow for Level-1 cards (DESIGN.md § Elevation).
+  List<BoxShadow> get cardShadow => const [
+        BoxShadow(
+          color: Color(0x0A0F172A),
+          blurRadius: 3,
+          offset: Offset(0, 1),
+        ),
+        BoxShadow(
+          color: Color(0x080F172A),
+          blurRadius: 12,
+          offset: Offset(0, 4),
+        ),
+      ];
+
+  /// Indigo-tinted glow for hero surfaces.
+  List<BoxShadow> get heroShadow => const [
+        BoxShadow(
+          color: Color(0x404F46E5),
+          blurRadius: 24,
+          offset: Offset(0, 10),
+        ),
+      ];
 
   @override
   AppColors copyWith({
@@ -77,6 +119,9 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? textSubtle,
     Color? primary,
     Color? primaryHover,
+    Color? primaryDeep,
+    Color? primaryTonal,
+    Color? primaryTonalBorder,
     Color? secondary,
     Color? accentPurple,
     Color? success,
@@ -97,6 +142,9 @@ class AppColors extends ThemeExtension<AppColors> {
       textSubtle: textSubtle ?? this.textSubtle,
       primary: primary ?? this.primary,
       primaryHover: primaryHover ?? this.primaryHover,
+      primaryDeep: primaryDeep ?? this.primaryDeep,
+      primaryTonal: primaryTonal ?? this.primaryTonal,
+      primaryTonalBorder: primaryTonalBorder ?? this.primaryTonalBorder,
       secondary: secondary ?? this.secondary,
       accentPurple: accentPurple ?? this.accentPurple,
       success: success ?? this.success,
@@ -113,25 +161,29 @@ class AppColors extends ThemeExtension<AppColors> {
   @override
   AppColors lerp(ThemeExtension<AppColors>? other, double t) {
     if (other is! AppColors) return this;
+    Color l(Color a, Color b) => Color.lerp(a, b, t)!;
     return AppColors(
-      canvas: Color.lerp(canvas, other.canvas, t)!,
-      surface: Color.lerp(surface, other.surface, t)!,
-      borderSubtle: Color.lerp(borderSubtle, other.borderSubtle, t)!,
-      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
-      textMuted: Color.lerp(textMuted, other.textMuted, t)!,
-      textSubtle: Color.lerp(textSubtle, other.textSubtle, t)!,
-      primary: Color.lerp(primary, other.primary, t)!,
-      primaryHover: Color.lerp(primaryHover, other.primaryHover, t)!,
-      secondary: Color.lerp(secondary, other.secondary, t)!,
-      accentPurple: Color.lerp(accentPurple, other.accentPurple, t)!,
-      success: Color.lerp(success, other.success, t)!,
-      successBg: Color.lerp(successBg, other.successBg, t)!,
-      warning: Color.lerp(warning, other.warning, t)!,
-      warningBg: Color.lerp(warningBg, other.warningBg, t)!,
-      danger: Color.lerp(danger, other.danger, t)!,
-      dangerBg: Color.lerp(dangerBg, other.dangerBg, t)!,
-      info: Color.lerp(info, other.info, t)!,
-      infoBg: Color.lerp(infoBg, other.infoBg, t)!,
+      canvas: l(canvas, other.canvas),
+      surface: l(surface, other.surface),
+      borderSubtle: l(borderSubtle, other.borderSubtle),
+      textPrimary: l(textPrimary, other.textPrimary),
+      textMuted: l(textMuted, other.textMuted),
+      textSubtle: l(textSubtle, other.textSubtle),
+      primary: l(primary, other.primary),
+      primaryHover: l(primaryHover, other.primaryHover),
+      primaryDeep: l(primaryDeep, other.primaryDeep),
+      primaryTonal: l(primaryTonal, other.primaryTonal),
+      primaryTonalBorder: l(primaryTonalBorder, other.primaryTonalBorder),
+      secondary: l(secondary, other.secondary),
+      accentPurple: l(accentPurple, other.accentPurple),
+      success: l(success, other.success),
+      successBg: l(successBg, other.successBg),
+      warning: l(warning, other.warning),
+      warningBg: l(warningBg, other.warningBg),
+      danger: l(danger, other.danger),
+      dangerBg: l(dangerBg, other.dangerBg),
+      info: l(info, other.info),
+      infoBg: l(infoBg, other.infoBg),
     );
   }
 }
@@ -139,5 +191,6 @@ class AppColors extends ThemeExtension<AppColors> {
 /// Convenience accessor: `context.colors.primary` instead of the full
 /// `Theme.of(context).extension<AppColors>()!` every time.
 extension AppColorsX on BuildContext {
-  AppColors get colors => Theme.of(this).extension<AppColors>() ?? AppColors.light;
+  AppColors get colors =>
+      Theme.of(this).extension<AppColors>() ?? AppColors.light;
 }

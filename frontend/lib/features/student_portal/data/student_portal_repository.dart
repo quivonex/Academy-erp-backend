@@ -104,6 +104,36 @@ class MyCourse {
   );
 }
 
+class PublicCoursePage {
+  const PublicCoursePage({
+    required this.items,
+    required this.hasNext,
+  });
+
+  final List<PublicCourse> items;
+  final bool hasNext;
+}
+
+class MyCoursePage {
+  const MyCoursePage({
+    required this.items,
+    required this.hasNext,
+  });
+
+  final List<MyCourse> items;
+  final bool hasNext;
+}
+
+class LiveClassPage {
+  const LiveClassPage({
+    required this.items,
+    required this.hasNext,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final bool hasNext;
+}
+
 class StudentPortalRepository {
   StudentPortalRepository(this._dio);
 
@@ -129,7 +159,7 @@ class StudentPortalRepository {
         .toList();
   });
 
-  Future<List<PublicCourse>> publicCourses({
+  Future<PublicCoursePage> publicCourses({
     String? search,
     String? categoryUuid,
     int page = 1,
@@ -146,15 +176,27 @@ class StudentPortalRepository {
           },
         );
 
-        return _items(response.data)
+        final body = response.data;
+        final data = body is Map ? body['data'] : null;
+
+        if (data is! Map || data['results'] is! List) {
+          throw const ApiException('Unexpected course list response.');
+        }
+
+        final items = (data['results'] as List)
             .map(
               (item) => PublicCourse.fromJson(
-            Map<String, dynamic>.from(
-              item as Map,
-            ),
-          ),
-        )
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
             .toList();
+
+        final next = data['next'];
+
+        return PublicCoursePage(
+          items: items,
+          hasNext: next != null && next.toString().isNotEmpty,
+        );
       });
 
   Future<PublicCourse> publicCourse(String uuid) => _request(() async {
@@ -186,7 +228,7 @@ class StudentPortalRepository {
         );
       });
 
-  Future<List<MyCourse>> myCourses({
+  Future<MyCoursePage> myCourses({
     int page = 1,
   }) =>
       _request(() async {
@@ -198,15 +240,27 @@ class StudentPortalRepository {
           },
         );
 
-        return _items(response.data)
+        final body = response.data;
+        final data = body is Map ? body['data'] : null;
+
+        if (data is! Map || data['results'] is! List) {
+          throw const ApiException('Unexpected course list response.');
+        }
+
+        final items = (data['results'] as List)
             .map(
               (item) => MyCourse.fromJson(
-            Map<String, dynamic>.from(
-              item as Map,
-            ),
-          ),
-        )
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
             .toList();
+
+        final next = data['next'];
+
+        return MyCoursePage(
+          items: items,
+          hasNext: next != null && next.toString().isNotEmpty,
+        );
       });
 
   Future<MyCourse> myCourse(String uuid) => _request(() async {
@@ -345,7 +399,7 @@ class StudentPortalRepository {
         );
       });
 
-  Future<List<Map<String, dynamic>>> allLiveClasses({
+  Future<LiveClassPage> allLiveClasses({
     String? status,
     int page = 1,
   }) =>
@@ -359,13 +413,25 @@ class StudentPortalRepository {
           },
         );
 
-        return _items(response.data)
+        final body = response.data;
+        final data = body is Map ? body['data'] : null;
+
+        if (data is! Map || data['results'] is! List) {
+          throw const ApiException('Unexpected live class list response.');
+        }
+
+        final items = (data['results'] as List)
             .map(
-              (item) => Map<String, dynamic>.from(
-                item as Map,
-              ),
+              (item) => Map<String, dynamic>.from(item as Map),
             )
             .toList();
+
+        final next = data['next'];
+
+        return LiveClassPage(
+          items: items,
+          hasNext: next != null && next.toString().isNotEmpty,
+        );
       });
 
   Future<List<Map<String, dynamic>>> assignments(

@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../session/session_controller.dart';
+import '../session/user_role.dart';
 import '../network/api_exception.dart';
 import '../theme/app_colors.dart';
 import '../theme/breakpoints.dart';
+import 'admin_ui.dart';
 import 'nav_item.dart';
 
-/// The shared shell for every authenticated screen. Implements the three
-/// responsive states from DESIGN.md § Responsive Breakpoints:
-///   >=1280px  fixed 260px sidebar
-///   1024-1279 68px icon rail
+/// The shared shell for every authenticated admin screen. Responsive states:
+///   >=1280px  fixed 264px sidebar
+///   1024-1279 72px icon rail
 ///   <1024     off-canvas drawer
 class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child, required this.currentRoute});
@@ -32,26 +33,42 @@ class AdminShell extends ConsumerWidget {
     final isCompact = AppBreakpoints.isCompact(width);
     final isRailOnly = AppBreakpoints.isLaptopOrTabletLandscape(width);
 
+    final brandSubtitle = role == UserRole.superAdmin
+        ? 'Multi-Academy SaaS'
+        : (session.firmName?.trim().isNotEmpty == true
+            ? session.firmName!.trim()
+            : 'Academy ERP');
+
+    Widget sidebar(bool expanded) => _Sidebar(
+          items: navItems,
+          currentRoute: currentRoute,
+          expanded: expanded,
+          subtitle: brandSubtitle,
+          roleLabel: _roleLabel(role),
+        );
+
     return Scaffold(
-      backgroundColor: colors.canvas,
-      drawer: isCompact ? _Sidebar(items: navItems, currentRoute: currentRoute, expanded: true) : null,
+      backgroundColor: const Color(0xFFF8FAFC),
+      drawer: isCompact ? Drawer(width: 264, child: sidebar(true)) : null,
       body: Row(
         children: [
-          if (!isCompact)
-            _Sidebar(items: navItems, currentRoute: currentRoute, expanded: !isRailOnly),
+          if (!isCompact) sidebar(!isRailOnly),
           Expanded(
             child: Column(
               children: [
                 _TopBar(showMenuButton: isCompact),
                 Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 1600),
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isCompact ? 16 : 24,
-                      vertical: 24,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 1600),
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 16 : 32,
+                        vertical: isCompact ? 20 : 28,
+                      ),
+                      child: child,
                     ),
-                    child: child,
                   ),
                 ),
               ],
@@ -63,47 +80,184 @@ class AdminShell extends ConsumerWidget {
   }
 }
 
+String _roleLabel(UserRole? role) {
+  return switch (role) {
+    UserRole.superAdmin => 'Super Admin',
+    UserRole.academyAdmin => 'Academy Admin',
+    UserRole.teacher => 'Teacher',
+    UserRole.student => 'Student',
+    UserRole.firmStaff => 'Firm Staff',
+    null => 'User',
+  };
+}
+
+bool _isSelected(String itemRoute, String current) =>
+    current == itemRoute || current.startsWith('$itemRoute/');
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({this.size = 38});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: kAdminGradient,
+        borderRadius: BorderRadius.circular(size * 0.28),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x404F46E5),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Icon(Icons.school_rounded, color: Colors.white, size: size * 0.55),
+    );
+  }
+}
+
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.items, required this.currentRoute, required this.expanded});
+  const _Sidebar({
+    required this.items,
+    required this.currentRoute,
+    required this.expanded,
+    required this.subtitle,
+    required this.roleLabel,
+  });
 
   final List<NavItem> items;
   final String currentRoute;
   final bool expanded;
+  final String subtitle;
+  final String roleLabel;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final width = expanded ? 260.0 : 68.0;
+    final textTheme = Theme.of(context).textTheme;
+    final width = expanded ? 264.0 : 72.0;
 
     return Container(
       width: width,
-      color: colors.surface,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
       child: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: expanded
-                  ? Row(
-                      children: [
-                        Icon(Icons.school, color: colors.primary),
-                        const SizedBox(width: 8),
-                        Text('EduSphere', style: Theme.of(context).textTheme.titleLarge),
-                      ],
-                    )
-                  : Icon(Icons.school, color: colors.primary),
+            // Brand
+            SizedBox(
+              height: 72,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: expanded ? 20 : 0),
+                child: expanded
+                    ? Row(
+                        children: [
+                          const _BrandMark(),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'EduSphere',
+                                  style: jakarta(
+                                    textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                      color: const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: colors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Center(child: _BrandMark()),
+              ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, color: Color(0xFFEEF0F5)),
+            if (expanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                child: Text(
+                  'Main menu',
+                  style: textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: 16),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: expanded ? 12 : 10),
                 children: [
                   for (final item in items)
-                    _NavTile(item: item, expanded: expanded, selected: item.route == currentRoute),
+                    _NavTile(
+                      item: item,
+                      expanded: expanded,
+                      selected: _isSelected(item.route, currentRoute),
+                    ),
                 ],
               ),
             ),
+            if (expanded)
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Signed in as $roleLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: const Color(0xFF334155),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -121,27 +275,72 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final tile = ListTile(
-      leading: Icon(item.icon, color: selected ? colors.primary : colors.textMuted, size: 20),
-      title: expanded
-          ? Text(
-              item.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: selected ? colors.primary : colors.textPrimary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-              overflow: TextOverflow.ellipsis,
-            )
-          : null,
-      selected: selected,
-      selectedTileColor: colors.primary.withOpacity(0.08),
-      dense: true,
-      onTap: () {
-        if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
-          Navigator.of(context).pop();
-        }
-        context.go(item.route);
-      },
+    final textTheme = Theme.of(context).textTheme;
+    final fg = selected ? colors.primary : const Color(0xFF475569);
+
+    final tile = Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected ? const Color(0xFFEEF0FF) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: selected ? const Color(0xFFE0E3FF) : Colors.transparent,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: const Color(0xFFF1F5F9),
+          onTap: () {
+            if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+              Navigator.of(context).pop();
+            }
+            context.go(item.route);
+          },
+          child: SizedBox(
+            height: 44,
+            child: expanded
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        Icon(item.icon, size: 20, color: fg),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            item.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: selected
+                                  ? colors.primary
+                                  : const Color(0xFF334155),
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (selected)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: colors.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x996366F1),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  )
+                : Center(child: Icon(item.icon, size: 22, color: fg)),
+          ),
+        ),
+      ),
     );
 
     if (!expanded) {
@@ -159,75 +358,164 @@ class _TopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
     final session = ref.watch(sessionControllerProvider);
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final roleLabel = _roleLabel(session.role);
+    final initial = roleLabel.substring(0, 1).toUpperCase();
 
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: colors.surface.withOpacity(0.9),
-        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+      height: 72,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        color: Color(0xF2FFFFFF),
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Row(
         children: [
-          if (showMenuButton)
+          if (showMenuButton) ...[
             IconButton(
-              icon: const Icon(Icons.menu),
+              tooltip: 'Menu',
+              icon: const Icon(Icons.menu_rounded),
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
-          Expanded(
-            child: _SearchField(),
+            const SizedBox(width: 4),
+          ],
+          const Spacer(),
+          IconButton(
+            tooltip: 'Notifications',
+            icon: Icon(Icons.notifications_none_rounded,
+                color: colors.textMuted),
+            onPressed: () {},
           ),
-          const SizedBox(width: 16),
-          IconButton(icon: const Icon(Icons.notifications_outlined), onPressed: () {}),
-          const SizedBox(width: 8),
+          if (wide)
+            Container(
+              width: 1,
+              height: 28,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              color: const Color(0xFFE2E8F0),
+            )
+          else
+            const SizedBox(width: 8),
           PopupMenuButton<String>(
+            tooltip: 'Account',
+            offset: const Offset(0, 52),
             onSelected: (value) async {
+              if (value == 'profile') {
+                context.go('/super-admin/profile');
+                return;
+              }
+
               if (value != 'logout') return;
+
               try {
                 await ref.read(sessionControllerProvider.notifier).logout();
-              } on ApiException catch (e) {
+              } on ApiException catch (error) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error.message)),
+                  );
                 }
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'logout', child: Text('Log out')),
-            ],
-            child: CircleAvatar(
-              backgroundColor: colors.primary,
-              child: Text(
-                session.role?.apiValue.substring(0, 1).toUpperCase() ?? '?',
-                style: const TextStyle(color: Colors.white),
+            itemBuilder: (context) => [
+              if (session.role == UserRole.superAdmin)
+                const PopupMenuItem(
+                  value: 'profile',
+                  child: Row(
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 18),
+                      SizedBox(width: 10),
+                      Text('My profile'),
+                    ],
+                  ),
+                ),
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_rounded, size: 18, color: colors.danger),
+                    const SizedBox(width: 10),
+                    Text('Log out', style: TextStyle(color: colors.danger)),
+                  ],
+                ),
               ),
+            ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: kAdminGradient,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Text(
+                        initial,
+                        style: jakarta(
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (wide) ...[
+                  const SizedBox(width: 12),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        roleLabel,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(
+                          session.firmName?.trim().isNotEmpty == true
+                              ? session.firmName!.trim()
+                              : 'EduSphere',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: colors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.expand_more_rounded,
+                      size: 20, color: colors.textMuted),
+                ],
+              ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: TextField(
-        decoration: InputDecoration(
-          isDense: true,
-          prefixIcon: const Icon(Icons.search, size: 20),
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Center(
-              widthFactor: 1,
-              child: Text('⌘K', style: Theme.of(context).textTheme.labelSmall),
-            ),
-          ),
-          hintText: 'Search students, teachers, invoices, batches...',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(999)),
-        ),
       ),
     );
   }

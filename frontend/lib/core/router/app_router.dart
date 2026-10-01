@@ -9,15 +9,33 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/firms/presentation/all_firm_admins_screen.dart';
 import '../../features/firms/presentation/firm_detail_screen.dart';
 import '../../features/firms/presentation/firms_list_screen.dart';
+import '../../features/firms/presentation/super_admin_profile_screen.dart';
 import '../../features/student_portal/presentation/explore_screen.dart';
 import '../../features/student_portal/presentation/my_courses_screen.dart';
 import '../../features/student_portal/presentation/student_register_screen.dart';
 import '../../features/student_portal/presentation/student_shell.dart';
 import '../../features/students/presentation/student_profile_screen.dart';
 import '../../features/students/presentation/students_directory_screen.dart';
+import '../../features/teachers/presentation/teacher_detail_screen.dart';
+import '../../features/teachers/presentation/teachers_list_screen.dart';
+import '../../features/staff/presentation/staff_list_screen.dart';
+import '../../features/enrollments/presentation/enrollment_detail_screen.dart';
+import '../../features/enrollments/presentation/enrollments_list_screen.dart';
+import '../../features/live_classes/presentation/live_classes_list_screen.dart';
+import '../../features/live_classes/presentation/live_class_detail_screen.dart';
+import '../../features/materials/presentation/materials_list_screen.dart';
+import '../../features/materials/presentation/material_detail_screen.dart';
+import '../../features/assignments/presentation/assignments_list_screen.dart';
+import '../../features/assignments/presentation/assignment_detail_screen.dart';
+import '../../features/assignments/presentation/assignment_submissions_screen.dart';
+import '../../features/assignments/presentation/assignment_pdf_import_screen.dart';
+import '../../features/subjects/presentation/subjects_list_screen.dart';
+import '../../features/subjects/presentation/subject_detail_screen.dart';
+import '../../features/subjects/presentation/chapter_detail_screen.dart';
+import '../../features/subjects/presentation/lesson_detail_screen.dart';
 import '../../features/student_portal/presentation/course_learning_screen.dart';
-import '../../features/student_portal/presentation/material_detail_screen.dart';
-import '../../features/student_portal/presentation/live_class_detail_screen.dart';
+import '../../features/student_portal/presentation/material_detail_screen.dart' as portal_mat;
+import '../../features/student_portal/presentation/live_class_detail_screen.dart' as portal_live;
 import '../../features/student_portal/presentation/student_assignment_screen.dart';
 import '../../features/student_portal/presentation/student_profile_screen.dart'
     as portal;
@@ -78,6 +96,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return session.role == UserRole.student
             ? '/student/courses'
             : '/dashboard';
+      }
+
+      if (location == '/super-admin/profile' &&
+          session.role != UserRole.superAdmin) {
+        return '/dashboard';
       }
 
       if (session.role == UserRole.student) {
@@ -146,7 +169,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/student/materials/:materialUuid',
             builder: (context, state) =>
-                MaterialDetailScreen(
+                portal_mat.MaterialDetailScreen(
               materialUuid: state.pathParameters[
                   'materialUuid']!,
             ),
@@ -160,7 +183,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path:
                 '/student/live-classes/:liveClassUuid',
             builder: (context, state) =>
-                LiveClassDetailScreen(
+                portal_live.LiveClassDetailScreen(
               liveClassUuid: state.pathParameters[
                   'liveClassUuid']!,
             ),
@@ -204,6 +227,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const DashboardScreen(),
           ),
           GoRoute(
+            path: '/super-admin/profile',
+            builder: (context, state) => const SuperAdminProfileScreen(),
+          ),
+          GoRoute(
             path: '/students',
             builder: (context, state) =>
             const StudentsDirectoryScreen(),
@@ -219,6 +246,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(
+            path: '/teachers',
+            builder: (context, state) =>
+                const TeachersListScreen(),
+            routes: [
+              GoRoute(
+                path: ':teacherUuid',
+                builder: (context, state) =>
+                    TeacherDetailScreen(
+                  teacherUuid:
+                      state.pathParameters[
+                          'teacherUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/staff',
+            builder: (context, state) =>
+                const StaffListScreen(),
+          ),
+          GoRoute(
             path: '/courses',
             builder: (context, state) =>
             const CoursesListScreen(),
@@ -230,6 +278,127 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       courseUuid:
                       state.pathParameters['courseUuid']!,
                     ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/enrollments',
+            builder: (context, state) =>
+                const EnrollmentsListScreen(),
+            routes: [
+              GoRoute(
+                path: ':enrollmentUuid',
+                builder: (context, state) =>
+                    EnrollmentDetailScreen(
+                  enrollmentUuid:
+                      state.pathParameters[
+                          'enrollmentUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/live-classes',
+            builder: (context, state) =>
+                const LiveClassesListScreen(),
+            routes: [
+              GoRoute(
+                path: ':liveClassUuid',
+                builder: (context, state) =>
+                    LiveClassDetailScreen(
+                  liveClassUuid:
+                      state.pathParameters[
+                          'liveClassUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/materials',
+            builder: (context, state) =>
+                const MaterialsListScreen(),
+            routes: [
+              GoRoute(
+                path: ':materialUuid',
+                builder: (context, state) =>
+                    MaterialDetailScreen(
+                  materialUuid:
+                      state.pathParameters[
+                          'materialUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/assignments',
+            builder: (context, state) =>
+                const AssignmentsListScreen(),
+            routes: [
+              GoRoute(
+                path: 'import-pdf',
+                builder: (context, state) =>
+                    const AssignmentPdfImportScreen(),
+              ),
+              GoRoute(
+                path: ':assignmentUuid',
+                builder: (context, state) =>
+                    AssignmentDetailScreen(
+                  assignmentUuid:
+                      state.pathParameters[
+                          'assignmentUuid']!,
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'submissions',
+                    builder: (context, state) =>
+                        AssignmentSubmissionsScreen(
+                      assignmentUuid:
+                          state.pathParameters[
+                              'assignmentUuid']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/subjects',
+            builder: (context, state) =>
+                const SubjectsListScreen(),
+            routes: [
+              GoRoute(
+                path: ':subjectUuid',
+                builder: (context, state) =>
+                    SubjectDetailScreen(
+                  subjectUuid:
+                      state.pathParameters[
+                          'subjectUuid']!,
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'chapters/:chapterUuid',
+                    builder: (context, state) =>
+                        ChapterDetailScreen(
+                      subjectUuid:
+                          state.pathParameters[
+                              'subjectUuid']!,
+                      chapterUuid:
+                          state.pathParameters[
+                              'chapterUuid']!,
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'lessons/:lessonUuid',
+                        builder: (context, state) =>
+                            LessonDetailScreen(
+                          lessonUuid:
+                              state.pathParameters[
+                                  'lessonUuid']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
