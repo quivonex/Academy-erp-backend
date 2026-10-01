@@ -18,13 +18,21 @@ def create_course_payment(
     user,
     validated_data,
 ):
-    student = Student.objects.select_related(
-        "firm"
-    ).get(
-        user=user,
-        firm=user.firm,
-        is_active=True,
-    )
+    try:
+        student = Student.objects.select_related(
+            "firm"
+        ).get(
+            user=user,
+            firm=user.firm,
+            is_active=True,
+        )
+    
+    except Student.DoesNotExist:
+        raise ValidationError({
+            "student": [
+                "Active student profile was not found."
+            ]
+        })
 
     course_uuid = validated_data.pop(
         "course_uuid"
@@ -35,13 +43,21 @@ def create_course_payment(
         None,
     )
 
-    course = Course.objects.get(
-        uuid=course_uuid,
-        firm=user.firm,
-        is_active=True,
-        is_published=True,
-        is_purchasable_online=True,
-    )
+    try:
+        course = Course.objects.get(
+            uuid=course_uuid,
+            firm=user.firm,
+            is_active=True,
+            is_published=True,
+            is_purchasable_online=True,
+        )
+
+    except Course.DoesNotExist:
+        raise ValidationError({
+            "course_uuid": [
+                "Course was not found or is not available for online payment."
+            ]
+        })
 
     if course.price <= 0:
         raise ValidationError({

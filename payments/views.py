@@ -33,11 +33,9 @@ class StudentCoursePaymentListCreateView(APIView):
         page = paginator.paginate_queryset(payments, request)
 
         serializer = CoursePaymentSerializer(page, many=True)
-        return paginator.get_paginated_response({
-            "success": True,
-            "message": "Payment history retrieved successfully",
-            "data": serializer.data,
-        })
+        return paginator.get_paginated_response(
+            serializer.data
+        )
 
     def post(self, request):
         serializer = StudentCoursePaymentCreateSerializer(data=request.data)
@@ -90,11 +88,9 @@ class CoursePaymentListView(APIView):
         page = paginator.paginate_queryset(payments, request)
 
         serializer = CoursePaymentSerializer(page, many=True)
-        return paginator.get_paginated_response({
-            "success": True,
-            "message": "Payment requests retrieved successfully",
-            "data": serializer.data,
-        })
+        return paginator.get_paginated_response(
+            serializer.data
+        )
 
 
 class CoursePaymentReviewView(APIView):
