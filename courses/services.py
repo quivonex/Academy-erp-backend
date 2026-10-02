@@ -12,6 +12,8 @@ from .models import (
     Lesson,
     Subject,
 )
+from datetime import timedelta
+from django.utils import timezone
 
 
 def get_category(firm, category_uuid):
@@ -210,7 +212,33 @@ def create_enrollment(*, firm, granted_by, validated_data):
         firm=firm,
         course_uuid=course_uuid,
     )
-
+    enrollment_status = validated_data.get(
+        "status",
+        Enrollment.Status.PENDING,
+    )
+    
+    if enrollment_status == Enrollment.Status.PENDING:
+        validated_data["access_start_at"] = None
+        validated_data["access_end_at"] = None
+    
+    elif enrollment_status == Enrollment.Status.ACTIVE:
+        access_start_at = (
+            validated_data.get("access_start_at")
+            or timezone.now()
+        )
+    
+        validated_data["access_start_at"] = access_start_at
+    
+        if (
+            not validated_data.get("access_end_at")
+            and course.access_duration_days
+        ):
+            validated_data["access_end_at"] = (
+                access_start_at
+                + timedelta(
+                    days=course.access_duration_days
+                )
+            )
     if Enrollment.objects.filter(
         firm=firm,
         student=student,

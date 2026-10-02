@@ -8,7 +8,9 @@ from .models import (
     Lesson,
     Subject,
 )
+from datetime import timedelta
 
+from django.utils import timezone
 
 class CourseCategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -228,16 +230,71 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        start = attrs.get("access_start_at")
-        end = attrs.get("access_end_at")
-
-        if start and end and end <= start:
-            raise serializers.ValidationError({
-                "access_end_at": (
-                    "Access end time must be after access start time."
+        enrollment_status = attrs.get(
+            "status",
+            (
+                self.instance.status
+                if self.instance
+                else Enrollment.Status.PENDING
+            ),
+        )
+    
+        access_start_at = attrs.get(
+            "access_start_at",
+            (
+                self.instance.access_start_at
+                if self.instance
+                else None
+            ),
+        )
+    
+        access_end_at = attrs.get(
+            "access_end_at",
+            (
+                self.instance.access_end_at
+                if self.instance
+                else None
+            ),
+        )
+    
+        if enrollment_status == Enrollment.Status.PENDING:
+            attrs["access_start_at"] = None
+            attrs["access_end_at"] = None
+            return attrs
+    
+        if enrollment_status == Enrollment.Status.ACTIVE:
+            if not access_start_at:
+                access_start_at = timezone.now()
+                attrs["access_start_at"] = access_start_at
+    
+            course = self.instance.course if self.instance else None
+    
+            if (
+                course
+                and not access_end_at
+                and course.access_duration_days
+            ):
+                access_end_at = (
+                    access_start_at
+                    + timedelta(
+                        days=course.access_duration_days
+                    )
                 )
-            })
-
+                attrs["access_end_at"] = access_end_at
+    
+            if (
+                access_end_at
+                and access_end_at <= access_start_at
+            ):
+                raise serializers.ValidationError({
+                    "access_end_at": [
+                        (
+                            "Access end time must be after "
+                            "access start time."
+                        )
+                    ]
+                })
+    
         return attrs
     
 

@@ -417,7 +417,7 @@ class Enrollment(models.Model):
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.ACTIVE,
+        default=Status.PENDING,
         db_index=True,
     )
 

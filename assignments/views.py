@@ -9,7 +9,9 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-
+import os
+import uuid
+from django.core.files.storage import default_storage
 from common.pagination import StandardResultsSetPagination
 from common.permissions import (
     IsFirmAdminOrStaff,
@@ -36,6 +38,7 @@ from .serializers import (
     AssignmentUpdateSerializer,
     StudentAssignmentQuestionSerializer,
     StudentAssignmentSubmitSerializer,
+    StudentAssignmentFileUploadSerializer,
 )
 from .services import (
     create_assignment,
@@ -817,22 +820,14 @@ class StudentAssignmentSubmitView(APIView):
             for answer in submitted_answers
         ]
 
-        if (
-            len(submitted_question_ids)
-            != len(
-                set(
-                    submitted_question_ids
-                )
-            )
+        if len(submitted_question_ids) != len(
+            set(submitted_question_ids)
         ):
             return error_response(
                 message="Submission failed",
                 errors={
                     "answers": [
-                        (
-                            "Duplicate question answers "
-                            "are not allowed."
-                        )
+                        "The same question cannot be submitted more than once."
                     ]
                 },
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -900,14 +895,10 @@ class StudentAssignmentSubmitView(APIView):
 
         for answer_data in submitted_answers:
             question_uuid = str(
-                answer_data[
-                    "question_uuid"
-                ]
+                answer_data["question_uuid"]
             )
 
-            question = question_map[
-                question_uuid
-            ]
+            question = question_map[question_uuid]
 
             if (
                 question.answer_type
@@ -915,10 +906,7 @@ class StudentAssignmentSubmitView(APIView):
             ):
                 selected_option = (
                     answer_data
-                    .get(
-                        "selected_option",
-                        "",
-                    )
+                    .get("selected_option", "")
                     .strip()
                     .upper()
                 )
@@ -939,14 +927,8 @@ class StudentAssignmentSubmitView(APIView):
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
-
-                # Important:
-                # Never auto-grade an MCQ if
-                # correct answer was not configured.
 
                 if question.correct_option not in [
                     "A",
@@ -959,16 +941,14 @@ class StudentAssignmentSubmitView(APIView):
                         errors={
                             "assignment": [
                                 (
-                                    "The answer key for "
-                                    "one or more MCQ "
-                                    "questions is missing. "
-                                    "Please contact the academy."
+                                    "The answer key for one "
+                                    "or more MCQ questions "
+                                    "is missing. Please "
+                                    "contact the academy."
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
 
             elif (
@@ -977,17 +957,11 @@ class StudentAssignmentSubmitView(APIView):
             ):
                 text_answer = (
                     answer_data
-                    .get(
-                        "text_answer",
-                        "",
-                    )
+                    .get("text_answer", "")
                     .strip()
                 )
 
-                if (
-                    question.is_required
-                    and not text_answer
-                ):
+                if question.is_required and not text_answer:
                     return error_response(
                         message="Submission failed",
                         errors={
@@ -998,15 +972,67 @@ class StudentAssignmentSubmitView(APIView):
                                 )
                             ]
                         },
-                        status_code=(
-                            status.HTTP_400_BAD_REQUEST
-                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
                     )
 
+            elif (
+                question.answer_type
+                == AssignmentQuestion.AnswerType.FILE
+            ):
+                file_key = (
+                    answer_data
+                    .get("file_key", "")
+                    .strip()
+                )
+
+                if question.is_required and not file_key:
+                    return error_response(
+                        message="Submission failed",
+                        errors={
+                            "file_key": [
+                                (
+                                    "File upload is required "
+                                    "for this question."
+                                )
+                            ]
+                        },
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                expected_prefix = (
+                    f"assignment_submissions/"
+                    f"{request.user.firm.uuid}/"
+                    f"{student.uuid}/"
+                    f"{assignment.uuid}/"
+                    f"{question.uuid}/"
+                )
+
+                if (
+                    file_key
+                    and (
+                        not file_key.startswith(
+                            expected_prefix
+                        )
+                        or not default_storage.exists(
+                            file_key
+                        )
+                    )
+                ):
+                    return error_response(
+                        message="Submission failed",
+                        errors={
+                            "file_key": [
+                                (
+                                    "Invalid assignment "
+                                    "file upload."
+                                )
+                            ]
+                        },
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
         # ---------------------------------------------
         # CREATE / GET SUBMISSION
         # ---------------------------------------------
-
+        
         submission, created = (
             AssignmentSubmission.objects
             .get_or_create(
@@ -1037,36 +1063,32 @@ class StudentAssignmentSubmitView(APIView):
 
         for answer_data in submitted_answers:
             question_uuid = str(
-                answer_data[
-                    "question_uuid"
-                ]
+                answer_data["question_uuid"]
             )
-
-            question = question_map[
-                question_uuid
-            ]
-
+        
+            question = question_map[question_uuid]
+        
             selected_option = (
                 answer_data
-                .get(
-                    "selected_option",
-                    "",
-                )
+                .get("selected_option", "")
                 .strip()
                 .upper()
             )
-
+        
             text_answer = (
                 answer_data
-                .get(
-                    "text_answer",
-                    "",
-                )
+                .get("text_answer", "")
                 .strip()
             )
-
+        
+            file_key = (
+                answer_data
+                .get("file_key", "")
+                .strip()
+            )
+        
             marks_obtained = None
-
+        
             if (
                 question.answer_type
                 == AssignmentQuestion.AnswerType.MCQ
@@ -1075,36 +1097,22 @@ class StudentAssignmentSubmitView(APIView):
                     selected_option
                     == question.correct_option.upper()
                 ):
-                    marks_obtained = (
-                        question.marks
-                    )
-
-                    total_marks += (
-                        question.marks
-                    )
-
+                    marks_obtained = question.marks
+                    total_marks += question.marks
                     correct_answers += 1
-
+        
                 else:
-                    marks_obtained = Decimal(
-                        "0.00"
-                    )
-
+                    marks_obtained = Decimal("0.00")
                     wrong_answers += 1
-
+        
             AssignmentAnswer.objects.update_or_create(
                 submission=submission,
                 question=question,
                 defaults={
-                    "text_answer": (
-                        text_answer
-                    ),
-                    "selected_option": (
-                        selected_option
-                    ),
-                    "marks_obtained": (
-                        marks_obtained
-                    ),
+                    "text_answer": text_answer,
+                    "file_key": file_key,
+                    "selected_option": selected_option,
+                    "marks_obtained": marks_obtained,
                 },
             )
 
@@ -1680,3 +1688,119 @@ class AssignmentUnpublishView(APIView):
         
         
         
+class StudentAssignmentFileUploadView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def post(
+        self,
+        request,
+        assignment_uuid,
+    ):
+        student = request.user.student_profile
+
+        serializer = StudentAssignmentFileUploadSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="File upload failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assignment = get_object_or_404(
+            Assignment.objects.select_related(
+                "course"
+            ),
+            uuid=assignment_uuid,
+            firm=request.user.firm,
+            is_active=True,
+            is_published=True,
+        )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=assignment.course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message=(
+                    "You do not have access "
+                    "to this assignment."
+                ),
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        question_uuid = serializer.validated_data[
+            "question_uuid"
+        ]
+
+        question = get_object_or_404(
+            AssignmentQuestion,
+            uuid=question_uuid,
+            assignment=assignment,
+        )
+
+        if (
+            question.answer_type
+            != AssignmentQuestion.AnswerType.FILE
+        ):
+            return error_response(
+                message="File upload failed",
+                errors={
+                    "question_uuid": [
+                        (
+                            "This question does not "
+                            "accept a file answer."
+                        )
+                    ]
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file = serializer.validated_data[
+            "file"
+        ]
+
+        extension = os.path.splitext(
+            uploaded_file.name.lower()
+        )[1]
+
+        storage_path = (
+            f"assignment_submissions/"
+            f"{request.user.firm.uuid}/"
+            f"{student.uuid}/"
+            f"{assignment.uuid}/"
+            f"{question.uuid}/"
+            f"{uuid.uuid4().hex}{extension}"
+        )
+
+        file_key = default_storage.save(
+            storage_path,
+            uploaded_file,
+        )
+
+        return success_response(
+            message="Assignment file uploaded successfully",
+            data={
+                "assignment_uuid": str(
+                    assignment.uuid
+                ),
+                "question_uuid": str(
+                    question.uuid
+                ),
+                "file_key": file_key,
+                "original_file_name": uploaded_file.name,
+            },
+            status_code=status.HTTP_201_CREATED,
+        )
+        
+        
+
+
