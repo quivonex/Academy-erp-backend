@@ -11,6 +11,7 @@ from .models import (
     Enrollment,
     Lesson,
     Subject,
+    StudentChapterVideoAccess,
 )
 from datetime import timedelta
 from django.utils import timezone
@@ -399,4 +400,170 @@ def bulk_assign_course_by_admission_date(
         "created_enrollments": created_enrollments,
         "skipped_students": skipped_students,
     }
+    
+
+
+@transaction.atomic
+def bulk_grant_chapter_video_access(
+    *,
+    firm,
+    granted_by,
+    validated_data,
+):
+    course = get_course(
+        firm=firm,
+        course_uuid=validated_data["course_uuid"],
+    )
+
+    if not course.is_active:
+        raise ValidationError({
+            "course_uuid": [
+                "Inactive course cannot be assigned."
+            ]
+        })
+
+    requested_student_uuids = validated_data["student_uuids"]
+
+    students = list(
+        Student.objects.filter(
+            firm=firm,
+            uuid__in=requested_student_uuids,
+            is_active=True,
+        ).order_by("first_name", "last_name")
+    )
+
+    found_student_uuids = {
+        student.uuid for student in students
+    }
+
+    missing_student_uuids = [
+        str(student_uuid)
+        for student_uuid in requested_student_uuids
+        if student_uuid not in found_student_uuids
+    ]
+
+    if missing_student_uuids:
+        raise ValidationError({
+            "student_uuids": [
+                (
+                    "Invalid, inactive, or another-firm student UUIDs: "
+                    + ", ".join(missing_student_uuids)
+                )
+            ]
+        })
+
+    requested_chapter_uuids = validated_data["chapter_uuids"]
+
+    chapters = list(
+        Chapter.objects.filter(
+            firm=firm,
+            uuid__in=requested_chapter_uuids,
+            subject__course=course,
+            is_active=True,
+        ).select_related("subject")
+    )
+
+    found_chapter_uuids = {
+        chapter.uuid for chapter in chapters
+    }
+
+    missing_chapter_uuids = [
+        str(chapter_uuid)
+        for chapter_uuid in requested_chapter_uuids
+        if chapter_uuid not in found_chapter_uuids
+    ]
+
+    if missing_chapter_uuids:
+        raise ValidationError({
+            "chapter_uuids": [
+                (
+                    "Invalid, inactive, or another-course chapter UUIDs: "
+                    + ", ".join(missing_chapter_uuids)
+                )
+            ]
+        })
+
+    access_start_at = (
+        validated_data.get("access_start_at")
+        or timezone.now()
+    )
+
+    access_end_at = validated_data.get("access_end_at")
+
+    if not access_end_at and course.access_duration_days:
+        access_end_at = (
+            access_start_at
+            + timedelta(days=course.access_duration_days)
+        )
+
+    existing_accesses = {
+        (access.student_id, access.chapter_id): access
+        for access in (
+            StudentChapterVideoAccess.objects
+            .select_for_update()
+            .filter(
+                firm=firm,
+                student__in=students,
+                course=course,
+                chapter__in=chapters,
+            )
+        )
+    }
+
+    new_accesses = []
+    updated_accesses = []
+
+    for student in students:
+        for chapter in chapters:
+            access_key = (student.id, chapter.id)
+            existing_access = existing_accesses.get(access_key)
+
+            if existing_access:
+                existing_access.granted_by = granted_by
+                existing_access.access_start_at = access_start_at
+                existing_access.access_end_at = access_end_at
+                existing_access.is_active = True
+
+                existing_access.save(update_fields=[
+                    "granted_by",
+                    "access_start_at",
+                    "access_end_at",
+                    "is_active",
+                    "updated_at",
+                ])
+
+                updated_accesses.append(existing_access)
+                continue
+
+            new_accesses.append(
+                StudentChapterVideoAccess(
+                    firm=firm,
+                    student=student,
+                    course=course,
+                    chapter=chapter,
+                    granted_by=granted_by,
+                    access_start_at=access_start_at,
+                    access_end_at=access_end_at,
+                    is_active=True,
+                )
+            )
+
+    created_accesses = (
+        StudentChapterVideoAccess.objects.bulk_create(
+            new_accesses
+        )
+    )
+
+    return {
+        "course": course,
+        "students": students,
+        "chapters": chapters,
+        "access_start_at": access_start_at,
+        "access_end_at": access_end_at,
+        "created_accesses": created_accesses,
+        "updated_accesses": updated_accesses,
+    }
+    
+    
+    
     

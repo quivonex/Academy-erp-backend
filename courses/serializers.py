@@ -496,3 +496,65 @@ class PublicCourseCategoryQuerySerializer(serializers.Serializer):
 
         
         
+class BulkStudentChapterVideoAccessSerializer(
+    serializers.Serializer
+):
+    course_uuid = serializers.UUIDField()
+
+    student_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        max_length=500,
+    )
+
+    chapter_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        max_length=100,
+    )
+
+    access_start_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    access_end_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        student_uuids = attrs["student_uuids"]
+        chapter_uuids = attrs["chapter_uuids"]
+
+        if len(student_uuids) != len(set(student_uuids)):
+            raise serializers.ValidationError({
+                "student_uuids": [
+                    "Duplicate student UUIDs are not allowed."
+                ]
+            })
+
+        if len(chapter_uuids) != len(set(chapter_uuids)):
+            raise serializers.ValidationError({
+                "chapter_uuids": [
+                    "Duplicate chapter UUIDs are not allowed."
+                ]
+            })
+
+        access_start_at = attrs.get("access_start_at")
+        access_end_at = attrs.get("access_end_at")
+
+        if (
+            access_start_at
+            and access_end_at
+            and access_end_at <= access_start_at
+        ):
+            raise serializers.ValidationError({
+                "access_end_at": [
+                    "Access end time must be after access start time."
+                ]
+            })
+
+        return attrs
+    
+    
