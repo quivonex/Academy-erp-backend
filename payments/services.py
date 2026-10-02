@@ -2,14 +2,17 @@ import os
 import uuid
 from django.utils import timezone
 from django.core.files.storage import default_storage
-from django.db import transaction
-
+from decimal import Decimal
 from rest_framework.exceptions import ValidationError
-
-from courses.models import Course
+from django.db import models, transaction
+from courses.models import Course, Enrollment
 from students.models import Student
 
-from .models import CoursePayment
+from .models import (
+    CoursePayment,
+    EnrollmentFeeAccount,
+    InstallmentPayment,
+)
 
 
 @transaction.atomic
@@ -26,7 +29,7 @@ def create_course_payment(
             firm=user.firm,
             is_active=True,
         )
-    
+
     except Student.DoesNotExist:
         raise ValidationError({
             "student": [
@@ -215,4 +218,272 @@ def review_course_payment(*, firm, reviewed_by, payment_uuid, validated_data):
     ])
 
     return payment
+
+
+
+def refresh_fee_account_summary(fee_account):
+    payable_amount = (
+        fee_account.total_amount
+        - fee_account.discount_amount
+    )
+
+    paid_amount = (
+        fee_account.installments
+        .filter(
+            status=InstallmentPayment.Status.RECORDED
+        )
+        .aggregate(total=models.Sum("amount"))
+        .get("total")
+        or Decimal("0.00")
+    )
+
+    balance_amount = payable_amount - paid_amount
+
+    if balance_amount < Decimal("0.00"):
+        balance_amount = Decimal("0.00")
+
+    if paid_amount <= Decimal("0.00"):
+        fee_status = EnrollmentFeeAccount.Status.UNPAID
+
+    elif balance_amount <= Decimal("0.00"):
+        fee_status = EnrollmentFeeAccount.Status.PAID
+
+    else:
+        fee_status = (
+            EnrollmentFeeAccount.Status.PARTIALLY_PAID
+        )
+
+    fee_account.paid_amount = paid_amount
+    fee_account.balance_amount = balance_amount
+    fee_account.status = fee_status
+
+    fee_account.save(
+        update_fields=[
+            "paid_amount",
+            "balance_amount",
+            "status",
+            "updated_at",
+        ]
+    )
+
+    return fee_account
+
+
+@transaction.atomic
+def create_fee_account(
+    *,
+    firm,
+    created_by,
+    validated_data,
+):
+    enrollment_uuid = validated_data["enrollment_uuid"]
+
+    try:
+        enrollment = (
+            Enrollment.objects
+            .select_related("student", "course")
+            .get(
+                uuid=enrollment_uuid,
+                firm=firm,
+            )
+        )
+
+    except Enrollment.DoesNotExist:
+        raise ValidationError({
+            "enrollment_uuid": [
+                "Enrollment was not found."
+            ]
+        })
+
+    if EnrollmentFeeAccount.objects.filter(
+        firm=firm,
+        enrollment=enrollment,
+    ).exists():
+        raise ValidationError({
+            "enrollment_uuid": [
+                (
+                    "A fee account already exists "
+                    "for this enrollment."
+                )
+            ]
+        })
+
+    total_amount = validated_data["total_amount"]
+    discount_amount = validated_data["discount_amount"]
+
+    balance_amount = total_amount - discount_amount
+
+    return EnrollmentFeeAccount.objects.create(
+        firm=firm,
+        enrollment=enrollment,
+        total_amount=total_amount,
+        discount_amount=discount_amount,
+        paid_amount=Decimal("0.00"),
+        balance_amount=balance_amount,
+        due_date=validated_data.get("due_date"),
+        notes=validated_data.get("notes", ""),
+        created_by=created_by,
+        status=EnrollmentFeeAccount.Status.UNPAID,
+    )
+
+
+@transaction.atomic
+def record_installment_payment(
+    *,
+    firm,
+    recorded_by,
+    validated_data,
+):
+    fee_account_uuid = validated_data["fee_account_uuid"]
+
+    try:
+        fee_account = (
+            EnrollmentFeeAccount.objects
+            .select_for_update()
+            .select_related(
+                "enrollment",
+                "enrollment__student",
+                "enrollment__course",
+            )
+            .get(
+                uuid=fee_account_uuid,
+                firm=firm,
+            )
+        )
+
+    except EnrollmentFeeAccount.DoesNotExist:
+        raise ValidationError({
+            "fee_account_uuid": [
+                "Fee account was not found."
+            ]
+        })
+
+    refresh_fee_account_summary(fee_account)
+
+    if fee_account.status == EnrollmentFeeAccount.Status.PAID:
+        raise ValidationError({
+            "amount": [
+                "This fee account is already fully paid."
+            ]
+        })
+
+    amount = validated_data["amount"]
+
+    if amount > fee_account.balance_amount:
+        raise ValidationError({
+            "amount": [
+                (
+                    "Installment amount cannot be greater "
+                    "than the pending balance."
+                )
+            ]
+        })
+
+    transaction_reference = (
+        validated_data.get(
+            "transaction_reference",
+            "",
+        )
+        .strip()
+    )
+
+    if transaction_reference:
+        reference_exists = (
+            InstallmentPayment.objects
+            .filter(
+                firm=firm,
+                transaction_reference=transaction_reference,
+                status=InstallmentPayment.Status.RECORDED,
+            )
+            .exists()
+        )
+
+        if reference_exists:
+            raise ValidationError({
+                "transaction_reference": [
+                    (
+                        "This transaction reference "
+                        "is already used."
+                    )
+                ]
+            })
+
+    installment = InstallmentPayment.objects.create(
+        firm=firm,
+        fee_account=fee_account,
+        amount=amount,
+        payment_method=validated_data["payment_method"],
+        transaction_reference=transaction_reference,
+        payment_date=(validated_data.get("payment_date") or timezone.localdate()),
+        notes=validated_data.get("notes", ""),
+        recorded_by=recorded_by,
+    )
+
+    refresh_fee_account_summary(fee_account)
+
+    return installment, fee_account
+
+
+@transaction.atomic
+def void_installment_payment(
+    *,
+    firm,
+    voided_by,
+    installment_uuid,
+    validated_data,
+):
+    try:
+        installment = (
+            InstallmentPayment.objects
+            .select_for_update()
+            .select_related("fee_account")
+            .get(
+                uuid=installment_uuid,
+                firm=firm,
+            )
+        )
+
+    except InstallmentPayment.DoesNotExist:
+        raise ValidationError({
+            "installment_uuid": [
+                "Installment payment was not found."
+            ]
+        })
+
+    if (
+        installment.status
+        != InstallmentPayment.Status.RECORDED
+    ):
+        raise ValidationError({
+            "installment": [
+                "Only recorded payments can be voided."
+            ]
+        })
+
+    fee_account = (
+        EnrollmentFeeAccount.objects
+        .select_for_update()
+        .get(pk=installment.fee_account_id)
+    )
+
+    installment.status = InstallmentPayment.Status.VOIDED
+    installment.voided_by = voided_by
+    installment.voided_at = timezone.now()
+    installment.void_reason = validated_data["void_reason"]
+
+    installment.save(
+        update_fields=[
+            "status",
+            "voided_by",
+            "voided_at",
+            "void_reason",
+            "updated_at",
+        ]
+    )
+
+    refresh_fee_account_summary(fee_account)
+
+    return installment, fee_account
+
+
 

@@ -1,8 +1,10 @@
 from django.urls import path
-
 from .views import (
     CoursePaymentListView,
     CoursePaymentReviewView,
+    EnrollmentFeeAccountListCreateView,
+    InstallmentPaymentListCreateView,
+    InstallmentPaymentVoidView,
     StudentCoursePaymentListCreateView,
 )
 
@@ -15,6 +17,24 @@ student_payment_urlpatterns = [
 ]
 
 admin_payment_urlpatterns = [
+    path(
+        "fee-accounts/",
+        EnrollmentFeeAccountListCreateView.as_view(),
+        name="fee-account-list-create",
+    ),
+    
+    path(
+        "installments/",
+        InstallmentPaymentListCreateView.as_view(),
+        name="installment-payment-list-create",
+    ),
+    
+    path(
+        "installments/<uuid:installment_uuid>/void/",
+        InstallmentPaymentVoidView.as_view(),
+        name="installment-payment-void",
+    ),
+
     path(
         "",
         CoursePaymentListView.as_view(),

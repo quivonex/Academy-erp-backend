@@ -384,7 +384,7 @@ class InstallmentPaymentCreateSerializer(
     amount = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
-        min_value=0.01,
+        min_value=Decimal("0.01"),
     )
 
     payment_method = serializers.ChoiceField(

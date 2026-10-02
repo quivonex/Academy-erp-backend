@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from decimal import Decimal
 import os
 from .models import (
     Assignment,
@@ -479,7 +480,7 @@ class AssignmentAnswerGradeInputSerializer(
     marks_obtained = serializers.DecimalField(
         max_digits=8,
         decimal_places=2,
-        min_value=0,
+        min_value=Decimal("0.00"),
     )
 
     feedback = serializers.CharField(
