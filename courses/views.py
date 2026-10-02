@@ -33,6 +33,7 @@ from .serializers import (
     PublicCourseCategoryQuerySerializer,
     PublicCourseCategorySerializer,
     PublicCourseQuerySerializer,
+    BulkStudentChapterVideoAccessSerializer,
 )
 from .services import (
     bulk_assign_course_by_admission_date,
@@ -48,6 +49,7 @@ from .services import (
     get_subject,
     get_teacher,
     update_instance,
+    bulk_grant_chapter_video_access,
 )
 
 def validation_error_response(exc):
@@ -888,7 +890,72 @@ class PublicCourseDetailView(APIView):
         )
         
         
+        
+class BulkStudentChapterVideoAccessView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
 
+    def post(self, request):
+        serializer = BulkStudentChapterVideoAccessSerializer(
+            data=request.data
+        )
 
+        if not serializer.is_valid():
+            return error_response(
+                message="Chapter video access grant failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
+        try:
+            result = bulk_grant_chapter_video_access(
+                firm=request.user.firm,
+                granted_by=request.user,
+                validated_data=serializer.validated_data,
+            )
+        except ValidationError as exc:
+            return validation_error_response(exc)
+
+        return success_response(
+            message="Chapter video access granted successfully",
+            data={
+                "course_uuid": str(result["course"].uuid),
+                "course_name": result["course"].name,
+                "selected_students_count": len(
+                    result["students"]
+                ),
+                "selected_chapters_count": len(
+                    result["chapters"]
+                ),
+                "access_start_at": result["access_start_at"],
+                "access_end_at": result["access_end_at"],
+                "created_permissions_count": len(
+                    result["created_accesses"]
+                ),
+                "renewed_permissions_count": len(
+                    result["updated_accesses"]
+                ),
+                "students": [
+                    {
+                        "student_uuid": str(student.uuid),
+                        "student_name": student.full_name,
+                        "admission_number": student.admission_number,
+                    }
+                    for student in result["students"]
+                ],
+                "chapters": [
+                    {
+                        "chapter_uuid": str(chapter.uuid),
+                        "chapter_title": chapter.title,
+                        "subject_name": chapter.subject.name,
+                    }
+                    for chapter in result["chapters"]
+                ],
+            },
+            status_code=status.HTTP_201_CREATED,
+        )
+        
+        
         

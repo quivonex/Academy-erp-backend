@@ -17,6 +17,7 @@ from .views import (
     SubjectDetailView,
     SubjectListCreateView,
     BulkEnrollmentByAdmissionDateView,
+    BulkStudentChapterVideoAccessView,
 )
 
 category_urlpatterns = [
@@ -48,6 +49,7 @@ enrollment_urlpatterns = [
     path("bulk-assign-by-admission-date/", BulkEnrollmentByAdmissionDateView.as_view(),),
     path("", EnrollmentListCreateView.as_view()),
     path("<uuid:enrollment_uuid>/", EnrollmentDetailView.as_view()),
+    path("chapter-video-access/bulk-grant/", BulkStudentChapterVideoAccessView.as_view(),),
 ]
 
 public_course_urlpatterns = [

@@ -15,6 +15,7 @@ from common.responses import (
 from courses.models import (
     Course,
     Enrollment,
+    StudentChapterVideoAccess,
 )
 
 from courses.access import (
@@ -371,21 +372,40 @@ class StudentCourseMaterialListView(APIView):
             is_active=True,
         )
 
-        enrollment = get_student_active_enrollment(
-            student=student,
-            course=course,
+        full_course_enrollment = (
+            get_student_active_enrollment(
+                student=student,
+                course=course,
+            )
         )
 
-        if not enrollment:
+        granted_chapter_ids = list(
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                course=course,
+                is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .values_list("chapter_id", flat=True)
+        )
+
+        if not full_course_enrollment and not granted_chapter_ids:
             return error_response(
                 message=(
-                    "You do not have access "
-                    "to this course."
+                    "You do not have access to this course "
+                    "or its chapter videos."
                 ),
                 errors={},
-                status_code=(
-                    status.HTTP_403_FORBIDDEN
-                ),
+                status_code=status.HTTP_403_FORBIDDEN,
             )
 
         materials = (
@@ -416,10 +436,16 @@ class StudentCourseMaterialListView(APIView):
             )
         )
 
-        material_type = (
-            request.query_params.get(
-                "material_type"
+        # Full course enrollment: all available materials.
+        # Chapter-only access: only VIDEO materials in granted chapters.
+        if not full_course_enrollment:
+            materials = materials.filter(
+                material_type=LearningMaterial.MaterialType.VIDEO,
+                chapter_id__in=granted_chapter_ids,
             )
+
+        material_type = request.query_params.get(
+            "material_type"
         )
 
         if material_type:
@@ -441,9 +467,7 @@ class StudentCourseMaterialListView(APIView):
                             )
                         ]
                     },
-                    status_code=(
-                        status.HTTP_400_BAD_REQUEST
-                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
             materials = materials.filter(
@@ -451,12 +475,12 @@ class StudentCourseMaterialListView(APIView):
             )
 
         paginator = StandardResultsSetPagination()
-        
+
         page = paginator.paginate_queryset(
             materials,
             request,
         )
-        
+
         serializer = StudentLearningMaterialSerializer(
             page,
             many=True,
@@ -464,11 +488,11 @@ class StudentCourseMaterialListView(APIView):
                 "request": request,
             },
         )
-        
+
         return paginator.get_paginated_response(
             serializer.data
         )
-        
+                
         
         
 class StudentMaterialDetailView(APIView):
