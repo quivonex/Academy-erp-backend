@@ -5,6 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
+import '../../subjects/data/subject.dart';
+import '../../subjects/data/subject_repository.dart';
+
+import '../../subjects/data/chapter.dart';
+import '../../subjects/data/chapter_repository.dart';
+
+import '../../subjects/data/lesson.dart';
+import '../../subjects/data/lesson_repository.dart';
+
 import '../data/assignment.dart';
 import '../data/assignment_repository.dart';
 
@@ -289,6 +298,18 @@ class _CreateAssignmentDialogState
   Course? selectedCourse;
   bool loadingCourses = false;
 
+  List<Subject> subjects = [];
+  Subject? selectedSubject;
+  bool loadingSubjects = false;
+
+  List<Chapter> chapters = [];
+  Chapter? selectedChapter;
+  bool loadingChapters = false;
+
+  List<Lesson> lessons = [];
+  Lesson? selectedLesson;
+  bool loadingLessons = false;
+
   DateTime? dueAt;
   bool allowLateSubmission = false;
   bool saving = false;
@@ -317,6 +338,144 @@ class _CreateAssignmentDialogState
       if (mounted) {
         setState(() {
           loadingCourses = false;
+        });
+      }
+    }
+  }
+
+  Future<void> loadSubjects(
+    String courseUuid,
+  ) async {
+    setState(() {
+      loadingSubjects = true;
+
+      subjects = [];
+      selectedSubject = null;
+
+      chapters = [];
+      selectedChapter = null;
+
+      lessons = [];
+      selectedLesson = null;
+    });
+
+    try {
+      final result = await ref
+          .read(subjectRepositoryProvider)
+          .list(
+            courseUuid: courseUuid,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        subjects = result.results
+            .where(
+              (subject) =>
+                  subject.isActive,
+            )
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error =
+            'Could not load subjects: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          loadingSubjects = false;
+        });
+      }
+    }
+  }
+
+  Future<void> loadChapters(
+    String subjectUuid,
+  ) async {
+    setState(() {
+      loadingChapters = true;
+
+      chapters = [];
+      selectedChapter = null;
+
+      lessons = [];
+      selectedLesson = null;
+    });
+
+    try {
+      final result = await ref
+          .read(chapterRepositoryProvider)
+          .list(
+            subjectUuid: subjectUuid,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        chapters = result.results
+            .where(
+              (chapter) =>
+                  chapter.isActive,
+            )
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error =
+            'Could not load chapters: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          loadingChapters = false;
+        });
+      }
+    }
+  }
+
+  Future<void> loadLessons(
+    String chapterUuid,
+  ) async {
+    setState(() {
+      loadingLessons = true;
+
+      lessons = [];
+      selectedLesson = null;
+    });
+
+    try {
+      final result = await ref
+          .read(lessonRepositoryProvider)
+          .list(
+            chapterUuid: chapterUuid,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        lessons = result.results
+            .where(
+              (lesson) =>
+                  lesson.isActive,
+            )
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error =
+            'Could not load lessons: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          loadingLessons = false;
         });
       }
     }
@@ -396,6 +555,9 @@ class _CreateAssignmentDialogState
     try {
       await ref.read(assignmentRepositoryProvider).create(
             courseUuid: selectedCourse!.uuid,
+            subjectUuid: selectedSubject?.uuid,
+            chapterUuid: selectedChapter?.uuid,
+            lessonUuid: selectedLesson?.uuid,
             title: title.text,
             description: description.text,
             instructions: instructions.text,
@@ -438,7 +600,7 @@ class _CreateAssignmentDialogState
               TextField(
                 controller: title,
                 decoration: const InputDecoration(
-                  labelText: 'Assignment Title',
+                  labelText: 'Assignment Title *',
                 ),
               ),
               const SizedBox(height: 10),
@@ -469,27 +631,201 @@ class _CreateAssignmentDialogState
               ),
               const SizedBox(height: 18),
               DropdownButtonFormField<String>(
-                value: selectedCourse?.uuid,
+                key: ValueKey('course_dd_${courses.length}'),
+                value: courses.any((c) => c.uuid == selectedCourse?.uuid)
+                    ? selectedCourse?.uuid
+                    : null,
                 decoration: const InputDecoration(
-                  labelText: 'Course',
+                  labelText: 'Course *',
                 ),
                 items: courses
                     .map(
                       (course) => DropdownMenuItem<String>(
                         value: course.uuid,
-                        child: Text('${course.name} (${course.code})'),
+                        child: Text(
+                          '${course.name} (${course.code})',
+                        ),
                       ),
                     )
                     .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    selectedCourse = courses.firstWhere((c) => c.uuid == value);
-                    error = null;
-                  });
-                },
+                onChanged: loadingCourses
+                    ? null
+                    : (value) async {
+                        if (value == null) {
+                          return;
+                        }
+
+                        final course = courses.firstWhere(
+                          (item) => item.uuid == value,
+                        );
+
+                        setState(() {
+                          selectedCourse = course;
+
+                          selectedSubject = null;
+                          subjects = [];
+
+                          selectedChapter = null;
+                          chapters = [];
+
+                          selectedLesson = null;
+                          lessons = [];
+
+                          error = null;
+                        });
+
+                        await loadSubjects(
+                          course.uuid,
+                        );
+                      },
               ),
               if (loadingCourses) const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey('subject_dd_${selectedCourse?.uuid}_${subjects.length}'),
+                value: subjects.any((s) => s.uuid == selectedSubject?.uuid)
+                    ? selectedSubject?.uuid
+                    : null,
+                decoration: InputDecoration(
+                  labelText: 'Subject',
+                  helperText: selectedCourse == null
+                      ? 'Select course first'
+                      : subjects.isEmpty && !loadingSubjects
+                          ? 'No subjects available'
+                          : null,
+                ),
+                items: subjects
+                    .map(
+                      (subject) => DropdownMenuItem<String>(
+                        value: subject.uuid,
+                        child: Text(
+                          subject.code.isEmpty
+                              ? subject.name
+                              : '${subject.name} (${subject.code})',
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: selectedCourse == null || loadingSubjects
+                    ? null
+                    : (value) async {
+                        if (value == null) {
+                          return;
+                        }
+
+                        final subject = subjects.firstWhere(
+                          (item) => item.uuid == value,
+                        );
+
+                        setState(() {
+                          selectedSubject = subject;
+
+                          selectedChapter = null;
+                          chapters = [];
+
+                          selectedLesson = null;
+                          lessons = [];
+
+                          error = null;
+                        });
+
+                        await loadChapters(
+                          subject.uuid,
+                        );
+                      },
+              ),
+              if (loadingSubjects) const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey('chapter_dd_${selectedSubject?.uuid}_${chapters.length}'),
+                value: chapters.any((c) => c.uuid == selectedChapter?.uuid)
+                    ? selectedChapter?.uuid
+                    : null,
+                decoration: InputDecoration(
+                  labelText: 'Chapter',
+                  helperText: selectedSubject == null
+                      ? 'Select subject first'
+                      : chapters.isEmpty && !loadingChapters
+                          ? 'No chapters available'
+                          : null,
+                ),
+                items: chapters
+                    .map(
+                      (chapter) => DropdownMenuItem<String>(
+                        value: chapter.uuid,
+                        child: Text(
+                          chapter.title,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: selectedSubject == null || loadingChapters
+                    ? null
+                    : (value) async {
+                        if (value == null) {
+                          return;
+                        }
+
+                        final chapter = chapters.firstWhere(
+                          (item) => item.uuid == value,
+                        );
+
+                        setState(() {
+                          selectedChapter = chapter;
+
+                          selectedLesson = null;
+                          lessons = [];
+
+                          error = null;
+                        });
+
+                        await loadLessons(
+                          chapter.uuid,
+                        );
+                      },
+              ),
+              if (loadingChapters) const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey('lesson_dd_${selectedChapter?.uuid}_${lessons.length}'),
+                value: lessons.any((l) => l.uuid == selectedLesson?.uuid)
+                    ? selectedLesson?.uuid
+                    : null,
+                decoration: InputDecoration(
+                  labelText: 'Lesson',
+                  helperText: selectedChapter == null
+                      ? 'Select chapter first'
+                      : lessons.isEmpty && !loadingLessons
+                          ? 'No lessons available'
+                          : null,
+                ),
+                items: lessons
+                    .map(
+                      (lesson) => DropdownMenuItem<String>(
+                        value: lesson.uuid,
+                        child: Text(
+                          lesson.title,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: selectedChapter == null || loadingLessons
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
+
+                        setState(() {
+                          selectedLesson = lessons.firstWhere(
+                            (item) => item.uuid == value,
+                          );
+
+                          error = null;
+                        });
+                      },
+              ),
+              if (loadingLessons) const LinearProgressIndicator(),
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,

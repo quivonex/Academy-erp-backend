@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_urls.dart';
 import '../../../core/network/dio_provider.dart';
+
+import 'course_payment.dart';
 
 List<dynamic> _items(dynamic response) {
   final data = response is Map ? response['data'] : null;
@@ -310,6 +314,7 @@ class StudentPortalRepository {
 
   Future<List<Map<String, dynamic>>> classes(String uuid) =>
       _allPages(ApiUrls.myCourseClasses(uuid));
+
   Future<List<Map<String, dynamic>>> banners({
     String? firmUuid,
   }) =>
@@ -483,9 +488,73 @@ class StudentPortalRepository {
           response.data['data'] as Map,
         );
       });
+
+  Future<CoursePayment> submitCoursePayment({
+    required String courseUuid,
+    required String paymentMethod,
+    String utrNumber = '',
+    String studentNote = '',
+    Uint8List? paymentProofBytes,
+    String? paymentProofName,
+  }) =>
+      _request(() async {
+        final formData = FormData.fromMap({
+          'course_uuid': courseUuid,
+          'payment_method': paymentMethod,
+          'utr_number': utrNumber.trim(),
+          'student_note': studentNote.trim(),
+          if (paymentProofBytes != null && paymentProofName != null)
+            'payment_screenshot': MultipartFile.fromBytes(
+              paymentProofBytes,
+              filename: paymentProofName,
+            ),
+        });
+
+        final response = await _dio.post(
+          ApiUrls.studentCoursePayments,
+          data: formData,
+        );
+
+        final data = response.data['data'] as Map;
+
+        return CoursePayment.fromJson(
+          Map<String, dynamic>.from(data),
+        );
+      });
+
+  Future<List<CoursePayment>> coursePayments() => _request(() async {
+        final response = await _dio.get(
+          ApiUrls.studentCoursePayments,
+        );
+
+        final body = response.data;
+        List<dynamic> raw = [];
+
+        if (body is Map) {
+          final data = body['data'];
+
+          if (data is List) {
+            raw = data;
+          } else if (data is Map) {
+            if (data['results'] is List) {
+              raw = data['results'] as List;
+            } else if (data['data'] is List) {
+              raw = data['data'] as List;
+            }
+          }
+        }
+
+        return raw
+            .map(
+              (item) => CoursePayment.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList();
+      });
 }
 
 final studentPortalRepositoryProvider =
-Provider<StudentPortalRepository>((ref) {
+    Provider<StudentPortalRepository>((ref) {
   return StudentPortalRepository(ref.watch(dioProvider));
 });

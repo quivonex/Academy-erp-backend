@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/data/login_screen.dart';
 import '../../features/courses/presentation/course_detail_screen.dart';
 import '../../features/courses/presentation/courses_list_screen.dart';
+import '../../features/course_categories/presentation/course_categories_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/firms/presentation/all_firm_admins_screen.dart';
 import '../../features/firms/presentation/firm_detail_screen.dart';
@@ -19,6 +20,7 @@ import '../../features/students/presentation/students_directory_screen.dart';
 import '../../features/teachers/presentation/teacher_detail_screen.dart';
 import '../../features/teachers/presentation/teachers_list_screen.dart';
 import '../../features/staff/presentation/staff_list_screen.dart';
+import '../../features/staff/presentation/staff_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollment_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollments_list_screen.dart';
 import '../../features/live_classes/presentation/live_classes_list_screen.dart';
@@ -30,6 +32,9 @@ import '../../features/assignments/presentation/assignment_detail_screen.dart';
 import '../../features/assignments/presentation/assignment_submissions_screen.dart';
 import '../../features/assignments/presentation/assignment_pdf_import_screen.dart';
 import '../../features/subjects/presentation/subjects_list_screen.dart';
+import '../../features/banners/presentation/banners_list_screen.dart';
+import '../../features/banners/presentation/banner_create_screen.dart';
+import '../../features/banners/presentation/banner_detail_screen.dart';
 import '../../features/subjects/presentation/subject_detail_screen.dart';
 import '../../features/subjects/presentation/chapter_detail_screen.dart';
 import '../../features/subjects/presentation/lesson_detail_screen.dart';
@@ -37,6 +42,7 @@ import '../../features/student_portal/presentation/course_learning_screen.dart';
 import '../../features/student_portal/presentation/material_detail_screen.dart' as portal_mat;
 import '../../features/student_portal/presentation/live_class_detail_screen.dart' as portal_live;
 import '../../features/student_portal/presentation/student_assignment_screen.dart';
+import '../../features/student_portal/presentation/course_payment_screen.dart';
 import '../../features/student_portal/presentation/student_profile_screen.dart'
     as portal;
 import '../../features/student_portal/presentation/all_live_classes_screen.dart';
@@ -195,6 +201,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:
+                '/student/course-payment/:courseUuid',
+            builder: (context, state) {
+              return CoursePaymentScreen(
+                courseUuid:
+                    state.pathParameters[
+                        'courseUuid']!,
+                courseName:
+                    state.uri.queryParameters[
+                            'name'] ??
+                        'Course',
+                amount:
+                    state.uri.queryParameters[
+                            'amount'] ??
+                        '0.00',
+              );
+            },
+          ),
+          GoRoute(
+            path:
                 '/student/assignments/:assignmentUuid',
             builder: (context, state) =>
                 StudentAssignmentScreen(
@@ -265,6 +290,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/staff',
             builder: (context, state) =>
                 const StaffListScreen(),
+            routes: [
+              GoRoute(
+                path: ':staffUuid',
+                builder: (context, state) =>
+                    StaffDetailScreen(
+                  staffUuid:
+                      state.pathParameters[
+                          'staffUuid']!,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: '/courses',
@@ -280,6 +316,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/course-categories',
+            builder: (context, state) =>
+                const CourseCategoriesScreen(),
           ),
           GoRoute(
             path: '/enrollments',
@@ -399,6 +440,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ],
                   ),
                 ],
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/banners',
+            builder: (context, state) =>
+                const BannersListScreen(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                builder: (context, state) =>
+                    const BannerCreateScreen(),
+              ),
+              GoRoute(
+                path: ':bannerUuid',
+                builder: (context, state) =>
+                    BannerDetailScreen(
+                  bannerUuid:
+                      state.pathParameters[
+                          'bannerUuid']!,
+                ),
               ),
             ],
           ),

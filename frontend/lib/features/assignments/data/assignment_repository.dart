@@ -70,12 +70,21 @@ class AssignmentRepository {
     double maxMarks = 0,
     DateTime? dueAt,
     bool allowLateSubmission = false,
+    String? subjectUuid,
+    String? chapterUuid,
+    String? lessonUuid,
   }) =>
       _request(() async {
         final response = await _dio.post<Map<String, dynamic>>(
           ApiUrls.assignments,
           data: {
             'course_uuid': courseUuid,
+            if (subjectUuid != null && subjectUuid.isNotEmpty)
+              'subject_uuid': subjectUuid,
+            if (chapterUuid != null && chapterUuid.isNotEmpty)
+              'chapter_uuid': chapterUuid,
+            if (lessonUuid != null && lessonUuid.isNotEmpty)
+              'lesson_uuid': lessonUuid,
             'title': title.trim(),
             'description': description.trim(),
             'instructions': instructions.trim(),

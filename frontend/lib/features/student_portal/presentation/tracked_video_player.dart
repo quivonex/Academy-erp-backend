@@ -40,6 +40,7 @@ class _TrackedVideoPlayerState
 
   bool _saving = false;
   String? _saveError;
+  bool _completionSent = false;
 
   @override
   void initState() {
@@ -70,6 +71,7 @@ class _TrackedVideoPlayerState
     _watchedMilliseconds = watched * 1000;
     _lastSavedWatchedSeconds = watched;
     _lastSavedPositionSeconds = lastPosition;
+    _completionSent = progress['is_completed'] == true;
 
     await _controller.initialize();
 
@@ -91,7 +93,7 @@ class _TrackedVideoPlayerState
 
     _timer = Timer.periodic(
       const Duration(seconds: 1),
-          (_) {
+      (_) {
         _samplePlayback();
 
         final unsavedSeconds =
@@ -102,9 +104,56 @@ class _TrackedVideoPlayerState
           unawaited(_saveProgress());
         }
 
-        if (mounted) setState(() {});
+        unawaited(
+          _markCompletedIfNeeded(),
+        );
+
+        if (mounted) {
+          setState(() {});
+        }
       },
     );
+  }
+
+  Future<void> _markCompletedIfNeeded() async {
+    if (_completionSent || !_controller.value.isInitialized) {
+      return;
+    }
+
+    final duration = _controller.value.duration.inSeconds;
+    final position = _controller.value.position.inSeconds;
+
+    if (duration <= 0) {
+      return;
+    }
+
+    // Mark completed when student reaches at least 95% of the video.
+    final reachedEnd = position >= (duration * 0.95).floor();
+
+    if (!reachedEnd) {
+      return;
+    }
+
+    try {
+      await _api.saveMaterialProgress(
+        materialUuid: widget.materialUuid,
+        watchedSeconds: _watchedMilliseconds ~/ 1000,
+        lastPositionSeconds: position,
+        markCompleted: true,
+      );
+
+      _completionSent = true;
+
+      if (mounted) {
+        widget.onProgressChanged();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saveError = 'Could not mark video as completed.';
+        });
+      }
+    }
   }
 
   void _samplePlayback() {

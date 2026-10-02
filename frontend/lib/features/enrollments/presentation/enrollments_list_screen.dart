@@ -94,6 +94,27 @@ class _EnrollmentsListScreenState
                 'Enroll Student',
               ),
             ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final done = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => const _BulkEnrollmentDialog(),
+                );
+
+                if (done == true && mounted) {
+                  setState(() {
+                    page = 1;
+                    reload();
+                  });
+                }
+              },
+              icon: const Icon(
+                Icons.group_add_outlined,
+              ),
+              label: const Text(
+                'Bulk Assign',
+              ),
+            ),
             IconButton(
               onPressed: refresh,
               icon: const Icon(
@@ -447,6 +468,468 @@ class _CreateEnrollmentDialogState
             saving ? 'Enrolling...' : 'Enroll Student',
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _BulkEnrollmentDialog extends ConsumerStatefulWidget {
+  const _BulkEnrollmentDialog();
+
+  @override
+  ConsumerState<_BulkEnrollmentDialog> createState() =>
+      _BulkEnrollmentDialogState();
+}
+
+class _BulkEnrollmentDialogState
+    extends ConsumerState<_BulkEnrollmentDialog> {
+  List<Course> courses = [];
+
+  Course? selectedCourse;
+
+  DateTime? joinedDateFrom;
+  DateTime? joinedDateTo;
+
+  bool grantAccess = true;
+
+  DateTime? accessStartAt;
+  DateTime? accessEndAt;
+
+  bool loadingCourses = false;
+  bool saving = false;
+
+  String? error;
+
+  Map<String, dynamic>? result;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCourses();
+  }
+
+  Future<void> loadCourses() async {
+    setState(() {
+      loadingCourses = true;
+    });
+
+    try {
+      final response = await ref.read(courseRepositoryProvider).list();
+
+      if (!mounted) return;
+
+      setState(() {
+        courses = response.results;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = 'Could not load courses: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          loadingCourses = false;
+        });
+      }
+    }
+  }
+
+  Future<DateTime?> pickDate(
+    DateTime? current,
+  ) async {
+    return showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+  }
+
+  Future<DateTime?> pickDateTime(
+    DateTime? current,
+  ) async {
+    final initial = current ?? DateTime.now();
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+
+    if (date == null || !mounted) {
+      return null;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        initial,
+      ),
+    );
+
+    if (time == null) {
+      return null;
+    }
+
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  Future<void> submit() async {
+    if (selectedCourse == null) {
+      setState(() {
+        error = 'Please select a course.';
+      });
+
+      return;
+    }
+
+    if (joinedDateFrom == null) {
+      setState(() {
+        error = 'Joined Date From is required.';
+      });
+
+      return;
+    }
+
+    if (joinedDateTo != null && joinedDateTo!.isBefore(joinedDateFrom!)) {
+      setState(() {
+        error = 'Joined Date To must be on or after Joined Date From.';
+      });
+
+      return;
+    }
+
+    if (accessStartAt != null &&
+        accessEndAt != null &&
+        !accessEndAt!.isAfter(accessStartAt!)) {
+      setState(() {
+        error = 'Access end time must be after access start time.';
+      });
+
+      return;
+    }
+
+    setState(() {
+      saving = true;
+      error = null;
+      result = null;
+    });
+
+    try {
+      final response = await ref
+          .read(
+            enrollmentManagementRepositoryProvider,
+          )
+          .bulkAssignByAdmissionDate(
+            courseUuid: selectedCourse!.uuid,
+            joinedDateFrom: joinedDateFrom!,
+            joinedDateTo: joinedDateTo,
+            grantAccess: grantAccess,
+            accessStartAt: accessStartAt,
+            accessEndAt: accessEndAt,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        result = response;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          saving = false;
+        });
+      }
+    }
+  }
+
+  String formatDate(
+    DateTime? value,
+  ) {
+    if (value == null) {
+      return 'Not selected';
+    }
+
+    return '${value.day.toString().padLeft(2, '0')}/'
+        '${value.month.toString().padLeft(2, '0')}/'
+        '${value.year}';
+  }
+
+  String formatDateTime(
+    DateTime? value,
+  ) {
+    if (value == null) {
+      return 'Not selected';
+    }
+
+    return '${formatDate(value)} '
+        '${value.hour.toString().padLeft(2, '0')}:'
+        '${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return AlertDialog(
+      title: const Text('Bulk Assign Course'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownButtonFormField<String>(
+                key: ValueKey('bulk_course_dd_${courses.length}'),
+                value: courses.any((c) => c.uuid == selectedCourse?.uuid)
+                    ? selectedCourse?.uuid
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Course *',
+                ),
+                items: courses
+                    .map(
+                      (course) => DropdownMenuItem<String>(
+                        value: course.uuid,
+                        child: Text(
+                          '${course.name} (${course.code})',
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: loadingCourses
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
+
+                        setState(() {
+                          selectedCourse = courses.firstWhere(
+                            (c) => c.uuid == value,
+                          );
+
+                          error = null;
+                        });
+                      },
+              ),
+              if (loadingCourses) const LinearProgressIndicator(),
+              const SizedBox(
+                height: 16,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Joined Date From *',
+                ),
+                subtitle: Text(
+                  formatDate(
+                    joinedDateFrom,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.calendar_month_outlined,
+                ),
+                onTap: () async {
+                  final value = await pickDate(
+                    joinedDateFrom,
+                  );
+
+                  if (value != null && mounted) {
+                    setState(() {
+                      joinedDateFrom = value;
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Joined Date To',
+                ),
+                subtitle: Text(
+                  formatDate(
+                    joinedDateTo,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.calendar_month_outlined,
+                ),
+                onTap: () async {
+                  final value = await pickDate(
+                    joinedDateTo,
+                  );
+
+                  if (value != null && mounted) {
+                    setState(() {
+                      joinedDateTo = value;
+                    });
+                  }
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Grant Access',
+                ),
+                subtitle: const Text(
+                  'Create active course access for matched students',
+                ),
+                value: grantAccess,
+                onChanged: (value) {
+                  setState(() {
+                    grantAccess = value;
+                  });
+                },
+              ),
+              if (grantAccess) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Access Start',
+                  ),
+                  subtitle: Text(
+                    formatDateTime(
+                      accessStartAt,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.schedule,
+                  ),
+                  onTap: () async {
+                    final value = await pickDateTime(
+                      accessStartAt,
+                    );
+
+                    if (value != null && mounted) {
+                      setState(() {
+                        accessStartAt = value;
+                      });
+                    }
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Access End',
+                  ),
+                  subtitle: Text(
+                    formatDateTime(
+                      accessEndAt,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.event_available,
+                  ),
+                  onTap: () async {
+                    final value = await pickDateTime(
+                      accessEndAt,
+                    );
+
+                    if (value != null && mounted) {
+                      setState(() {
+                        accessEndAt = value;
+                      });
+                    }
+                  },
+                ),
+              ],
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: 12,
+                  ),
+                  child: Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (result != null) ...[
+                const SizedBox(
+                  height: 18,
+                ),
+                const Divider(),
+                const SizedBox(
+                  height: 8,
+                ),
+                Text(
+                  'Bulk Enrollment Result',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium,
+                ),
+                const SizedBox(
+                  height: 12,
+                ),
+                Text(
+                  'Course: ${result!['course_name'] ?? '-'}',
+                ),
+                Text(
+                  'Matched Students: ${result!['matched_students_count'] ?? 0}',
+                ),
+                Text(
+                  'Created Enrollments: ${result!['created_enrollments_count'] ?? 0}',
+                ),
+                Text(
+                  'Skipped Students: ${result!['skipped_students_count'] ?? 0}',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving
+              ? null
+              : () {
+                  Navigator.pop(
+                    context,
+                    result != null,
+                  );
+                },
+          child: Text(
+            result == null ? 'Cancel' : 'Close',
+          ),
+        ),
+        if (result == null)
+          FilledButton.icon(
+            onPressed: saving ? null : submit,
+            icon: saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(
+                    Icons.group_add,
+                  ),
+            label: Text(
+              saving ? 'Assigning...' : 'Assign Course',
+            ),
+          ),
       ],
     );
   }

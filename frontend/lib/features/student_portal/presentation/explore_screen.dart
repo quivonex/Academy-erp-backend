@@ -1187,6 +1187,7 @@ class _PublicCourseDetailScreenState
   Widget _courseAction({
     required bool isAuthenticated,
     required bool isStudent,
+    required PublicCourse course,
   }) {
     final colors = context.colors;
     final textTheme = Theme.of(context).textTheme;
@@ -1293,13 +1294,54 @@ class _PublicCourseDetailScreenState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             note(
-              'You do not have access to this course yet. '
-              'Contact the academy for enrollment.',
+              'You do not have access to this course yet.',
+              icon: Icons.lock_outline,
             ),
             const SizedBox(height: 14),
+            if (double.tryParse(course.price) != null &&
+                double.parse(course.price) > 0)
+              FilledButton.icon(
+                onPressed: () async {
+                  final uri = Uri(
+                    path: '/student/course-payment/${course.uuid}',
+                    queryParameters: {
+                      'name': course.name,
+                      'amount': course.price,
+                    },
+                  );
+
+                  final submitted = await context.push(uri.toString());
+
+                  if (submitted == true && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment is waiting for academy verification.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Submit Payment'),
+              )
+            else
+              OutlinedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Contact the academy to request course access.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Request Access'),
+              ),
+            const SizedBox(height: 10),
             OutlinedButton(
               onPressed: () => context.go('/student/courses'),
-              child: const Text('View my courses'),
+              child: const Text('View My Courses'),
             ),
           ],
         );
@@ -1486,6 +1528,7 @@ class _PublicCourseDetailScreenState
                   child: _courseAction(
                     isAuthenticated: session.isAuthenticated,
                     isStudent: isStudent,
+                    course: course,
                   ),
                 ),
               ],

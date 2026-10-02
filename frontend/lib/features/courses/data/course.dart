@@ -8,6 +8,8 @@ class Course {
     required this.isActive,
     required this.isPublished,
     required this.isPurchasableOnline,
+    required this.isFeatured,
+    required this.featuredOrder,
     this.description = '',
     this.categoryName,
     this.durationMonths,
@@ -20,15 +22,23 @@ class Course {
   final String description;
   final String price;
   final String deliveryMode;
+
   final bool isActive;
   final bool isPublished;
   final bool isPurchasableOnline;
+  final bool isFeatured;
+
+  final int featuredOrder;
+
   final String? categoryName;
   final int? durationMonths;
   final int? accessDurationDays;
 
-  factory Course.fromJson(Map<String, dynamic> json) {
+  factory Course.fromJson(
+    Map<String, dynamic> json,
+  ) {
     final category = json['category'];
+
     return Course(
       uuid: json['uuid']?.toString() ?? json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -39,9 +49,22 @@ class Course {
       isActive: json['is_active'] == true,
       isPublished: json['is_published'] == true,
       isPurchasableOnline: json['is_purchasable_online'] == true,
+      isFeatured: json['is_featured'] == true,
+      featuredOrder: int.tryParse(
+            json['featured_order']?.toString() ?? '0',
+          ) ??
+          0,
       categoryName: category is Map ? category['name']?.toString() : null,
-      durationMonths: json['duration_months'] as int?,
-      accessDurationDays: json['access_duration_days'] as int?,
+      durationMonths: json['duration_months'] is int
+          ? json['duration_months'] as int
+          : int.tryParse(
+              json['duration_months']?.toString() ?? '',
+            ),
+      accessDurationDays: json['access_duration_days'] is int
+          ? json['access_duration_days'] as int
+          : int.tryParse(
+              json['access_duration_days']?.toString() ?? '',
+            ),
     );
   }
 }

@@ -28,11 +28,21 @@ class ApiUrls {
   static const String courses = '/courses/';
   static String courseDetail(String uuid) => '/courses/$uuid/';
 
+  // Course Categories
+  static const String courseCategories = '/course-categories/';
+  static String courseCategoryDetail(String uuid) => '/course-categories/$uuid/';
+
   // Teachers
   static const String teachers = '/teachers/';
   static String teacherDetail(String uuid) => '/teachers/$uuid/';
   static String teacherActivate(String uuid) => '/teachers/$uuid/activate/';
   static String teacherDeactivate(String uuid) => '/teachers/$uuid/deactivate/';
+
+  // Staff
+  static const String staff = '/staff/';
+  static String staffDetail(String uuid) => '/staff/$uuid/';
+  static String staffActivate(String uuid) => '/staff/$uuid/activate/';
+  static String staffDeactivate(String uuid) => '/staff/$uuid/deactivate/';
 
   // Enrollments
   static const String enrollments = '/enrollments/';
@@ -104,6 +114,10 @@ class ApiUrls {
       '/student/courses/$uuid/live-classes/';
   static const String publicBanners = '/public/banners/';
 
+  // Banners - Admin
+  static const String banners = '/banners/';
+  static String bannerDetail(String uuid) => '/banners/$uuid/';
+
   static String studentMaterial(String uuid) =>
       '/student/materials/$uuid/';
 
@@ -129,4 +143,15 @@ class ApiUrls {
 
   static String assignmentResult(String uuid) =>
       '/student/assignments/$uuid/result/';
+
+  // Student Payments
+  static const String studentCoursePayments =
+      '/student/course-payments/';
+
+  // Admin Payments
+  static const String payments =
+      '/payments/';
+
+  static String paymentReview(String uuid) =>
+      '/payments/$uuid/review/';
 }

@@ -107,6 +107,40 @@ class EnrollmentRepository {
           Map<String, dynamic>.from(resData as Map),
         );
       });
+
+  Future<Map<String, dynamic>> bulkAssignByAdmissionDate({
+    required String courseUuid,
+    required DateTime joinedDateFrom,
+    DateTime? joinedDateTo,
+    bool grantAccess = true,
+    DateTime? accessStartAt,
+    DateTime? accessEndAt,
+  }) =>
+      _request(() async {
+        String dateOnly(DateTime value) {
+          return '${value.year.toString().padLeft(4, '0')}-'
+              '${value.month.toString().padLeft(2, '0')}-'
+              '${value.day.toString().padLeft(2, '0')}';
+        }
+
+        final response = await _dio.post<Map<String, dynamic>>(
+          ApiUrls.bulkEnrollmentByAdmissionDate,
+          data: {
+            'course_uuid': courseUuid,
+            'joined_date_from': dateOnly(joinedDateFrom),
+            if (joinedDateTo != null)
+              'joined_date_to': dateOnly(joinedDateTo),
+            'grant_access': grantAccess,
+            if (accessStartAt != null)
+              'access_start_at': accessStartAt.toUtc().toIso8601String(),
+            if (accessEndAt != null)
+              'access_end_at': accessEndAt.toUtc().toIso8601String(),
+          },
+        );
+
+        final resData = response.data?['data'] ?? response.data ?? {};
+        return Map<String, dynamic>.from(resData as Map);
+      });
 }
 
 final enrollmentManagementRepositoryProvider =
