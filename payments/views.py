@@ -55,27 +55,15 @@ class StudentCoursePaymentListCreateView(APIView):
         )
 
     def post(self, request):
-        serializer = StudentCoursePaymentCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        try:
-            payment = create_course_payment(
-                user=request.user,
-                validated_data=serializer.validated_data,
+        return error_response(
+                message=(
+                    "Student payment submissions are no longer "
+                    "accepted. Please contact the academy. "
+                    "Payments are recorded by the Firm Admin."
+                ),
+                errors={},
+                status_code=status.HTTP_410_GONE,
             )
-        except ValidationError as exc:
-            return error_response(
-                message="Unable to create payment request",
-                errors=exc.detail,
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return success_response(
-            message="Payment request submitted successfully",
-            data=CoursePaymentSerializer(payment).data,
-            status_code=status.HTTP_201_CREATED,
-        )
-
 
 class CoursePaymentListView(APIView):
     permission_classes = [IsAuthenticated, IsFirmAdminOrStaff]
@@ -114,28 +102,15 @@ class CoursePaymentReviewView(APIView):
     permission_classes = [IsAuthenticated, IsFirmAdminOrStaff]
 
     def patch(self, request, payment_uuid):
-        serializer = CoursePaymentReviewSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        try:
-            payment = review_course_payment(
-                firm=request.user.firm,
-                reviewed_by=request.user,
-                payment_uuid=payment_uuid,
-                validated_data=serializer.validated_data,
-            )
-        except ValidationError as exc:
-            return error_response(
-                message="Unable to review payment request",
-                errors=exc.detail,
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return success_response(
-            message="Payment request reviewed successfully",
-            data=CoursePaymentSerializer(payment).data,
-        )
-        
+        return error_response(
+            message=(
+                "Legacy payment requests cannot be reviewed. "
+                "Record the verified amount using the "
+                "installment payment API instead."
+            ),
+            errors={},
+            status_code=status.HTTP_410_GONE,
+        )    
 class EnrollmentFeeAccountListCreateView(APIView):
     permission_classes = [
         IsAuthenticated,
