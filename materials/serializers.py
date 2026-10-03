@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import LearningMaterial
-
+from common.storage_urls import get_private_file_url
 MAX_MATERIAL_FILE_SIZE = 100 * 1024 * 1024
 
 MATERIAL_FILE_SIZE_LIMITS = {
@@ -100,6 +100,9 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
         required=False,
     )
     
+    file_url = serializers.SerializerMethodField(
+        read_only=True,)
+    
     class Meta:
         model = LearningMaterial
 
@@ -120,6 +123,7 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
             "source",
             "file",
             "file_key",
+            "file_url",
             "external_url",
             "duration_seconds",
             "sequence",
@@ -258,6 +262,9 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
             })
     
         return attrs
+    
+    def get_file_url(self, obj):
+        return get_private_file_url(obj.file_key)
     
     
     
