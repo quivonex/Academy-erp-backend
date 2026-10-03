@@ -80,7 +80,9 @@ urlpatterns = [
     path("api/v1/banners/", include(banner_urlpatterns)),
     path("api/v1/public/banners/", include(public_banner_urlpatterns)),
 
-
+    path("api/v1/dashboard/", include("dashboard.urls")),
+    
+    
 ]
 
 from django.conf import settings
