@@ -20,6 +20,7 @@ from courses.models import (
 
 from courses.access import (
     get_student_active_enrollment,
+    student_has_chapter_video_access,
 )
 
 from classes.models import LiveClass
@@ -501,11 +502,7 @@ class StudentMaterialDetailView(APIView):
         IsStudent,
     ]
 
-    def get(
-        self,
-        request,
-        material_uuid,
-    ):
+    def get(self, request, material_uuid):
         student = request.user.student_profile
         now = timezone.now()
 
@@ -536,48 +533,61 @@ class StudentMaterialDetailView(APIView):
 
         if not material:
             return error_response(
-                message=(
-                    "Material not found "
-                    "or unavailable."
-                ),
+                message="Material not found or unavailable.",
                 errors={},
-                status_code=(
-                    status.HTTP_404_NOT_FOUND
-                ),
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        enrollment = get_student_active_enrollment(
-            student=student,
-            course=material.course,
+        full_course_enrollment = (
+            get_student_active_enrollment(
+                student=student,
+                course=material.course,
+            )
         )
 
-        if not enrollment:
-            return error_response(
-                message=(
-                    "You do not have access "
-                    "to this material."
-                ),
-                errors={},
-                status_code=(
-                    status.HTTP_403_FORBIDDEN
-                ),
+        if not full_course_enrollment:
+            # Chapter-only permission never exposes PDFs,
+            # documents, links, or materials without a chapter.
+            if (
+                material.material_type
+                != LearningMaterial.MaterialType.VIDEO
+                or not material.chapter
+            ):
+                return error_response(
+                    message=(
+                        "You do not have access to this material."
+                    ),
+                    errors={},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            has_chapter_access = (
+                student_has_chapter_video_access(
+                    student=student,
+                    course=material.course,
+                    chapter=material.chapter,
+                )
             )
 
-        serializer = (
-            StudentLearningMaterialSerializer(
-                material,
-                context={
-                    "request": request
-                },
-            )
+            if not has_chapter_access:
+                return error_response(
+                    message=(
+                        "You do not have access to this chapter video."
+                    ),
+                    errors={},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = StudentLearningMaterialSerializer(
+            material,
+            context={
+                "request": request,
+            },
         )
 
         return success_response(
-            message=(
-                "Material retrieved successfully"
-            ),
+            message="Material retrieved successfully",
             data=serializer.data,
-        )
-        
+        )        
         
         
