@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -13,6 +14,7 @@ from .models import (
     InstallmentPayment,
 )
 from .serializers import (
+    StudentFeeAccountLedgerSerializer,
     CoursePaymentReviewSerializer,
     CoursePaymentSerializer,
     StudentCoursePaymentCreateSerializer,
@@ -401,3 +403,60 @@ class InstallmentPaymentVoidView(APIView):
                 ).data,
             },
         )
+        
+        
+        
+        
+class StudentFeeAccountLedgerListView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request):
+        student = request.user.student_profile
+
+        installments_queryset = (
+            InstallmentPayment.objects
+            .filter(firm=request.user.firm)
+            .order_by("-payment_date", "-created_at")
+        )
+
+        fee_accounts = (
+            EnrollmentFeeAccount.objects
+            .filter(
+                firm=request.user.firm,
+                enrollment__student=student,
+            )
+            .select_related(
+                "enrollment",
+                "enrollment__course",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "installments",
+                    queryset=installments_queryset,
+                )
+            )
+            .order_by("-created_at")
+        )
+
+        paginator = StandardResultsSetPagination()
+
+        page = paginator.paginate_queryset(
+            fee_accounts,
+            request,
+        )
+
+        serializer = StudentFeeAccountLedgerSerializer(
+            page,
+            many=True,
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data
+        )
+        
+        
+        
+        

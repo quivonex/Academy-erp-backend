@@ -588,6 +588,7 @@ class StudentMaterialDetailView(APIView):
         return success_response(
             message="Material retrieved successfully",
             data=serializer.data,
-        )        
+        )
+        
         
         

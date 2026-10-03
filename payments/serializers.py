@@ -414,3 +414,76 @@ class InstallmentPaymentVoidSerializer(
         min_length=3,
         max_length=1000,
     )
+
+
+
+class StudentInstallmentPaymentSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = InstallmentPayment
+
+        fields = (
+            "uuid",
+            "amount",
+            "payment_method",
+            "transaction_reference",
+            "payment_date",
+            "status",
+            "voided_at",
+            "created_at",
+        )
+
+        read_only_fields = fields
+
+
+class StudentFeeAccountLedgerSerializer(
+    serializers.ModelSerializer
+):
+    enrollment_uuid = serializers.UUIDField(
+        source="enrollment.uuid",
+        read_only=True,
+    )
+
+    course_uuid = serializers.UUIDField(
+        source="enrollment.course.uuid",
+        read_only=True,
+    )
+
+    course_name = serializers.CharField(
+        source="enrollment.course.name",
+        read_only=True,
+    )
+
+    course_code = serializers.CharField(
+        source="enrollment.course.code",
+        read_only=True,
+    )
+
+    installments = StudentInstallmentPaymentSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = EnrollmentFeeAccount
+
+        fields = (
+            "uuid",
+            "enrollment_uuid",
+            "course_uuid",
+            "course_name",
+            "course_code",
+            "total_amount",
+            "discount_amount",
+            "paid_amount",
+            "balance_amount",
+            "due_date",
+            "status",
+            "installments",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = fields
+        
