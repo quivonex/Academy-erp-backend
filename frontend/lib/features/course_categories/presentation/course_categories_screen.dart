@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
 
 import '../data/course_category.dart';
@@ -24,6 +25,7 @@ class _CourseCategoriesScreenState
 
   String search = '';
   int page = 1;
+  bool busy = false;
 
   @override
   void initState() {
@@ -34,12 +36,12 @@ class _CourseCategoriesScreenState
   void reload() {
     result = ref
         .read(
-          courseCategoryRepositoryProvider,
-        )
+      courseCategoryRepositoryProvider,
+    )
         .list(
-          search: search,
-          page: page,
-        );
+      search: search,
+      page: page,
+    );
   }
 
   void refresh() {
@@ -56,47 +58,65 @@ class _CourseCategoriesScreenState
     });
   }
 
-  Future<void> openForm([
-    AdminCourseCategory? category,
-  ]) async {
-    final changed = await showDialog<bool>(
-      context: context,
-      builder: (_) => _CategoryFormDialog(
-        category: category,
-      ),
-    );
-
-    if (changed == true && mounted) {
-      refresh();
+  Future<void> openForm([AdminCourseCategory? category]) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final changed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _CategoryFormDialog(category: category),
+      );
+      if (!mounted || changed != true) return;
+      setState(() {
+        if (category == null) {
+          searchController.clear();
+          search = '';
+          page = 1;
+        }
+        reload();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(category == null
+            ? 'Category created successfully.'
+            : 'Category updated successfully.')),
+      );
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> toggleStatus(
-    AdminCourseCategory category,
-  ) async {
+  Future<void> toggleStatus(AdminCourseCategory category) async {
+    if (busy) return;
+    final repository = ref.read(courseCategoryRepositoryProvider);
+    setState(() => busy = true);
     try {
-      await ref
-          .read(
-            courseCategoryRepositoryProvider,
-          )
-          .update(
-            uuid: category.uuid,
-            isActive: !category.isActive,
-          );
-
-      if (mounted) {
-        refresh();
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
+      final updated = await repository.update(
+        uuid: category.uuid,
+        isActive: !category.isActive,
       );
+      if (!mounted) return;
+      refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(updated.isActive
+            ? 'Category activated successfully.'
+            : 'Category deactivated successfully.')),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+              'Could not update category status. Please try again.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -127,7 +147,7 @@ class _CourseCategoriesScreenState
           subtitle: 'Group courses into streams students can browse.',
           titleTrailing: [
             IconButton(
-              onPressed: refresh,
+              onPressed: busy ? null : refresh,
               tooltip: 'Refresh',
               icon: const Icon(Icons.refresh_rounded),
             ),
@@ -136,10 +156,14 @@ class _CourseCategoriesScreenState
             GradientButton(
               label: 'Add category',
               icon: Icons.add_rounded,
-              onPressed: () => openForm(),
+              onPressed: busy ? null : () => openForm(),
             ),
           ],
         ),
+        if (busy) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
         const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<AdminCourseCategoryPage>(
@@ -150,7 +174,10 @@ class _CourseCategoriesScreenState
                 noun: 'categories',
                 onRetry: refresh,
               );
-              final data = snapshot.data;
+              final data = snapshot.connectionState == ConnectionState.done &&
+                  !snapshot.hasError
+                  ? snapshot.data
+                  : null;
               final rows = data?.results ?? const <AdminCourseCategory>[];
               final active = rows.where((c) => c.isActive).length;
 
@@ -160,7 +187,7 @@ class _CourseCategoriesScreenState
                   AdminKpiGrid(
                     children: [
                       AdminKpiCard(
-                        label: 'Total categories',
+                        label: search.isEmpty ? 'Total categories' : 'Matching categories',
                         value: data == null ? '…' : '${data.count}',
                         icon: Icons.category_outlined,
                       ),
@@ -197,51 +224,52 @@ class _CourseCategoriesScreenState
                           ? 'Create a category to organise your courses.'
                           : 'Try a different search.',
                       actionLabel: search.isEmpty ? 'Add category' : null,
-                      onAction: search.isEmpty ? () => openForm() : null,
+                      onAction: search.isEmpty && !busy ? () => openForm() : null,
                     )
                   else ...[
-                    for (final category in rows)
-                      AdminListRow(
-                        title: category.name,
-                        icon: Icons.category_outlined,
-                        subtitle: category.description.isEmpty
-                            ? 'No description'
-                            : category.description,
-                        trailing: [
-                          ActiveBadge(active: category.isActive),
-                          PopupMenuButton<String>(
-                            tooltip: 'Actions',
-                            icon: const Icon(Icons.more_vert_rounded),
-                            onSelected: (value) {
-                              if (value == 'edit') openForm(category);
-                              if (value == 'status') toggleStatus(category);
-                            },
-                            itemBuilder: (_) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Edit'),
-                              ),
-                              PopupMenuItem(
-                                value: 'status',
-                                child: Text(
-                                  category.isActive
-                                      ? 'Deactivate'
-                                      : 'Activate',
+                      for (final category in rows)
+                        AdminListRow(
+                          title: category.name,
+                          icon: Icons.category_outlined,
+                          subtitle: category.description.isEmpty
+                              ? 'No description'
+                              : category.description,
+                          trailing: [
+                            ActiveBadge(active: category.isActive),
+                            PopupMenuButton<String>(
+                              enabled: !busy,
+                              tooltip: 'Actions',
+                              icon: const Icon(Icons.more_vert_rounded),
+                              onSelected: (value) {
+                                if (value == 'edit') openForm(category);
+                                if (value == 'status') toggleStatus(category);
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        onTap: () => openForm(category),
+                                PopupMenuItem(
+                                  value: 'status',
+                                  child: Text(
+                                    category.isActive
+                                        ? 'Deactivate'
+                                        : 'Activate',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          onTap: busy ? null : () => openForm(category),
+                        ),
+                      AdminPager(
+                        page: page,
+                        pageSize: 20,
+                        total: data!.count,
+                        noun: 'categories',
+                        onPage: _goToPage,
                       ),
-                    AdminPager(
-                      page: page,
-                      pageSize: 20,
-                      total: data!.count,
-                      noun: 'categories',
-                      onPage: _goToPage,
-                    ),
-                  ],
+                    ],
                 ],
               );
             },
@@ -265,6 +293,7 @@ class _CategoryFormDialog extends ConsumerStatefulWidget {
 }
 
 class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
+  final formKey = GlobalKey<FormState>();
   final name = TextEditingController();
 
   final description = TextEditingController();
@@ -292,14 +321,9 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
   }
 
   Future<void> save() async {
-    if (name.text.trim().isEmpty) {
-      setState(() {
-        error = 'Category name is required.';
-      });
-
-      return;
-    }
-
+    if (saving) return;
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    FocusScope.of(context).unfocus();
     setState(() {
       saving = true;
       error = null;
@@ -325,20 +349,17 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
         );
       }
 
+      if (!mounted) return;
+      setState(() => saving = false);
+      Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
+        setState(() => error = 'Could not save category. Please try again.');
       }
     } finally {
-      if (mounted) {
+      if (mounted && saving) {
         setState(() {
           saving = false;
         });
@@ -355,86 +376,81 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return AlertDialog(
-      title: Text(
-        isEdit ? 'Edit Category' : 'Add Category',
-      ),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.category_outlined,
+      title: isEdit ? 'Edit category' : 'Add category',
+      subtitle: 'Group courses into a category.',
+      onClose: saving ? null : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FieldLabel(
+              label: 'Category name',
+              required: true,
+              child: TextFormField(
                 controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Category Name *',
+                enabled: !saving,
+                maxLength: 150,
+                textInputAction: TextInputAction.next,
+                decoration: adminFieldDecoration(
+                  context,
+                  hint: 'Enter category name',
+                  icon: Icons.category_outlined,
                 ),
+                validator: (value) =>
+                value == null || value.trim().isEmpty
+                    ? 'Category name is required'
+                    : null,
               ),
-              const SizedBox(
-                height: 12,
-              ),
-              TextField(
+            ),
+            const SizedBox(height: 16),
+            FieldLabel(
+              label: 'Description',
+              child: TextFormField(
                 controller: description,
+                enabled: !saving,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
+                keyboardType: TextInputType.multiline,
+                decoration: adminFieldDecoration(
+                  context,
+                  hint: 'Optional',
                 ),
               ),
-              const SizedBox(
-                height: 12,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Active',
-                ),
-                value: isActive,
-                onChanged: (value) {
-                  setState(() {
-                    isActive = value;
-                  });
-                },
-              ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 10,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Active'),
+              value: isActive,
+              onChanged: saving
+                  ? null
+                  : (value) => setState(() => isActive = value),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 16),
+              AdminErrorBanner(message: error!),
             ],
-          ),
+          ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: saving
-              ? null
-              : () => Navigator.pop(
-                    context,
-                  ),
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        GradientButton(
+          label: isEdit ? 'Save changes' : 'Create category',
+          icon: Icons.check_rounded,
+          loading: saving,
           onPressed: saving ? null : save,
-          child: Text(
-            saving
-                ? 'Saving...'
-                : isEdit
-                    ? 'Update'
-                    : 'Create',
-          ),
         ),
       ],
-    );
-  }
+    ),
+  );
 }

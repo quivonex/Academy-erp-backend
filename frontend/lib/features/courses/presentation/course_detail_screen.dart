@@ -3,10 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
-
+import '../../../core/widgets/admin_ui.dart';
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
-
 import '../data/course.dart';
 import '../data/course_repository.dart';
 
@@ -21,7 +20,7 @@ class CourseDetailScreen extends ConsumerStatefulWidget {
 
 class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
   late Future<Course> result;
-  bool changing = false;
+  bool busy = false;
 
   @override
   void initState() {
@@ -29,252 +28,374 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
     reload();
   }
 
+  @override
+  void didUpdateWidget(covariant CourseDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.courseUuid != widget.courseUuid) reload();
+  }
+
   void reload() {
     result = ref.read(courseRepositoryProvider).detail(widget.courseUuid);
   }
 
-  Future<void> toggle(Course course) async {
-    setState(() => changing = true);
+  void goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/courses');
+    }
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> toggleStatus(Course course) async {
+    if (busy) return;
+    final repository = ref.read(courseRepositoryProvider);
+    final uuid = course.uuid;
+    setState(() => busy = true);
     try {
-      await ref
-          .read(courseRepositoryProvider)
-          .setPublished(course.uuid, !course.isPublished);
-      if (mounted) setState(reload);
+      final updated = await repository.setPublished(uuid, !course.isPublished);
+      if (!mounted || widget.courseUuid != uuid) return;
+      setState(() => result = Future<Course>.value(updated));
+      showMessage(updated.isPublished
+          ? 'Course published successfully.'
+          : 'Course unpublished successfully.');
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted && widget.courseUuid == uuid) showMessage(e.message);
+    } catch (_) {
+      if (mounted && widget.courseUuid == uuid) {
+        showMessage('Could not change publication status. Please try again.');
       }
     } finally {
-      if (mounted) setState(() => changing = false);
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> editCourse(Course course) async {
+    if (busy) return;
+    final repository = ref.read(courseRepositoryProvider);
+    final uuid = course.uuid;
+    setState(() => busy = true);
+    try {
+      final updated = await showDialog<Course>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EditCourseDialog(
+          course: course,
+          repository: repository,
+        ),
+      );
+      if (!mounted || updated == null || widget.courseUuid != uuid) return;
+      setState(() => result = Future<Course>.value(updated));
+      showMessage('Course updated successfully.');
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Course>(
-        future: result,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Could not load course: ${snapshot.error}'),
-            );
-          }
-          final c = snapshot.data!;
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text('Courses'),
-                    ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final changed = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => _EditCourseDialog(course: c),
-                        );
-                        if (changed == true && mounted) {
-                          setState(reload);
-                        }
-                      },
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Edit Course'),
-                    ),
-                  ],
+    future: result,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData) {
+        final error = snapshot.error;
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: goBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Courses'),
                 ),
-                Text(c.name, style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
+              ),
+              AdminStateMessage(
+                icon: Icons.cloud_off_rounded,
+                title: 'Could not load course',
+                message: error is ApiException
+                    ? error.message
+                    : 'Please try again.',
+                actionLabel: 'Retry',
+                onAction: () => setState(reload),
+                isError: true,
+              ),
+            ],
+          ),
+        );
+      }
+
+      final course = snapshot.data!;
+      final name = course.name.trim().isEmpty
+          ? course.code
+          : course.name;
+      return SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: goBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Courses'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AdminCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InitialsBadge(label: adminInitials(name)),
+                  const SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Code: ${c.code}'),
-                        Text('Category: ${c.categoryName ?? '—'}'),
-                        Text('Price: ₹${c.price}'),
-                        Text('Mode: ${c.deliveryMode}'),
                         Text(
-                          'Duration: ${c.durationMonths?.toString() ?? '—'} months',
+                          name,
+                          style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                        Text(
-                          'Access: ${c.accessDurationDays?.toString() ?? '—'} days',
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SoftBadge(
+                              label: course.code,
+                              monospace: true,
+                            ),
+                            ActiveBadge(active: course.isActive),
+                          ],
                         ),
-                        Text('Active: ${c.isActive ? 'Yes' : 'No'}'),
-                        Text('Published: ${c.isPublished ? 'Yes' : 'No'}'),
-                        Text(
-                          'Purchasable online: ${c.isPurchasableOnline ? 'Yes' : 'No'}',
-                        ),
-                        Text('Featured: ${c.isFeatured ? 'Yes' : 'No'}'),
-                        if (c.isFeatured)
-                          Text('Featured Order: ${c.featuredOrder}'),
-                        const SizedBox(height: 8),
-                        Text(c.description),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: changing ? null : () => toggle(c),
-                  child: Text(
-                    changing
-                        ? 'Updating...'
-                        : (c.isPublished
-                            ? 'Unpublish course'
-                            : 'Publish course'),
+                  IconButton(
+                    onPressed: busy ? null : () => setState(reload),
+                    tooltip: 'Refresh',
+                    icon: const Icon(Icons.refresh_rounded),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            AdminCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Course information',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoRow(label: 'Code', value: course.code),
+                  _InfoRow(label: 'Category', value: course.categoryName ?? ''),
+                  _InfoRow(label: 'Price', value: '₹${course.price}'),
+                  _InfoRow(label: 'Delivery mode', value: course.deliveryMode),
+                  _InfoRow(
+                    label: 'Duration',
+                    value: course.durationMonths == null
+                        ? '—' : '${course.durationMonths} months',
+                  ),
+                  _InfoRow(
+                    label: 'Student access',
+                    value: course.accessDurationDays == null
+                        ? '—' : '${course.accessDurationDays} days',
+                  ),
+                  _InfoRow(label: 'Active', value: course.isActive ? 'Yes' : 'No'),
+                  _InfoRow(label: 'Published', value: course.isPublished ? 'Yes' : 'No'),
+                  _InfoRow(label: 'Purchasable online',
+                      value: course.isPurchasableOnline ? 'Yes' : 'No'),
+                  _InfoRow(label: 'Featured', value: course.isFeatured ? 'Yes' : 'No'),
+                  if (course.isFeatured)
+                    _InfoRow(label: 'Featured order',
+                        value: course.featuredOrder.toString()),
+                  _InfoRow(label: 'Description', value: course.description),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                GradientButton(
+                  label: 'Edit course',
+                  icon: Icons.edit_outlined,
+                  onPressed: busy ? null : () => editCourse(course),
+                ),
+                AdminOutlineButton(
+                  label: course.isPublished
+                      ? 'Unpublish course' : 'Publish course',
+                  icon: Icons.public_rounded,
+                  danger: course.isPublished,
+                  onPressed: busy ? null : () => toggleStatus(course),
                 ),
               ],
             ),
+            if (busy) ...[
+              const SizedBox(height: 14),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final labelWidget = Text(label, style: textTheme.bodySmall);
+    final valueWidget = SelectableText(
+      value.trim().isEmpty ? '—' : value,
+      style: textTheme.bodyMedium,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                labelWidget,
+                const SizedBox(height: 4),
+                valueWidget,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 160, child: labelWidget),
+              const SizedBox(width: 16),
+              Expanded(child: valueWidget),
+            ],
           );
         },
-      );
+      ),
+    );
+  }
 }
 
 class _EditCourseDialog extends ConsumerStatefulWidget {
-  const _EditCourseDialog({
-    required this.course,
-  });
-
+  const _EditCourseDialog({required this.course, required this.repository});
   final Course course;
+  final CourseRepository repository;
 
   @override
   ConsumerState<_EditCourseDialog> createState() => _EditCourseDialogState();
 }
 
 class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
-  late final TextEditingController name;
-  late final TextEditingController code;
-  late final TextEditingController description;
-  late final TextEditingController price;
-  late final TextEditingController durationMonths;
-  late final TextEditingController accessDays;
-  late final TextEditingController featuredOrder;
+  final key = GlobalKey<FormState>();
 
-  late String mode;
+  late final name = TextEditingController(text: widget.course.name);
+  late final code = TextEditingController(text: widget.course.code);
+  late final description = TextEditingController(text: widget.course.description);
+  late final price = TextEditingController(text: widget.course.price);
+  late final durationMonths = TextEditingController(text: widget.course.durationMonths?.toString() ?? '');
+  late final accessDays = TextEditingController(text: widget.course.accessDurationDays?.toString() ?? '');
+  late final featuredOrder = TextEditingController(text: widget.course.featuredOrder.toString());
 
-  late bool isActive;
-  late bool isPublished;
-  late bool isPurchasableOnline;
-  late bool isFeatured;
+  late String mode = widget.course.deliveryMode;
 
   List<AdminCourseCategory> categories = [];
   AdminCourseCategory? selectedCategory;
-
-  String? existingCategoryName;
-
   bool categoryChanged = false;
+  bool choosingCategory = false;
+
+  late bool isActive = widget.course.isActive;
+  late bool isPublished = widget.course.isPublished;
+  late bool isPurchasableOnline = widget.course.isPurchasableOnline;
+  late bool isFeatured = widget.course.isFeatured;
+
+  bool loadingCategories = false;
   bool saving = false;
   String? error;
+  String? categoryError;
 
   @override
   void initState() {
     super.initState();
-
-    final course = widget.course;
-
-    name = TextEditingController(text: course.name);
-    code = TextEditingController(text: course.code);
-    description = TextEditingController(text: course.description);
-    price = TextEditingController(text: course.price);
-    durationMonths = TextEditingController(
-      text: course.durationMonths?.toString() ?? '',
-    );
-    accessDays = TextEditingController(
-      text: course.accessDurationDays?.toString() ?? '',
-    );
-    featuredOrder = TextEditingController(
-      text: course.featuredOrder.toString(),
-    );
-
-    mode = course.deliveryMode;
-    isActive = course.isActive;
-    isPublished = course.isPublished;
-    isPurchasableOnline = course.isPurchasableOnline;
-    isFeatured = course.isFeatured;
-
-    existingCategoryName = course.categoryName;
-
     loadCategories();
   }
 
   Future<void> loadCategories() async {
-    try {
-      final result = await ref
-          .read(
-            courseCategoryRepositoryProvider,
-          )
-          .list();
-
-      if (!mounted) return;
-
-      setState(() {
-        categories = result.results;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> save() async {
-    if (name.text.trim().isEmpty || code.text.trim().isEmpty) {
-      setState(() {
-        error = 'Course name and code are required.';
-      });
-      return;
-    }
-
+    if (loadingCategories || saving) return;
+    final repository = ref.read(courseCategoryRepositoryProvider);
     setState(() {
-      saving = true;
-      error = null;
+      loadingCategories = true;
+      categoryError = null;
     });
-
     try {
-      await ref.read(courseRepositoryProvider).update(
-            uuid: widget.course.uuid,
-            name: name.text,
-            code: code.text,
-            description: description.text,
-            price: price.text,
-            deliveryMode: mode,
-            categoryUuid: selectedCategory?.uuid,
-            updateCategory: categoryChanged,
-            durationMonths: durationMonths.text.trim().isEmpty
-                ? null
-                : int.tryParse(durationMonths.text),
-            accessDurationDays: accessDays.text.trim().isEmpty
-                ? null
-                : int.tryParse(accessDays.text),
-            isActive: isActive,
-            isPublished: isPublished,
-            isPurchasableOnline: isPurchasableOnline,
-            isFeatured: isFeatured,
-            featuredOrder: int.tryParse(featuredOrder.text) ?? 0,
-          );
-
-      if (mounted) {
-        Navigator.pop(context, true);
+      final all = <AdminCourseCategory>[];
+      var nextPage = 1;
+      var received = 0;
+      while (true) {
+        final response = await repository.list(page: nextPage);
+        if (!mounted) return;
+        all.addAll(response.results);
+        received += response.results.length;
+        if (response.results.isEmpty || received >= response.count) break;
+        nextPage++;
       }
-    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final unique = {for (final item in all) item.uuid: item};
+        categories = unique.values.where((item) => item.isActive).toList();
+        if (!categories.any((c) => c.uuid == selectedCategory?.uuid)) {
+          selectedCategory = null;
+          categoryChanged = false;
+        }
+      });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => categoryError = e.message);
+    } catch (_) {
       if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
+        setState(() => categoryError = 'Could not load course categories.');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => loadingCategories = false);
     }
+  }
+
+  String? validateInteger(String? value, {bool optional = false}) {
+    final text = (value ?? '').trim();
+    if (optional && text.isEmpty) return null;
+    final number = int.tryParse(text);
+    return number == null || number < 0 || number > 2147483647
+        ? 'Enter a whole number from 0 to 2147483647'
+        : null;
+  }
+
+  String? validatePrice(String? value) {
+    final text = (value ?? '').trim();
+    if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)) {
+      return 'Enter a non-negative price with up to 2 decimal places';
+    }
+    final whole = text.split('.').first.replaceFirst(RegExp(r'^0+'), '');
+    return whole.length > 8 ? 'Maximum price is 99999999.99' : null;
   }
 
   @override
@@ -289,137 +410,217 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
     super.dispose();
   }
 
+  Future<void> save() async {
+    if (saving || loadingCategories) return;
+    if (!(key.currentState?.validate() ?? false)) return;
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      saving = true;
+      error = null;
+    });
+
+    try {
+      final updated = await widget.repository.update(
+        uuid: widget.course.uuid,
+        name: name.text,
+        code: code.text,
+        description: description.text,
+        price: price.text.trim(),
+        deliveryMode: mode,
+        categoryUuid: selectedCategory?.uuid,
+        updateCategory: categoryChanged,
+        durationMonths: durationMonths.text.trim().isEmpty
+            ? null
+            : int.parse(durationMonths.text.trim()),
+        accessDurationDays: accessDays.text.trim().isEmpty
+            ? null
+            : int.parse(accessDays.text.trim()),
+        isActive: isActive,
+        isPublished: isPublished,
+        isPurchasableOnline: isPurchasableOnline,
+        isFeatured: isFeatured,
+        featuredOrder: isFeatured ? int.parse(featuredOrder.text.trim()) : widget.course.featuredOrder,
+      );
+
+      if (!mounted) return;
+      setState(() => saving = false);
+      Navigator.of(context).pop(updated);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'Could not update course. Please try again.');
+      }
+    } finally {
+      if (mounted && saving) setState(() => saving = false);
+    }
+  }
+
+  Widget categoryField() {
+    final categoryLabel = categoryChanged
+        ? selectedCategory?.name ?? 'No category'
+        : widget.course.categoryName ?? 'No category';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FieldLabel(label: 'Category', child: Text(categoryLabel)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            TextButton(
+              onPressed: saving || loadingCategories
+                  ? null : () => setState(() => choosingCategory = true),
+              child: const Text('Choose category'),
+            ),
+            if (categoryChanged
+                ? selectedCategory != null
+                : widget.course.categoryName != null)
+              TextButton(
+                onPressed: saving ? null : () => setState(() {
+                  categoryChanged = true;
+                  selectedCategory = null;
+                  choosingCategory = false;
+                }),
+                child: const Text('Remove category'),
+              ),
+            if (categoryChanged || choosingCategory)
+              TextButton(
+                onPressed: saving ? null : () => setState(() {
+                  categoryChanged = false;
+                  selectedCategory = null;
+                  choosingCategory = false;
+                }),
+                child: const Text('Keep original category'),
+              ),
+          ],
+        ),
+        if (loadingCategories) const LinearProgressIndicator(),
+        if (categoryError != null) ...[
+          const SizedBox(height: 8),
+          AdminErrorBanner(message: categoryError!),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: saving ? null : loadCategories,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry categories'),
+            ),
+          ),
+        ],
+        if (choosingCategory && !loadingCategories && categoryError == null)
+          DropdownButtonFormField<String>(
+            key: ValueKey(selectedCategory?.uuid),
+            value: selectedCategory?.uuid,
+            isExpanded: true,
+            decoration: adminFieldDecoration(context,
+                hint: categories.isEmpty ? 'No active categories' : 'Select category'),
+            items: categories.map((category) => DropdownMenuItem<String>(
+              value: category.uuid,
+              child: Text(category.name, overflow: TextOverflow.ellipsis),
+            )).toList(),
+            onChanged: saving ? null : (value) {
+              if (value == null) return;
+              setState(() {
+                selectedCategory = categories.firstWhere((c) => c.uuid == value);
+                categoryChanged = true;
+                choosingCategory = false;
+              });
+            },
+          ),
+      ],
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit Course'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.edit_outlined,
+      title: 'Edit course',
+      subtitle: 'Update this course’s information.',
+      onClose: saving ? null : () => Navigator.of(context).pop(),
+      body: IgnorePointer(
+        ignoring: saving,
+        child: Form(
+          key: key,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              TextFormField(
                 controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Course Name',
-                ),
+                enabled: !saving,
+                maxLength: 200,
+                decoration: const InputDecoration(labelText: 'Course name'),
+                validator: requiredField,
               ),
               const SizedBox(height: 10),
-              TextField(
+              TextFormField(
                 controller: code,
-                decoration: const InputDecoration(
-                  labelText: 'Course Code',
-                ),
+                enabled: !saving,
+                maxLength: 50,
+                decoration: const InputDecoration(labelText: 'Course code'),
+                validator: requiredField,
               ),
               const SizedBox(height: 10),
-              if (existingCategoryName != null && !categoryChanged)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Current Category'),
-                  subtitle: Text(existingCategoryName!),
-                  trailing: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        categoryChanged = true;
-                      });
-                    },
-                    child: const Text('Change'),
-                  ),
-                ),
-              if (existingCategoryName == null || categoryChanged)
-                DropdownButtonFormField<String>(
-                  key: ValueKey('edit_cat_dd_${categories.length}'),
-                  value: categories.any((c) => c.uuid == selectedCategory?.uuid)
-                      ? selectedCategory?.uuid
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                  ),
-                  items: categories
-                      .map(
-                        (category) => DropdownMenuItem<String>(
-                          value: category.uuid,
-                          child: Text(category.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      categoryChanged = true;
-                      selectedCategory = value == null
-                          ? null
-                          : categories.firstWhere(
-                              (item) => item.uuid == value,
-                            );
-                    });
-                  },
-                ),
+              categoryField(),
               const SizedBox(height: 10),
-              TextField(
+              TextFormField(
                 controller: description,
-                maxLines: 3,
+                enabled: !saving,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: durationMonths,
+                enabled: !saving,
+                validator: (value) => validateInteger(value, optional: true),
+                keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Description',
+                  labelText: 'Duration (Months)',
                 ),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: price,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
+              TextFormField(
+                controller: accessDays,
+                enabled: !saving,
+                validator: (value) => validateInteger(value, optional: true),
+                keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Price',
+                  labelText: 'Student Access Duration (Days)',
+                  hintText: 'Example: 180',
                 ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: price,
+                enabled: !saving,
+                decoration: const InputDecoration(labelText: 'Price (₹)'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: validatePrice,
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: mode,
-                decoration: const InputDecoration(
-                  labelText: 'Delivery Mode',
-                ),
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Delivery mode'),
                 items: const [
-                  DropdownMenuItem(
-                    value: 'ONLINE',
-                    child: Text('Online'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'OFFLINE',
-                    child: Text('Offline'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'HYBRID',
-                    child: Text('Hybrid'),
-                  ),
+                  DropdownMenuItem(value: 'ONLINE', child: Text('Online')),
+                  DropdownMenuItem(value: 'OFFLINE', child: Text('Offline')),
+                  DropdownMenuItem(value: 'HYBRID', child: Text('Hybrid')),
                 ],
-                onChanged: (value) {
-                  setState(() {
-                    mode = value ?? mode;
-                  });
-                },
+                onChanged: saving ? null : (value) => setState(() => mode = value ?? mode),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: durationMonths,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Duration Months',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: accessDays,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Access Duration Days',
-                ),
-              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Active'),
                 value: isActive,
-                onChanged: (value) {
+                onChanged: saving ? null : (value) {
                   setState(() {
                     isActive = value;
                   });
@@ -429,7 +630,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Published'),
                 value: isPublished,
-                onChanged: (value) {
+                onChanged: saving ? null : (value) {
                   setState(() {
                     isPublished = value;
                   });
@@ -439,7 +640,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Purchasable Online'),
                 value: isPurchasableOnline,
-                onChanged: (value) {
+                onChanged: saving ? null : (value) {
                   setState(() {
                     isPurchasableOnline = value;
                   });
@@ -447,25 +648,30 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Featured'),
+                title: const Text('Featured Course'),
                 value: isFeatured,
-                onChanged: (value) {
+                onChanged: saving ? null : (value) {
                   setState(() {
                     isFeatured = value;
                   });
                 },
               ),
-              if (isFeatured)
-                TextField(
+              if (isFeatured) ...[
+                const SizedBox(height: 10),
+                TextFormField(
                   controller: featuredOrder,
+                  enabled: !saving,
+                  validator: validateInteger,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Featured Order',
+                    hintText: '0 = first priority',
                   ),
                 ),
+              ],
               if (error != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     error!,
                     style: TextStyle(
@@ -482,13 +688,16 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
           onPressed: saving ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Changes',
-          ),
+        GradientButton(
+          label: 'Save changes',
+          icon: Icons.check_rounded,
+          loading: saving,
+          onPressed: saving || loadingCategories ? null : save,
         ),
       ],
-    );
-  }
+    ),
+  );
 }
+
+String? requiredField(String? value) =>
+    value == null || value.trim().isEmpty ? 'Required' : null;
