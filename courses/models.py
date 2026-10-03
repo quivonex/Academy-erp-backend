@@ -417,7 +417,7 @@ class Enrollment(models.Model):
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.ACTIVE,
+        default=Status.PENDING,
         db_index=True,
     )
 
@@ -441,4 +441,92 @@ class Enrollment(models.Model):
     def __str__(self):
         return f"{self.student} - {self.course}"
     
-    
+
+
+class StudentChapterVideoAccess(models.Model):
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    firm = models.ForeignKey(
+        Firm,
+        on_delete=models.PROTECT,
+        related_name="student_chapter_video_accesses",
+    )
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.PROTECT,
+        related_name="chapter_video_accesses",
+    )
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.PROTECT,
+        related_name="student_chapter_video_accesses",
+    )
+
+    chapter = models.ForeignKey(
+        Chapter,
+        on_delete=models.PROTECT,
+        related_name="student_video_accesses",
+    )
+
+    granted_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="granted_chapter_video_accesses",
+    )
+
+    access_start_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    access_end_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        db_table = "student_chapter_video_accesses"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "chapter"],
+                name="unique_student_chapter_video_access",
+            )
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["firm", "student", "course", "is_active"]
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.student.full_name} - "
+            f"{self.course.name} - "
+            f"{self.chapter.title}"
+        )

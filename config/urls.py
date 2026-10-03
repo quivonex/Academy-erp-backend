@@ -33,7 +33,7 @@ from courses.urls import (
 from assignments.urls import (
     student_assignment_urlpatterns,
 )
-
+from payments.urls import admin_payment_urlpatterns, student_payment_urlpatterns
 from teachers.urls import staff_urlpatterns
 from banners.urls import urlpatterns as banner_urlpatterns
 from banners.public_urls import urlpatterns as public_banner_urlpatterns
@@ -62,6 +62,8 @@ urlpatterns = [
     path("api/v1/enrollments/", include(enrollment_urlpatterns),),
     
     path("api/v1/student/", include("students.portal_urls"),),
+    path("api/v1/student/", include(student_payment_urlpatterns),),
+    path("api/v1/payments/", include(admin_payment_urlpatterns)),
     
     path("api/v1/live-classes/", include("classes.urls"),),
     

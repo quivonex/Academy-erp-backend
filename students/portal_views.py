@@ -15,15 +15,18 @@ from common.responses import (
 from courses.models import (
     Course,
     Enrollment,
+    StudentChapterVideoAccess,
 )
 
 from courses.access import (
     get_student_active_enrollment,
+    student_has_chapter_video_access,
 )
 
 from classes.models import LiveClass
 
 from .portal_serializers import (
+    StudentChapterVideoCourseSerializer,
     StudentCourseSerializer,
     StudentLiveClassSerializer,
     StudentLearningMaterialSerializer,
@@ -40,7 +43,6 @@ class StudentMyCoursesView(APIView):
     def get(self, request):
         student = request.user.student_profile
         now = timezone.now()
-
         enrollments = (
             Enrollment.objects
             .filter(
@@ -63,23 +65,83 @@ class StudentMyCoursesView(APIView):
             )
             .order_by("-enrolled_at")
         )
-
-        paginator = StandardResultsSetPagination()
-
-        page = paginator.paginate_queryset(
+        full_course_ids = list(
+            enrollments.values_list(
+                "course_id",
+                flat=True,
+            )
+        )
+        chapter_accesses = (
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                is_active=True,
+                course__is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .exclude(course_id__in=full_course_ids)
+            .select_related(
+                "course",
+                "course__category",
+                "chapter",
+            )
+            .order_by(
+                "course__name",
+                "chapter__sequence",
+            )
+        )
+        chapters_by_course_id = {}
+        first_access_by_course_id = {}
+        for access in chapter_accesses:
+            if access.course_id not in first_access_by_course_id:
+                first_access_by_course_id[
+                    access.course_id
+                ] = access
+            chapters_by_course_id.setdefault(
+                access.course_id,
+                [],
+            ).append(
+                {
+                    "uuid": str(access.chapter.uuid),
+                    "title": access.chapter.title,
+                    "sequence": access.chapter.sequence,
+                }
+            )
+        full_course_data = StudentCourseSerializer(
             enrollments,
+            many=True,
+        ).data
+        chapter_only_course_data = (
+            StudentChapterVideoCourseSerializer(
+                list(first_access_by_course_id.values()),
+                many=True,
+                context={
+                    "chapters_by_course_id": (
+                        chapters_by_course_id
+                    ),
+                },
+            ).data
+        )
+        courses = (
+            full_course_data
+            + chapter_only_course_data
+        )
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(
+            courses,
             request,
         )
-
-        serializer = StudentCourseSerializer(
-            page,
-            many=True,
-        )
-
         return paginator.get_paginated_response(
-            serializer.data
-        )
-        
+            page
+        )    
         
 class StudentCourseDetailView(APIView):
     permission_classes = [
@@ -90,15 +152,19 @@ class StudentCourseDetailView(APIView):
     def get(self, request, course_uuid):
         student = request.user.student_profile
         now = timezone.now()
-
+        course = get_object_or_404(
+            Course,
+            uuid=course_uuid,
+            firm=request.user.firm,
+            is_active=True,
+        )
         enrollment = (
             Enrollment.objects
             .filter(
                 firm=request.user.firm,
                 student=student,
-                course__uuid=course_uuid,
+                course=course,
                 status=Enrollment.Status.ACTIVE,
-                course__is_active=True,
             )
             .filter(
                 Q(access_start_at__isnull=True)
@@ -114,21 +180,67 @@ class StudentCourseDetailView(APIView):
             )
             .first()
         )
-
-        if not enrollment:
+        if enrollment:
+            return success_response(
+                message="Course retrieved successfully",
+                data=StudentCourseSerializer(
+                    enrollment
+                ).data,
+            )
+        chapter_accesses = (
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                course=course,
+                is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .select_related(
+                "course",
+                "course__category",
+                "chapter",
+            )
+            .order_by("chapter__sequence")
+        )
+        first_access = chapter_accesses.first()
+        if not first_access:
             return error_response(
                 message="You do not have access to this course.",
                 errors={},
-                status_code=404,
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-
+        accessible_chapters = [
+            {
+                "uuid": str(access.chapter.uuid),
+                "title": access.chapter.title,
+                "sequence": access.chapter.sequence,
+            }
+            for access in chapter_accesses
+        ]
         return success_response(
-            message="Course retrieved successfully",
-            data=StudentCourseSerializer(
-                enrollment
+            message=(
+                "Chapter video course retrieved successfully"
+            ),
+            data=StudentChapterVideoCourseSerializer(
+                first_access,
+                context={
+                    "chapters_by_course_id": {
+                        course.id: accessible_chapters,
+                    },
+                },
             ).data,
-        )        
-
+        )
+            
+            
+    
 class StudentLiveClassListView(APIView):
     permission_classes = [
         IsAuthenticated,
@@ -371,21 +483,40 @@ class StudentCourseMaterialListView(APIView):
             is_active=True,
         )
 
-        enrollment = get_student_active_enrollment(
-            student=student,
-            course=course,
+        full_course_enrollment = (
+            get_student_active_enrollment(
+                student=student,
+                course=course,
+            )
         )
 
-        if not enrollment:
+        granted_chapter_ids = list(
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                course=course,
+                is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .values_list("chapter_id", flat=True)
+        )
+
+        if not full_course_enrollment and not granted_chapter_ids:
             return error_response(
                 message=(
-                    "You do not have access "
-                    "to this course."
+                    "You do not have access to this course "
+                    "or its chapter videos."
                 ),
                 errors={},
-                status_code=(
-                    status.HTTP_403_FORBIDDEN
-                ),
+                status_code=status.HTTP_403_FORBIDDEN,
             )
 
         materials = (
@@ -416,10 +547,16 @@ class StudentCourseMaterialListView(APIView):
             )
         )
 
-        material_type = (
-            request.query_params.get(
-                "material_type"
+        # Full course enrollment: all available materials.
+        # Chapter-only access: only VIDEO materials in granted chapters.
+        if not full_course_enrollment:
+            materials = materials.filter(
+                material_type=LearningMaterial.MaterialType.VIDEO,
+                chapter_id__in=granted_chapter_ids,
             )
+
+        material_type = request.query_params.get(
+            "material_type"
         )
 
         if material_type:
@@ -441,9 +578,7 @@ class StudentCourseMaterialListView(APIView):
                             )
                         ]
                     },
-                    status_code=(
-                        status.HTTP_400_BAD_REQUEST
-                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
             materials = materials.filter(
@@ -451,12 +586,12 @@ class StudentCourseMaterialListView(APIView):
             )
 
         paginator = StandardResultsSetPagination()
-        
+
         page = paginator.paginate_queryset(
             materials,
             request,
         )
-        
+
         serializer = StudentLearningMaterialSerializer(
             page,
             many=True,
@@ -464,11 +599,11 @@ class StudentCourseMaterialListView(APIView):
                 "request": request,
             },
         )
-        
+
         return paginator.get_paginated_response(
             serializer.data
         )
-        
+                
         
         
 class StudentMaterialDetailView(APIView):
@@ -477,11 +612,7 @@ class StudentMaterialDetailView(APIView):
         IsStudent,
     ]
 
-    def get(
-        self,
-        request,
-        material_uuid,
-    ):
+    def get(self, request, material_uuid):
         student = request.user.student_profile
         now = timezone.now()
 
@@ -512,46 +643,60 @@ class StudentMaterialDetailView(APIView):
 
         if not material:
             return error_response(
-                message=(
-                    "Material not found "
-                    "or unavailable."
-                ),
+                message="Material not found or unavailable.",
                 errors={},
-                status_code=(
-                    status.HTTP_404_NOT_FOUND
-                ),
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        enrollment = get_student_active_enrollment(
-            student=student,
-            course=material.course,
+        full_course_enrollment = (
+            get_student_active_enrollment(
+                student=student,
+                course=material.course,
+            )
         )
 
-        if not enrollment:
-            return error_response(
-                message=(
-                    "You do not have access "
-                    "to this material."
-                ),
-                errors={},
-                status_code=(
-                    status.HTTP_403_FORBIDDEN
-                ),
+        if not full_course_enrollment:
+            # Chapter-only permission never exposes PDFs,
+            # documents, links, or materials without a chapter.
+            if (
+                material.material_type
+                != LearningMaterial.MaterialType.VIDEO
+                or not material.chapter
+            ):
+                return error_response(
+                    message=(
+                        "You do not have access to this material."
+                    ),
+                    errors={},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            has_chapter_access = (
+                student_has_chapter_video_access(
+                    student=student,
+                    course=material.course,
+                    chapter=material.chapter,
+                )
             )
 
-        serializer = (
-            StudentLearningMaterialSerializer(
-                material,
-                context={
-                    "request": request
-                },
-            )
+            if not has_chapter_access:
+                return error_response(
+                    message=(
+                        "You do not have access to this chapter video."
+                    ),
+                    errors={},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = StudentLearningMaterialSerializer(
+            material,
+            context={
+                "request": request,
+            },
         )
 
         return success_response(
-            message=(
-                "Material retrieved successfully"
-            ),
+            message="Material retrieved successfully",
             data=serializer.data,
         )
         

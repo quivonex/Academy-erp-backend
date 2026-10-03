@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
-from courses.models import Enrollment
+from courses.models import (
+    Enrollment,
+    StudentChapterVideoAccess,
+)
 from django.core.files.storage import default_storage
 from materials.models import LearningMaterial
 
@@ -48,12 +51,18 @@ class StudentCourseSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    
+    access_scope = serializers.SerializerMethodField()
+
+    def get_access_scope(self, obj):
+        return "FULL_COURSE"
 
     class Meta:
         model = Enrollment
 
         fields = (
             "uuid",
+            "access_scope",
             "course_uuid",
             "course_name",
             "course_code",
@@ -269,4 +278,92 @@ class StudentLearningMaterialSerializer(
         return url
     
     
+    
+class StudentChapterVideoCourseSerializer(
+    serializers.ModelSerializer
+):
+    course_uuid = serializers.UUIDField(
+        source="course.uuid",
+        read_only=True,
+    )
+
+    course_name = serializers.CharField(
+        source="course.name",
+        read_only=True,
+    )
+
+    course_code = serializers.CharField(
+        source="course.code",
+        read_only=True,
+    )
+
+    course_description = serializers.CharField(
+        source="course.description",
+        read_only=True,
+    )
+
+    category_name = serializers.CharField(
+        source="course.category.name",
+        read_only=True,
+        allow_null=True,
+    )
+
+    price = serializers.DecimalField(
+        source="course.price",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    delivery_mode = serializers.CharField(
+        source="course.delivery_mode",
+        read_only=True,
+    )
+
+    access_duration_days = serializers.IntegerField(
+        source="course.access_duration_days",
+        read_only=True,
+        allow_null=True,
+    )
+
+    access_scope = serializers.SerializerMethodField()
+    accessible_chapters = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentChapterVideoAccess
+
+        fields = (
+            "uuid",
+            "course_uuid",
+            "course_name",
+            "course_code",
+            "course_description",
+            "category_name",
+            "price",
+            "delivery_mode",
+            "access_duration_days",
+            "access_scope",
+            "accessible_chapters",
+            "access_start_at",
+            "access_end_at",
+            "created_at",
+        )
+
+        read_only_fields = fields
+
+    def get_access_scope(self, obj):
+        return "CHAPTER_VIDEOS_ONLY"
+
+    def get_accessible_chapters(self, obj):
+        chapters_by_course_id = self.context.get(
+            "chapters_by_course_id",
+            {},
+        )
+
+        return chapters_by_course_id.get(
+            obj.course_id,
+            [],
+        )
+        
+        
     
