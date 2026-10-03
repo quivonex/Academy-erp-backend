@@ -59,3 +59,45 @@ def create_notification(
     
     
     
+def create_course_access_notification(enrollment):
+    course = enrollment.course
+    student = enrollment.student
+
+    if not student.user or not student.user.is_active:
+        return None
+
+    body = (
+        f"Course access has been granted for {course.name}."
+    )
+
+    if enrollment.access_start_at:
+        body += (
+            f" Access starts on "
+            f"{enrollment.access_start_at.strftime('%d %b %Y, %I:%M %p')}."
+        )
+
+    return create_notification(
+        firm=enrollment.firm,
+        recipient=student.user,
+        notification_type=Notification.NotificationType.COURSE_ACCESS,
+        title="Course access granted",
+        body=body,
+        data={
+            "course_uuid": str(course.uuid),
+            "enrollment_uuid": str(enrollment.uuid),
+            "access_start_at": (
+                enrollment.access_start_at.isoformat()
+                if enrollment.access_start_at
+                else None
+            ),
+            "access_end_at": (
+                enrollment.access_end_at.isoformat()
+                if enrollment.access_end_at
+                else None
+            ),
+        },
+    )
+    
+    
+    
+    
