@@ -19,7 +19,10 @@ from payments.serializers import (
     EnrollmentFeeAccountSerializer,
     InstallmentPaymentSerializer,
 )
-
+from rest_framework import serializers
+from assignments.models import AssignmentSubmission
+from courses.models import Enrollment
+from courses.serializers import EnrollmentSerializer
 
 def get_date_range(request):
     date_from_value = request.query_params.get("date_from")
@@ -242,6 +245,196 @@ class PendingDuesReportView(APIView):
                     request,
                     fee_accounts,
                     EnrollmentFeeAccountSerializer,
+                ),
+            },
+        )
+        
+        
+
+class PendingAssignmentGradingSerializer(
+    serializers.ModelSerializer
+):
+    assignment_uuid = serializers.UUIDField(
+        source="assignment.uuid",
+        read_only=True,
+    )
+
+    assignment_title = serializers.CharField(
+        source="assignment.title",
+        read_only=True,
+    )
+
+    course_uuid = serializers.UUIDField(
+        source="assignment.course.uuid",
+        read_only=True,
+    )
+
+    course_name = serializers.CharField(
+        source="assignment.course.name",
+        read_only=True,
+    )
+
+    student_uuid = serializers.UUIDField(
+        source="student.uuid",
+        read_only=True,
+    )
+
+    student_name = serializers.CharField(
+        source="student.full_name",
+        read_only=True,
+    )
+
+    admission_number = serializers.CharField(
+        source="student.admission_number",
+        read_only=True,
+    )
+
+    class Meta:
+        model = AssignmentSubmission
+
+        fields = (
+            "uuid",
+            "assignment_uuid",
+            "assignment_title",
+            "course_uuid",
+            "course_name",
+            "student_uuid",
+            "student_name",
+            "admission_number",
+            "submitted_at",
+            "created_at",
+        )
+
+        read_only_fields = fields
+
+
+class EnrollmentStatusReportView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get(self, request):
+        enrollments = (
+            Enrollment.objects
+            .filter(firm=request.user.firm)
+            .select_related(
+                "student",
+                "course",
+            )
+            .order_by("-enrolled_at")
+        )
+
+        status_value = request.query_params.get("status")
+        course_uuid = request.query_params.get("course_uuid")
+
+        if status_value:
+            valid_statuses = [
+                choice[0]
+                for choice in Enrollment.Status.choices
+            ]
+
+            if status_value not in valid_statuses:
+                return error_response(
+                    message="Invalid enrollment status",
+                    errors={
+                        "status": [
+                            (
+                                "Use PENDING, ACTIVE, "
+                                "COMPLETED, or CANCELLED."
+                            )
+                        ]
+                    },
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            enrollments = enrollments.filter(
+                status=status_value
+            )
+
+        if course_uuid:
+            enrollments = enrollments.filter(
+                course__uuid=course_uuid
+            )
+
+        return success_response(
+            message=(
+                "Enrollment status report retrieved successfully"
+            ),
+            data={
+                "summary": {
+                    "total": enrollments.count(),
+                    "pending": enrollments.filter(
+                        status=Enrollment.Status.PENDING
+                    ).count(),
+                    "active": enrollments.filter(
+                        status=Enrollment.Status.ACTIVE
+                    ).count(),
+                    "completed": enrollments.filter(
+                        status=Enrollment.Status.COMPLETED
+                    ).count(),
+                    "cancelled": enrollments.filter(
+                        status=Enrollment.Status.CANCELLED
+                    ).count(),
+                },
+                "enrollments": get_paginated_data(
+                    request,
+                    enrollments,
+                    EnrollmentSerializer,
+                ),
+            },
+        )
+
+
+class PendingAssignmentGradingReportView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get(self, request):
+        submissions = (
+            AssignmentSubmission.objects
+            .filter(
+                firm=request.user.firm,
+                status=AssignmentSubmission.Status.SUBMITTED,
+            )
+            .select_related(
+                "assignment",
+                "assignment__course",
+                "student",
+            )
+            .order_by("-submitted_at", "-created_at")
+        )
+
+        course_uuid = request.query_params.get(
+            "course_uuid"
+        )
+        assignment_uuid = request.query_params.get(
+            "assignment_uuid"
+        )
+
+        if course_uuid:
+            submissions = submissions.filter(
+                assignment__course__uuid=course_uuid
+            )
+
+        if assignment_uuid:
+            submissions = submissions.filter(
+                assignment__uuid=assignment_uuid
+            )
+
+        return success_response(
+            message=(
+                "Pending assignment grading report "
+                "retrieved successfully"
+            ),
+            data={
+                "pending_grading_count": submissions.count(),
+                "submissions": get_paginated_data(
+                    request,
+                    submissions,
+                    PendingAssignmentGradingSerializer,
                 ),
             },
         )
