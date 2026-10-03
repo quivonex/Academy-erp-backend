@@ -250,6 +250,55 @@ USE_TZ = True
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# =========================================================
+# OPTIONAL AWS S3 PRIVATE MEDIA STORAGE
+# =========================================================
+
+USE_S3 = env.bool(
+    "USE_S3",
+    default=False,
+)
+
+if USE_S3:
+    STORAGES = {
+        "default": {
+            "BACKEND": "common.storage.PrivateMediaStorage",
+            "OPTIONS": {
+                "access_key": env(
+                    "AWS_ACCESS_KEY_ID",
+                    default=None,
+                ),
+                "secret_key": env(
+                    "AWS_SECRET_ACCESS_KEY",
+                    default=None,
+                ),
+                "bucket_name": env(
+                    "AWS_STORAGE_BUCKET_NAME",
+                ),
+                "region_name": env(
+                    "AWS_S3_REGION_NAME",
+                    default="ap-south-1",
+                ),
+                "signature_version": "s3v4",
+                "default_acl": None,
+                "file_overwrite": False,
+                "querystring_auth": True,
+                "querystring_expire": 300,
+                "object_parameters": {
+                    "ServerSideEncryption": "AES256",
+                    "CacheControl": "private, max-age=300",
+                },
+            },
+        },
+        "staticfiles": {
+            "BACKEND": (
+                "django.contrib.staticfiles.storage."
+                "StaticFilesStorage"
+            ),
+        },
+    }
+    
+    
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
