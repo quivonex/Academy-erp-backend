@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
+import '../../../core/widgets/status_pill.dart';
 import '../data/live_class.dart';
 import '../data/live_class_repository.dart';
+
+enum _ClassAction { start, complete, cancel }
 
 class LiveClassDetailScreen extends ConsumerStatefulWidget {
   const LiveClassDetailScreen({
@@ -19,15 +23,26 @@ class LiveClassDetailScreen extends ConsumerStatefulWidget {
       _LiveClassDetailScreenState();
 }
 
-class _LiveClassDetailScreenState extends ConsumerState<LiveClassDetailScreen> {
+class _LiveClassDetailScreenState
+    extends ConsumerState<LiveClassDetailScreen> {
   late Future<LiveClass> result;
-
-  bool processing = false;
+  bool busy = false;
+  int revision = 0;
 
   @override
   void initState() {
     super.initState();
     reload();
+  }
+
+  @override
+  void didUpdateWidget(covariant LiveClassDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.liveClassUuid != widget.liveClassUuid) {
+      revision++;
+      reload();
+    }
   }
 
   void reload() {
@@ -36,417 +51,323 @@ class _LiveClassDetailScreenState extends ConsumerState<LiveClassDetailScreen> {
         .detail(widget.liveClassUuid);
   }
 
-  Future<void> startClass(
-    LiveClass liveClass,
-  ) async {
-    setState(() {
-      processing = true;
-    });
+  void refresh() {
+    if (!busy) setState(reload);
+  }
+
+  void message(String text) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
+  Future<void> edit(LiveClass liveClass) async {
+    if (busy ||
+        !['SCHEDULED', 'LIVE'].contains(liveClass.status)) {
+      return;
+    }
+
+    final currentRevision = revision;
+    setState(() => busy = true);
 
     try {
-      await ref.read(liveClassRepositoryProvider).start(liveClass.uuid);
+      final updated = await showDialog<LiveClass>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EditLiveClassDialog(
+          liveClass: liveClass,
+        ),
+      );
 
-      if (mounted) {
-        setState(reload);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Live class started successfully.',
-            ),
-          ),
-        );
+      if (!mounted ||
+          currentRevision != revision ||
+          updated == null) {
+        return;
       }
-    } on ApiException catch (e) {
-      showError(e.message);
+
+      setState(() => result = Future.value(updated));
+      message('Live class updated successfully.');
     } finally {
-      if (mounted) {
-        setState(() {
-          processing = false;
-        });
-      }
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> completeClass(
-    LiveClass liveClass,
-  ) async {
-    setState(() {
-      processing = true;
-    });
+  Future<void> perform(
+      LiveClass liveClass,
+      _ClassAction action,
+      ) async {
+    if (busy) return;
+
+    final allowed = switch (action) {
+      _ClassAction.start =>
+      liveClass.status == 'SCHEDULED',
+      _ClassAction.complete =>
+      liveClass.status == 'LIVE',
+      _ClassAction.cancel =>
+          ['SCHEDULED', 'LIVE'].contains(liveClass.status),
+    };
+
+    if (!allowed) return;
+
+    final currentRevision = revision;
+    setState(() => busy = true);
 
     try {
-      await ref.read(liveClassRepositoryProvider).complete(liveClass.uuid);
-
-      if (mounted) {
-        setState(reload);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Live class completed successfully.',
-            ),
-          ),
-        );
-      }
-    } on ApiException catch (e) {
-      showError(e.message);
-    } finally {
-      if (mounted) {
-        setState(() {
-          processing = false;
-        });
-      }
-    }
-  }
-
-  Future<void> cancelClass(
-    LiveClass liveClass,
-  ) async {
-    final confirmed = await showDialog<bool>(
+      if (action == _ClassAction.cancel) {
+        final confirmed = await showDialog<bool>(
           context: context,
-          builder: (_) => AlertDialog(
-            title: const Text(
-              'Cancel Live Class',
-            ),
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Cancel live class'),
             content: const Text(
-              'Are you sure you want to cancel this live class?',
+              'Are you sure you want to cancel this class?',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  false,
-                ),
-                child: const Text(
-                  'No',
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep class'),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  true,
-                ),
-                child: const Text(
-                  'Yes, Cancel',
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(true),
+                child: const Text('Cancel class'),
               ),
             ],
           ),
-        ) ??
-        false;
-
-    if (!confirmed) {
-      return;
-    }
-
-    setState(() {
-      processing = true;
-    });
-
-    try {
-      await ref.read(liveClassRepositoryProvider).cancel(liveClass.uuid);
-
-      if (mounted) {
-        setState(reload);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Live class cancelled successfully.',
-            ),
-          ),
         );
+
+        if (!mounted ||
+            currentRevision != revision ||
+            confirmed != true) {
+          return;
+        }
       }
+
+      final repository =
+      ref.read(liveClassRepositoryProvider);
+
+      final updated = await (switch (action) {
+        _ClassAction.start =>
+            repository.start(liveClass.uuid),
+        _ClassAction.complete =>
+            repository.complete(liveClass.uuid),
+        _ClassAction.cancel =>
+            repository.cancel(liveClass.uuid),
+      });
+
+      if (!mounted || currentRevision != revision) return;
+
+      setState(() => result = Future.value(updated));
+
+      message(switch (action) {
+        _ClassAction.start =>
+        'Live class started successfully.',
+        _ClassAction.complete =>
+        'Live class completed successfully.',
+        _ClassAction.cancel =>
+        'Live class cancelled successfully.',
+      });
     } on ApiException catch (e) {
-      showError(e.message);
-    } finally {
-      if (mounted) {
-        setState(() {
-          processing = false;
-        });
+      if (mounted && currentRevision == revision) {
+        message(e.message);
+        setState(reload);
       }
+    } catch (_) {
+      if (mounted && currentRevision == revision) {
+        message(
+          'Could not update class. Refresh to check its current status.',
+        );
+        setState(reload);
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
-  }
-
-  void showError(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<LiveClass>(
-      future: result,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.only(bottom: 24),
+    children: [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: busy
+              ? null
+              : () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/live-classes');
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+          label: const Text('Live classes'),
+        ),
+      ),
+      FutureBuilder<LiveClass>(
+        future: result,
+        builder: (context, snapshot) {
+          final state = adminFutureState(
+            snapshot,
+            noun: 'live class',
+            onRetry: refresh,
           );
-        }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Could not load live class:\n${snapshot.error}',
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(reload);
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
+          if (state != null) return state;
 
-        final liveClass = snapshot.data!;
+          final liveClass = snapshot.data!;
+          final scheduled =
+              liveClass.status == 'SCHEDULED';
+          final live = liveClass.status == 'LIVE';
 
-        final canStart = liveClass.status == 'SCHEDULED';
-
-        final canComplete = liveClass.status == 'LIVE';
-
-        final canCancel =
-            liveClass.status == 'SCHEDULED' || liveClass.status == 'LIVE';
-
-        final canEdit =
-            liveClass.status == 'SCHEDULED' || liveClass.status == 'LIVE';
-
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextButton.icon(
-                onPressed: () => context.pop(),
-                icon: const Icon(
-                  Icons.arrow_back,
+              AdminPageHeader(
+                eyebrow: const AdminEyebrow(
+                  section: 'Virtual campus',
+                  detail: 'Live class details',
                 ),
-                label: const Text('Live Classes'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 28,
-                    child: Icon(
-                      Icons.video_camera_front,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          liveClass.title,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(
-                          height: 4,
-                        ),
-                        Text(
-                          liveClass.courseName,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Chip(
-                    label: Text(
-                      liveClass.status,
-                    ),
+                title: liveClass.title,
+                subtitle: liveClass.courseName,
+                titleTrailing: [
+                  StatusPill(
+                    label: liveClass.status,
+                    compact: true,
+                    tone: switch (liveClass.status) {
+                      'LIVE' => PillTone.danger,
+                      'SCHEDULED' => PillTone.info,
+                      'COMPLETED' => PillTone.success,
+                      _ => PillTone.neutral,
+                    },
                   ),
                 ],
+                actions: [
+                  AdminOutlineButton(
+                    label: 'Refresh',
+                    icon: Icons.refresh_rounded,
+                    onPressed: busy ? null : refresh,
+                  ),
+                  if (scheduled || live)
+                    GradientButton(
+                      label: 'Edit class',
+                      icon: Icons.edit_outlined,
+                      onPressed:
+                      busy ? null : () => edit(liveClass),
+                    ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(
-                    20,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Live Class Information',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(
-                        height: 18,
-                      ),
-                      _InfoRow(
-                        label: 'Title',
-                        value: liveClass.title,
-                      ),
-                      _InfoRow(
-                        label: 'Course',
-                        value: liveClass.courseName,
-                      ),
-                      _InfoRow(
-                        label: 'Subject',
-                        value: liveClass.subjectName?.isNotEmpty == true
-                            ? liveClass.subjectName!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Teacher',
-                        value: liveClass.teacherName,
-                      ),
-                      _InfoRow(
-                        label: 'Scheduled Start',
-                        value: _formatDateTime(
-                          liveClass.scheduledStartAt,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Scheduled End',
-                        value: _formatDateTime(
-                          liveClass.scheduledEndAt,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Actual Start',
-                        value: _formatDateTime(
-                          liveClass.actualStartAt,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Actual End',
-                        value: _formatDateTime(
-                          liveClass.actualEndAt,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Meeting URL',
-                        value: liveClass.meetingUrl?.isNotEmpty == true
-                            ? liveClass.meetingUrl!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Meeting ID',
-                        value: liveClass.meetingId?.isNotEmpty == true
-                            ? liveClass.meetingId!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Meeting Password',
-                        value: liveClass.meetingPassword?.isNotEmpty == true
-                            ? liveClass.meetingPassword!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Status',
-                        value: liveClass.status,
-                      ),
-                      _InfoRow(
-                        label: 'Description',
-                        value: liveClass.description.isEmpty
-                            ? '—'
-                            : liveClass.description,
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: 16),
+              AdminCard(
+                child: Column(
+                  children: [
+                    _InfoRow(
+                      label: 'Title',
+                      value: liveClass.title,
+                    ),
+                    _InfoRow(
+                      label: 'Course',
+                      value: liveClass.courseName,
+                    ),
+                    _InfoRow(
+                      label: 'Subject',
+                      value: _text(liveClass.subjectName),
+                    ),
+                    _InfoRow(
+                      label: 'Teacher',
+                      value: liveClass.teacherName,
+                    ),
+                    _InfoRow(
+                      label: 'Scheduled start',
+                      value: _date(liveClass.scheduledStartAt),
+                    ),
+                    _InfoRow(
+                      label: 'Scheduled end',
+                      value: _date(liveClass.scheduledEndAt),
+                    ),
+                    _InfoRow(
+                      label: 'Actual start',
+                      value: _date(liveClass.actualStartAt),
+                    ),
+                    _InfoRow(
+                      label: 'Actual end',
+                      value: _date(liveClass.actualEndAt),
+                    ),
+                    _InfoRow(
+                      label: 'Meeting URL',
+                      value: _text(liveClass.meetingUrl),
+                    ),
+                    _InfoRow(
+                      label: 'Meeting ID',
+                      value: _text(liveClass.meetingId),
+                    ),
+                    _InfoRow(
+                      label: 'Meeting password',
+                      value: _text(liveClass.meetingPassword),
+                    ),
+                    _InfoRow(
+                      label: 'Description',
+                      value: _text(liveClass.description),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
+              if (busy) const LinearProgressIndicator(),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
-                runSpacing: 10,
+                runSpacing: 12,
                 children: [
-                  if (canStart)
-                    FilledButton.icon(
-                      onPressed: processing
+                  if (scheduled)
+                    GradientButton(
+                      label: 'Start class',
+                      icon: Icons.play_arrow_rounded,
+                      onPressed: busy
                           ? null
-                          : () => startClass(
-                                liveClass,
-                              ),
-                      icon: const Icon(
-                        Icons.play_arrow,
-                      ),
-                      label: Text(
-                        processing ? 'Processing...' : 'Start Class',
+                          : () => perform(
+                        liveClass,
+                        _ClassAction.start,
                       ),
                     ),
-                  if (canComplete)
-                    FilledButton.icon(
-                      onPressed: processing
+                  if (live)
+                    GradientButton(
+                      label: 'Complete class',
+                      icon: Icons.check_rounded,
+                      onPressed: busy
                           ? null
-                          : () => completeClass(
-                                liveClass,
-                              ),
-                      icon: const Icon(
-                        Icons.check,
-                      ),
-                      label: Text(
-                        processing ? 'Processing...' : 'Complete Class',
+                          : () => perform(
+                        liveClass,
+                        _ClassAction.complete,
                       ),
                     ),
-                  if (canEdit)
-                    OutlinedButton.icon(
-                      onPressed: processing
+                  if (scheduled || live)
+                    AdminOutlineButton(
+                      label: 'Cancel class',
+                      icon: Icons.cancel_outlined,
+                      danger: true,
+                      onPressed: busy
                           ? null
-                          : () async {
-                              final updated = await showDialog<bool>(
-                                context: context,
-                                builder: (_) => _EditLiveClassDialog(
-                                  liveClass: liveClass,
-                                ),
-                              );
-
-                              if (updated == true && mounted) {
-                                setState(
-                                  reload,
-                                );
-                              }
-                            },
-                      icon: const Icon(
-                        Icons.edit,
-                      ),
-                      label: const Text(
-                        'Edit Class',
-                      ),
-                    ),
-                  if (canCancel)
-                    OutlinedButton.icon(
-                      onPressed: processing
-                          ? null
-                          : () => cancelClass(
-                                liveClass,
-                              ),
-                      icon: const Icon(
-                        Icons.cancel_outlined,
-                      ),
-                      label: const Text(
-                        'Cancel Class',
+                          : () => perform(
+                        liveClass,
+                        _ClassAction.cancel,
                       ),
                     ),
                 ],
               ),
             ],
-          ),
-        );
-      },
-    );
-  }
+          );
+        },
+      ),
+    ],
+  );
 }
 
 class _EditLiveClassDialog extends ConsumerStatefulWidget {
-  const _EditLiveClassDialog({
-    required this.liveClass,
-  });
+  const _EditLiveClassDialog({required this.liveClass});
 
   final LiveClass liveClass;
 
@@ -455,23 +376,24 @@ class _EditLiveClassDialog extends ConsumerStatefulWidget {
       _EditLiveClassDialogState();
 }
 
-class _EditLiveClassDialogState extends ConsumerState<_EditLiveClassDialog> {
+class _EditLiveClassDialogState
+    extends ConsumerState<_EditLiveClassDialog> {
+  final formKey = GlobalKey<FormState>();
+
   late final TextEditingController title;
-
   late final TextEditingController description;
-
   late final TextEditingController meetingUrl;
-
   late final TextEditingController meetingId;
-
   late final TextEditingController meetingPassword;
 
   DateTime? startAt;
   DateTime? endAt;
-
   bool saving = false;
-
+  bool picking = false;
   String? error;
+
+  bool get scheduled =>
+      widget.liveClass.status == 'SCHEDULED';
 
   @override
   void initState() {
@@ -480,26 +402,21 @@ class _EditLiveClassDialogState extends ConsumerState<_EditLiveClassDialog> {
     title = TextEditingController(
       text: widget.liveClass.title,
     );
-
     description = TextEditingController(
       text: widget.liveClass.description,
     );
-
     meetingUrl = TextEditingController(
       text: widget.liveClass.meetingUrl ?? '',
     );
-
     meetingId = TextEditingController(
       text: widget.liveClass.meetingId ?? '',
     );
-
     meetingPassword = TextEditingController(
       text: widget.liveClass.meetingPassword ?? '',
     );
 
-    startAt = widget.liveClass.scheduledStartAt;
-
-    endAt = widget.liveClass.scheduledEndAt;
+    startAt = widget.liveClass.scheduledStartAt?.toLocal();
+    endAt = widget.liveClass.scheduledEndAt?.toLocal();
   }
 
   @override
@@ -509,60 +426,84 @@ class _EditLiveClassDialogState extends ConsumerState<_EditLiveClassDialog> {
     meetingUrl.dispose();
     meetingId.dispose();
     meetingPassword.dispose();
-
     super.dispose();
   }
 
-  Future<DateTime?> pickDateTime(
-    DateTime? current,
-  ) async {
-    final initial = current ?? DateTime.now();
+  Future<void> pick(bool start) async {
+    if (saving || picking || !scheduled) return;
 
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
+    setState(() => picking = true);
 
-    if (date == null || !mounted) {
-      return null;
+    try {
+      final initial =
+          (start ? startAt : endAt) ?? DateTime.now();
+
+      final day = DateTime(
+        initial.year,
+        initial.month,
+        initial.day,
+      );
+
+      final first =
+      day.isBefore(DateTime(2000)) ? day : DateTime(2000);
+
+      final last = day.isAfter(DateTime(2100, 12, 31))
+          ? day
+          : DateTime(2100, 12, 31);
+
+      final date = await showDatePicker(
+        context: context,
+        initialDate: day,
+        firstDate: first,
+        lastDate: last,
+      );
+
+      if (!mounted || date == null) return;
+
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(initial),
+      );
+
+      if (!mounted || time == null) return;
+
+      setState(() {
+        final value = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+
+        if (start) {
+          startAt = value;
+        } else {
+          endAt = value;
+        }
+
+        error = null;
+      });
+    } finally {
+      if (mounted) setState(() => picking = false);
     }
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        initial,
-      ),
-    );
-
-    if (time == null) {
-      return null;
-    }
-
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
   }
 
   Future<void> save() async {
-    if (title.text.trim().isEmpty) {
-      setState(() {
-        error = 'Title is required.';
-      });
-
+    if (saving ||
+        picking ||
+        !formKey.currentState!.validate()) {
       return;
     }
 
-    if (startAt != null && endAt != null && !endAt!.isAfter(startAt!)) {
+    if (scheduled &&
+        (startAt == null ||
+            endAt == null ||
+            !endAt!.isAfter(startAt!))) {
       setState(() {
-        error = 'End time must be after start time.';
+        error =
+        'Select start/end times. End must be after start.';
       });
-
       return;
     }
 
@@ -572,171 +513,158 @@ class _EditLiveClassDialogState extends ConsumerState<_EditLiveClassDialog> {
     });
 
     try {
+      final updated =
       await ref.read(liveClassRepositoryProvider).update(
-            uuid: widget.liveClass.uuid,
-            title: title.text,
-            description: description.text,
-            scheduledStartAt: startAt,
-            scheduledEndAt: endAt,
-            meetingUrl: meetingUrl.text,
-            meetingId: meetingId.text,
-            meetingPassword: meetingPassword.text,
-            includeSchedule: widget.liveClass.status == 'SCHEDULED',
-          );
+        uuid: widget.liveClass.uuid,
+        title: title.text,
+        description: description.text,
+        meetingUrl: meetingUrl.text,
+        meetingId: meetingId.text,
+        meetingPassword: meetingPassword.text,
+        scheduledStartAt: scheduled ? startAt : null,
+        scheduledEndAt: scheduled ? endAt : null,
+        includeSchedule: scheduled,
+      );
 
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (mounted) Navigator.of(context).pop(updated);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          error = e.message;
+          error = 'Could not save class. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
+  Widget field(
+      TextEditingController controller,
+      String label, {
+        int? maxLength,
+        int lines = 1,
+        bool obscure = false,
+        String? Function(String?)? validator,
+      }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextFormField(
+          controller: controller,
+          enabled: !saving,
+          maxLength: maxLength,
+          maxLines: lines,
+          obscureText: obscure,
+          validator: validator,
+          decoration: adminFieldDecoration(
+            context,
+            hint: label,
+          ).copyWith(labelText: label),
+        ),
+      );
+
   @override
-  Widget build(BuildContext context) {
-    final isScheduled = widget.liveClass.status == 'SCHEDULED';
-
-    return AlertDialog(
-      title: const Text('Edit Live Class'),
-      content: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: description,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                ),
-              ),
-              if (isScheduled) ...[
-                const SizedBox(
-                  height: 12,
-                ),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving && !picking,
+    child: AdminFormDialog(
+      icon: Icons.edit_outlined,
+      title: 'Edit live class',
+      subtitle: scheduled
+          ? 'Update class details and scheduled times.'
+          : 'Update title, description and meeting details.',
+      onClose: saving || picking
+          ? null
+          : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            field(
+              title,
+              'Title',
+              maxLength: 255,
+              validator: (value) =>
+              (value ?? '').trim().isEmpty
+                  ? 'Title is required.'
+                  : null,
+            ),
+            field(description, 'Description', lines: 3),
+            if (scheduled)
+              for (final start in [true, false])
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Scheduled Start',
+                  title: Text(
+                    start
+                        ? 'Scheduled start (local time)'
+                        : 'Scheduled end (local time)',
                   ),
-                  subtitle: Text(
-                    _formatDateTime(
-                      startAt,
-                    ),
-                  ),
+                  subtitle:
+                  Text(_date(start ? startAt : endAt)),
                   trailing: const Icon(
-                    Icons.calendar_month,
+                    Icons.calendar_month_outlined,
                   ),
-                  onTap: () async {
-                    final value = await pickDateTime(
-                      startAt,
-                    );
+                  onTap: saving || picking
+                      ? null
+                      : () => pick(start),
+                ),
+            field(
+              meetingUrl,
+              'Meeting URL',
+              maxLength: 1000,
+              validator: (value) {
+                final text = (value ?? '').trim();
 
-                    if (value != null && mounted) {
-                      setState(() {
-                        startAt = value;
-                      });
-                    }
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Scheduled End',
-                  ),
-                  subtitle: Text(
-                    _formatDateTime(
-                      endAt,
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.calendar_month,
-                  ),
-                  onTap: () async {
-                    final value = await pickDateTime(
-                      endAt,
-                    );
+                if (text.isEmpty) return null;
 
-                    if (value != null && mounted) {
-                      setState(() {
-                        endAt = value;
-                      });
-                    }
-                  },
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: meetingUrl,
-                decoration: const InputDecoration(
-                  labelText: 'Meeting URL',
+                final uri = Uri.tryParse(text);
+
+                if (uri == null ||
+                    !['http', 'https'].contains(uri.scheme) ||
+                    uri.host.isEmpty) {
+                  return 'Enter a valid http/https meeting URL.';
+                }
+
+                return null;
+              },
+            ),
+            field(
+              meetingId,
+              'Meeting ID',
+              maxLength: 255,
+            ),
+            field(
+              meetingPassword,
+              'Meeting password',
+              maxLength: 255,
+              obscure: true,
+            ),
+            if (error != null)
+              Text(
+                error!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: meetingId,
-                decoration: const InputDecoration(
-                  labelText: 'Meeting ID',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: meetingPassword,
-                decoration: const InputDecoration(
-                  labelText: 'Meeting Password',
-                ),
-              ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 12,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        AdminOutlineButton(
+          label: 'Cancel',
+          onPressed: saving || picking
+              ? null
+              : () => Navigator.of(context).pop(),
         ),
-        FilledButton(
-          onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Changes',
-          ),
+        GradientButton(
+          label: 'Save changes',
+          loading: saving,
+          onPressed: saving || picking ? null : save,
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _InfoRow extends StatelessWidget {
@@ -749,49 +677,51 @@ class _InfoRow extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 170,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final heading = Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
           ),
-          Expanded(
-            child: SelectableText(value),
-          ),
-        ],
-      ),
-    );
-  }
+        );
+
+        if (constraints.maxWidth < 480) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              const SizedBox(height: 4),
+              SelectableText(value),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 170, child: heading),
+            Expanded(child: SelectableText(value)),
+          ],
+        );
+      },
+    ),
+  );
 }
 
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return '—';
-  }
+String _text(String? value) =>
+    (value ?? '').trim().isEmpty ? '—' : value!;
+
+String _date(DateTime? value) {
+  if (value == null) return '—';
 
   final local = value.toLocal();
 
-  String twoDigits(int number) => number.toString().padLeft(
-        2,
-        '0',
-      );
+  String two(int number) =>
+      number.toString().padLeft(2, '0');
 
-  return '${twoDigits(local.day)}/'
-      '${twoDigits(local.month)}/'
-      '${local.year} '
-      '${twoDigits(local.hour)}:'
-      '${twoDigits(local.minute)}';
+  return '${two(local.day)}/${two(local.month)}/${local.year} '
+      '${two(local.hour)}:${two(local.minute)}';
 }

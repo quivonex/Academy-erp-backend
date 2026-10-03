@@ -3,15 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
 import '../data/material.dart';
 import '../data/material_repository.dart';
 
 class MaterialDetailScreen extends ConsumerStatefulWidget {
-  const MaterialDetailScreen({
-    super.key,
-    required this.materialUuid,
-  });
-
+  const MaterialDetailScreen({super.key, required this.materialUuid});
   final String materialUuid;
 
   @override
@@ -19,11 +16,10 @@ class MaterialDetailScreen extends ConsumerStatefulWidget {
       _MaterialDetailScreenState();
 }
 
-class _MaterialDetailScreenState
-    extends ConsumerState<MaterialDetailScreen> {
+class _MaterialDetailScreenState extends ConsumerState<MaterialDetailScreen> {
   late Future<LearningMaterial> result;
-
-  bool deleting = false;
+  bool busy = false;
+  int revision = 0;
 
   @override
   void initState() {
@@ -31,310 +27,261 @@ class _MaterialDetailScreenState
     reload();
   }
 
-  void reload() {
-    result = ref
-        .read(materialRepositoryProvider)
-        .detail(widget.materialUuid);
+  @override
+  void didUpdateWidget(covariant MaterialDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.materialUuid != widget.materialUuid) {
+      revision++;
+      busy = false;
+      reload();
+    }
   }
 
-  Future<void> deleteMaterial(
-    LearningMaterial material,
-  ) async {
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text(
-              'Delete Material',
-            ),
-            content: Text(
-              'Are you sure you want to delete "${material.title}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  false,
-                ),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  true,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  void reload() {
+    result = ref.read(materialRepositoryProvider).detail(widget.materialUuid);
+  }
 
-    if (!confirmed) {
-      return;
+  void back() {
+    if (busy) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/materials');
     }
+  }
 
-    setState(() {
-      deleting = true;
-    });
+  void notify(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
+  Future<void> edit(LearningMaterial material) async {
+    if (busy) return;
+    final ticket = revision;
+    setState(() => busy = true);
     try {
-      await ref
-          .read(materialRepositoryProvider)
-          .delete(material.uuid);
-
-      if (mounted) {
-        context.pop();
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-          ),
-        );
+      final updated = await showDialog<LearningMaterial>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EditMaterialDialog(material: material),
+      );
+      if (!mounted || ticket != revision) return;
+      if (updated != null) {
+        setState(() => result = Future.value(updated));
+        notify('Material updated successfully.');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          deleting = false;
-        });
+      if (mounted && ticket == revision) {
+        setState(() => busy = false);
+      }
+    }
+  }
+
+  Future<void> delete(LearningMaterial material) async {
+    if (busy) return;
+    final ticket = revision;
+    setState(() => busy = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete material?'),
+          content: Text(
+            'Permanently delete "${material.title}" and its uploaded file? '
+                'This cannot be undone. Materials with student progress '
+                'records cannot be deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || ticket != revision || confirmed != true) return;
+      await ref.read(materialRepositoryProvider).delete(material.uuid);
+      if (!mounted || ticket != revision) return;
+      setState(() => busy = false);
+      notify('Material deleted successfully.');
+      back();
+    } on ApiException catch (e) {
+      if (mounted && ticket == revision) notify(e.message);
+    } catch (_) {
+      if (mounted && ticket == revision) {
+        notify('Could not delete material. Please try again.');
+      }
+    } finally {
+      if (mounted && ticket == revision) {
+        setState(() => busy = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<LearningMaterial>(
-      future: result,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Could not load material:\n${snapshot.error}',
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(reload);
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
+    return PopScope(
+      canPop: !busy,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextButton.icon(
+              onPressed: busy ? null : back,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Materials'),
             ),
-          );
-        }
-
-        final material = snapshot.data!;
-
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextButton.icon(
-                onPressed: () => context.pop(),
-                icon: const Icon(
-                  Icons.arrow_back,
-                ),
-                label: const Text('Materials'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    child: Icon(
-                      _iconForType(
-                        material.materialType,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          material.title,
-                          style: Theme.of(context).textTheme.headlineSmall,
+            const SizedBox(height: 12),
+            FutureBuilder<LearningMaterial>(
+              future: result,
+              builder: (context, snapshot) {
+                final state = adminFutureState(
+                  snapshot,
+                  noun: 'material',
+                  onRetry: () {
+                    if (!busy) setState(reload);
+                  },
+                );
+                if (state != null) return state;
+                final material = snapshot.data!;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AdminPageHeader(
+                      title: material.title,
+                      subtitle: material.courseName,
+                      titleTrailing: [
+                        SoftBadge(label: material.materialType),
+                        ActiveBadge(active: material.isActive),
+                      ],
+                      actions: [
+                        GradientButton(
+                          label: 'Edit Material',
+                          icon: Icons.edit_outlined,
+                          onPressed: busy ? null : () => edit(material),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          material.courseName,
+                        AdminOutlineButton(
+                          label: 'Delete Material',
+                          icon: Icons.delete_outline,
+                          danger: true,
+                          onPressed: busy ? null : () => delete(material),
                         ),
                       ],
                     ),
-                  ),
-                  Chip(
-                    label: Text(
-                      material.materialType,
+                    const SizedBox(height: 24),
+                    AdminCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Material information',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 16),
+                          _InfoRow(
+                            label: 'Course',
+                            value: material.courseName,
+                          ),
+                          _InfoRow(
+                            label: 'Subject',
+                            value: material.subjectName,
+                          ),
+                          _InfoRow(
+                            label: 'Chapter',
+                            value: material.chapterTitle,
+                          ),
+                          _InfoRow(
+                            label: 'Lesson',
+                            value: material.lessonTitle,
+                          ),
+                          _InfoRow(
+                            label: 'Type',
+                            value: material.materialType,
+                          ),
+                          _InfoRow(
+                            label: 'Source',
+                            value: material.source,
+                          ),
+                          _InfoRow(
+                            label: 'File key',
+                            value: material.fileKey,
+                          ),
+                          _InfoRow(
+                            label: 'External URL',
+                            value: material.externalUrl,
+                          ),
+                          _InfoRow(
+                            label: 'Duration',
+                            value: material.durationSeconds == null
+                                ? null
+                                : '${material.durationSeconds} seconds',
+                          ),
+                          _InfoRow(
+                            label: 'Sequence',
+                            value: '${material.sequence}',
+                          ),
+                          _InfoRow(
+                            label: 'Available from',
+                            value: _formatDate(material.availableFrom),
+                          ),
+                          _InfoRow(
+                            label: 'Available until',
+                            value: _formatDate(material.availableUntil),
+                          ),
+                          _InfoRow(
+                            label: 'Required',
+                            value: material.isRequired ? 'Yes' : 'No',
+                          ),
+                          _InfoRow(
+                            label: 'Counts toward progress',
+                            value: material.countsTowardProgress ? 'Yes' : 'No',
+                          ),
+                          _InfoRow(
+                            label: 'Description',
+                            value: material.description,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Material Information',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 18),
-                      _InfoRow(
-                        label: 'Title',
-                        value: material.title,
-                      ),
-                      _InfoRow(
-                        label: 'Course',
-                        value: material.courseName,
-                      ),
-                      _InfoRow(
-                        label: 'Subject',
-                        value: material.subjectName?.isNotEmpty == true
-                            ? material.subjectName!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Chapter',
-                        value: material.chapterTitle?.isNotEmpty == true
-                            ? material.chapterTitle!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Lesson',
-                        value: material.lessonTitle?.isNotEmpty == true
-                            ? material.lessonTitle!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Material Type',
-                        value: material.materialType,
-                      ),
-                      _InfoRow(
-                        label: 'Source',
-                        value: material.source,
-                      ),
-                      _InfoRow(
-                        label: 'File Key',
-                        value: material.fileKey.isEmpty
-                            ? '—'
-                            : material.fileKey,
-                      ),
-                      _InfoRow(
-                        label: 'External URL',
-                        value: material.externalUrl.isEmpty
-                            ? '—'
-                            : material.externalUrl,
-                      ),
-                      _InfoRow(
-                        label: 'Duration',
-                        value: material.durationSeconds == null
-                            ? '—'
-                            : '${material.durationSeconds} sec',
-                      ),
-                      _InfoRow(
-                        label: 'Sequence',
-                        value: material.sequence.toString(),
-                      ),
-                      _InfoRow(
-                        label: 'Available From',
-                        value: _formatDateTime(
-                          material.availableFrom,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Available Until',
-                        value: _formatDateTime(
-                          material.availableUntil,
-                        ),
-                      ),
-                      _InfoRow(
-                        label: 'Required',
-                        value: material.isRequired ? 'Yes' : 'No',
-                      ),
-                      _InfoRow(
-                        label: 'Counts Toward Progress',
-                        value: material.countsTowardProgress ? 'Yes' : 'No',
-                      ),
-                      _InfoRow(
-                        label: 'Status',
-                        value: material.isActive ? 'Active' : 'Inactive',
-                      ),
-                      _InfoRow(
-                        label: 'Description',
-                        value: material.description.isEmpty
-                            ? '—'
-                            : material.description,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 10,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () async {
-                      final updated = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => _EditMaterialDialog(
-                          material: material,
-                        ),
-                      );
-
-                      if (updated == true && mounted) {
-                        setState(reload);
-                      }
-                    },
-                    icon: const Icon(Icons.edit),
-                    label: const Text(
-                      'Edit Material',
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: deleting
-                        ? null
-                        : () => deleteMaterial(
-                              material,
-                            ),
-                    icon: const Icon(
-                      Icons.delete_outline,
-                    ),
-                    label: Text(
-                      deleting ? 'Deleting...' : 'Delete Material',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _EditMaterialDialog extends ConsumerStatefulWidget {
-  const _EditMaterialDialog({
-    required this.material,
-  });
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, this.value});
+  final String label;
+  final String? value;
 
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: FormRow(
+      left: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge,
+      ),
+      right: SelectableText(
+        value?.trim().isNotEmpty == true ? value! : '—',
+      ),
+    ),
+  );
+}
+
+class _EditMaterialDialog extends ConsumerStatefulWidget {
+  const _EditMaterialDialog({required this.material});
   final LearningMaterial material;
 
   @override
@@ -342,446 +289,362 @@ class _EditMaterialDialog extends ConsumerStatefulWidget {
       _EditMaterialDialogState();
 }
 
-class _EditMaterialDialogState extends ConsumerState<_EditMaterialDialog> {
+class _EditMaterialDialogState
+    extends ConsumerState<_EditMaterialDialog> {
+  final form = GlobalKey<FormState>();
   late final TextEditingController title;
-
   late final TextEditingController description;
-
   late final TextEditingController externalUrl;
-
   late final TextEditingController duration;
-
   late final TextEditingController sequence;
-
   DateTime? availableFrom;
   DateTime? availableUntil;
-
-  bool isRequired = true;
-
-  bool countsTowardProgress = true;
-
+  late bool isRequired;
+  late bool countsTowardProgress;
   bool saving = false;
-
+  bool picking = false;
   String? error;
+  bool get locked => saving || picking;
 
   @override
   void initState() {
     super.initState();
-
-    title = TextEditingController(
-      text: widget.material.title,
-    );
-
-    description = TextEditingController(
-      text: widget.material.description,
-    );
-
-    externalUrl = TextEditingController(
-      text: widget.material.externalUrl,
-    );
-
+    final m = widget.material;
+    title = TextEditingController(text: m.title);
+    description = TextEditingController(text: m.description);
+    externalUrl = TextEditingController(text: m.externalUrl);
     duration = TextEditingController(
-      text: widget.material.durationSeconds?.toString() ?? '',
+      text: m.durationSeconds?.toString() ?? '',
     );
-
-    sequence = TextEditingController(
-      text: widget.material.sequence.toString(),
-    );
-
-    availableFrom = widget.material.availableFrom;
-
-    availableUntil = widget.material.availableUntil;
-
-    isRequired = widget.material.isRequired;
-
-    countsTowardProgress = widget.material.countsTowardProgress;
+    sequence = TextEditingController(text: '${m.sequence}');
+    availableFrom = m.availableFrom?.toLocal();
+    availableUntil = m.availableUntil?.toLocal();
+    isRequired = m.isRequired;
+    countsTowardProgress = m.countsTowardProgress;
   }
 
   @override
   void dispose() {
-    title.dispose();
-    description.dispose();
-    externalUrl.dispose();
-    duration.dispose();
-    sequence.dispose();
-
+    for (final controller in [
+      title,
+      description,
+      externalUrl,
+      duration,
+      sequence,
+    ]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  Future<DateTime?> pickDateTime(
-    DateTime? current,
-  ) async {
-    final initial = current ?? DateTime.now();
-
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-
-    if (date == null || !mounted) {
-      return null;
+  String? integerError(String? value, {bool optional = false}) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return optional ? null : 'Sequence is required.';
     }
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        initial,
-      ),
-    );
-
-    if (time == null) {
-      return null;
+    final number = int.tryParse(text);
+    if (!RegExp(r'^\d+$').hasMatch(text) ||
+        number == null ||
+        number < 0 ||
+        number > 2147483647) {
+      return 'Enter a whole number from 0 to 2147483647.';
     }
+    return null;
+  }
 
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
+  Future<void> pick(bool from) async {
+    if (locked) return;
+    setState(() => picking = true);
+    try {
+      final initial =
+          (from ? availableFrom : availableUntil) ?? DateTime.now();
+      final day = DateTime(initial.year, initial.month, initial.day);
+      final date = await showDatePicker(
+        context: context,
+        initialDate: day,
+        firstDate: day.isBefore(DateTime(2000))
+            ? day
+            : DateTime(2000),
+        lastDate: day.isAfter(DateTime(2100, 12, 31))
+            ? day
+            : DateTime(2100, 12, 31),
+      );
+      if (!mounted || date == null) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(initial),
+      );
+      if (!mounted || time == null) return;
+      final selected = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+      setState(() {
+        if (from) {
+          availableFrom = selected;
+        } else {
+          availableUntil = selected;
+        }
+        error = null;
+      });
+    } finally {
+      if (mounted) setState(() => picking = false);
+    }
   }
 
   Future<void> save() async {
-    if (title.text.trim().isEmpty) {
-      setState(() {
-        error = 'Title is required.';
-      });
-
-      return;
-    }
-
+    if (locked || !form.currentState!.validate()) return;
     if (availableFrom != null &&
         availableUntil != null &&
         !availableUntil!.isAfter(availableFrom!)) {
       setState(() {
         error = 'Available until must be after available from.';
       });
-
       return;
     }
-
-    if (widget.material.materialType == 'LINK' &&
-        externalUrl.text.trim().isEmpty) {
-      setState(() {
-        error = 'External URL is required for link material.';
-      });
-
-      return;
-    }
-
     setState(() {
       saving = true;
       error = null;
     });
-
     try {
-      await ref.read(materialRepositoryProvider).update(
-            uuid: widget.material.uuid,
-            title: title.text,
-            description: description.text,
-            externalUrl: externalUrl.text,
-            durationSeconds: int.tryParse(
-              duration.text,
-            ),
-            sequence: int.tryParse(
-                  sequence.text,
-                ) ??
-                1,
-            availableFrom: availableFrom,
-            availableUntil: availableUntil,
-            isRequired: isRequired,
-            countsTowardProgress: countsTowardProgress,
-          );
-
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      final updated = await ref.read(materialRepositoryProvider).update(
+        uuid: widget.material.uuid,
+        title: title.text.trim(),
+        description: description.text.trim(),
+        externalUrl: externalUrl.text.trim(),
+        durationSeconds: duration.text.trim().isEmpty
+            ? null
+            : int.parse(duration.text.trim()),
+        sequence: int.parse(sequence.text.trim()),
+        availableFrom: availableFrom,
+        availableUntil: availableUntil,
+        isRequired: isRequired,
+        countsTowardProgress: countsTowardProgress,
+      );
+      if (mounted) Navigator.of(context).pop(updated);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          error = e.message;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = e.toString();
+          error = 'Could not save material. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit Material'),
-      content: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget dateField(String label, DateTime? value, bool from) =>
+      FieldLabel(
+        label: label,
+        child: InputDecorator(
+          decoration: adminFieldDecoration(context),
+          child: Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                ),
+              Text(_formatDate(value)),
+              IconButton(
+                tooltip: 'Choose $label',
+                onPressed: locked ? null : () => pick(from),
+                icon: const Icon(Icons.calendar_month_outlined),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: description,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                ),
-              ),
-              if (widget.material.materialType == 'LINK') ...[
-                const SizedBox(
-                  height: 12,
-                ),
-                TextField(
-                  controller: externalUrl,
-                  decoration: const InputDecoration(
-                    labelText: 'External URL',
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: duration,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Duration Seconds',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: sequence,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Sequence',
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Available From',
-                ),
-                subtitle: Text(
-                  _formatDateTime(
-                    availableFrom,
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (availableFrom != null)
-                      IconButton(
-                        onPressed: () {
-                          setState(() {
-                            availableFrom = null;
-                          });
-                        },
-                        icon: const Icon(
-                          Icons.close,
-                        ),
-                      ),
-                    const Icon(
-                      Icons.calendar_month,
-                    ),
-                  ],
-                ),
-                onTap: () async {
-                  final value = await pickDateTime(
-                    availableFrom,
-                  );
-
-                  if (value != null && mounted) {
-                    setState(() {
-                      availableFrom = value;
-                    });
-                  }
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Available Until',
-                ),
-                subtitle: Text(
-                  _formatDateTime(
-                    availableUntil,
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (availableUntil != null)
-                      IconButton(
-                        onPressed: () {
-                          setState(() {
-                            availableUntil = null;
-                          });
-                        },
-                        icon: const Icon(
-                          Icons.close,
-                        ),
-                      ),
-                    const Icon(
-                      Icons.calendar_month,
-                    ),
-                  ],
-                ),
-                onTap: () async {
-                  final value = await pickDateTime(
-                    availableUntil,
-                  );
-
-                  if (value != null && mounted) {
-                    setState(() {
-                      availableUntil = value;
-                    });
-                  }
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Required'),
-                value: isRequired,
-                onChanged: (value) {
-                  setState(() {
-                    isRequired = value;
-                  });
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Counts Toward Progress',
-                ),
-                value: countsTowardProgress,
-                onChanged: (value) {
-                  setState(() {
-                    countsTowardProgress = value;
-                  });
-                },
-              ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 12,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+              if (value != null)
+                IconButton(
+                  tooltip: 'Clear $label',
+                  onPressed: locked
+                      ? null
+                      : () => setState(() {
+                    if (from) {
+                      availableFrom = null;
+                    } else {
+                      availableUntil = null;
+                    }
+                    error = null;
+                  }),
+                  icon: const Icon(Icons.close),
                 ),
             ],
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Changes',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
+      );
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 180,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) => PopScope(
+    canPop: !locked,
+    child: AdminFormDialog(
+      icon: Icons.edit_outlined,
+      title: 'Edit material',
+      subtitle: widget.material.courseName,
+      onClose: locked
+          ? null
+          : () => Navigator.of(context).pop(),
+      body: Form(
+        key: form,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FieldLabel(
+              label: 'Title',
+              required: true,
+              child: TextFormField(
+                controller: title,
+                enabled: !locked,
+                maxLength: 255,
+                decoration: adminFieldDecoration(
+                  context,
+                  hint: 'Material title',
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Title is required.';
+                  }
+                  if (v.trim().length > 255) {
+                    return 'Use at most 255 characters.';
+                  }
+                  return null;
+                },
               ),
             ),
-          ),
-          Expanded(
-            child: SelectableText(value),
-          ),
-        ],
+            const SizedBox(height: 16),
+            FieldLabel(
+              label: 'Description',
+              child: TextFormField(
+                controller: description,
+                enabled: !locked,
+                minLines: 3,
+                maxLines: 5,
+                decoration: adminFieldDecoration(
+                  context,
+                  hint: 'Optional description',
+                ),
+              ),
+            ),
+            if (widget.material.materialType == 'LINK') ...[
+              const SizedBox(height: 16),
+              FieldLabel(
+                label: 'External URL',
+                required: true,
+                child: TextFormField(
+                  controller: externalUrl,
+                  enabled: !locked,
+                  maxLength: 1000,
+                  keyboardType: TextInputType.url,
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: 'https://...',
+                  ),
+                  validator: (v) {
+                    final text = v?.trim() ?? '';
+                    final uri = Uri.tryParse(text);
+                    if (text.isEmpty) {
+                      return 'External URL is required.';
+                    }
+                    if (text.length > 1000) {
+                      return 'Use at most 1000 characters.';
+                    }
+                    if (uri == null ||
+                        !uri.hasAuthority ||
+                        uri.host.isEmpty ||
+                        !['http', 'https'].contains(
+                          uri.scheme.toLowerCase(),
+                        )) {
+                      return 'Enter a valid HTTP or HTTPS URL.';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FormRow(
+              left: FieldLabel(
+                label: 'Duration (seconds)',
+                child: TextFormField(
+                  controller: duration,
+                  enabled: !locked,
+                  keyboardType: TextInputType.number,
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: 'Optional',
+                  ),
+                  validator: (v) => integerError(v, optional: true),
+                ),
+              ),
+              right: FieldLabel(
+                label: 'Sequence',
+                required: true,
+                child: TextFormField(
+                  controller: sequence,
+                  enabled: !locked,
+                  keyboardType: TextInputType.number,
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: '1',
+                  ),
+                  validator: (v) => integerError(v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            dateField('Available from', availableFrom, true),
+            const SizedBox(height: 16),
+            dateField('Available until', availableUntil, false),
+            const SizedBox(height: 8),
+            const Text(
+              'Dates use your local time. Clear a date to remove '
+                  'that availability limit.',
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Required'),
+              value: isRequired,
+              onChanged: locked
+                  ? null
+                  : (v) => setState(() => isRequired = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Counts toward progress'),
+              value: countsTowardProgress,
+              onChanged: locked
+                  ? null
+                  : (v) => setState(() => countsTowardProgress = v),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
+        ),
       ),
-    );
-  }
+      actions: [
+        AdminOutlineButton(
+          label: 'Cancel',
+          onPressed: locked
+              ? null
+              : () => Navigator.of(context).pop(),
+        ),
+        GradientButton(
+          label: 'Save Changes',
+          icon: Icons.check,
+          loading: saving,
+          onPressed: locked ? null : save,
+        ),
+      ],
+    ),
+  );
 }
 
-IconData _iconForType(
-  String type,
-) {
-  switch (type) {
-    case 'VIDEO':
-      return Icons.videocam_outlined;
-
-    case 'PDF':
-      return Icons.picture_as_pdf_outlined;
-
-    case 'DOCUMENT':
-      return Icons.description_outlined;
-
-    case 'LINK':
-      return Icons.link;
-
-    default:
-      return Icons.insert_drive_file_outlined;
-  }
-}
-
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return '—';
-  }
-
-  final local = value.toLocal();
-
-  String twoDigits(int value) => value.toString().padLeft(2, '0');
-
-  return '${twoDigits(local.day)}/'
-      '${twoDigits(local.month)}/'
-      '${local.year} '
-      '${twoDigits(local.hour)}:'
-      '${twoDigits(local.minute)}';
+String _formatDate(DateTime? value) {
+  if (value == null) return '—';
+  final d = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(d.day)}/${two(d.month)}/${d.year} '
+      '${two(d.hour)}:${two(d.minute)}';
 }
