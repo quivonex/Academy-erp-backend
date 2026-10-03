@@ -77,6 +77,14 @@ const List<NavItem> kAllNavItems = [
     ],
   ),
   NavItem(
+    label: 'Fees',
+    icon: Icons.account_balance_wallet_outlined,
+    route: '/fees',
+    roles: [
+      UserRole.academyAdmin,
+    ],
+  ),
+  NavItem(
     label: 'Live Classes',
     icon: Icons.video_camera_front_outlined,
     route: '/live-classes',

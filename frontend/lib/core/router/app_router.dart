@@ -23,6 +23,8 @@ import '../../features/staff/presentation/staff_list_screen.dart';
 import '../../features/staff/presentation/staff_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollment_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollments_list_screen.dart';
+import '../../features/fees/presentation/fee_account_detail_screen.dart';
+import '../../features/fees/presentation/fee_accounts_list_screen.dart';
 import '../../features/live_classes/presentation/live_classes_list_screen.dart';
 import '../../features/live_classes/presentation/live_class_detail_screen.dart';
 import '../../features/materials/presentation/materials_list_screen.dart';
@@ -331,6 +333,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: ':enrollmentUuid',
                 builder: (context, state) =>
                     EnrollmentDetailScreen(
+                  enrollmentUuid:
+                      state.pathParameters[
+                          'enrollmentUuid']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/fees',
+            builder: (context, state) =>
+                const FeeAccountsListScreen(),
+            routes: [
+              GoRoute(
+                path: ':enrollmentUuid',
+                builder: (context, state) =>
+                    FeeAccountDetailScreen(
                   enrollmentUuid:
                       state.pathParameters[
                           'enrollmentUuid']!,

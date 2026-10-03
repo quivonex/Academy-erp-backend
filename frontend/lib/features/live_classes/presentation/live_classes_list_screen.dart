@@ -2,31 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../../../core/widgets/status_pill.dart';
-
-import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
-
-import '../../teachers/data/teacher.dart';
 import '../../teachers/data/teacher_repository.dart';
-
-import '../../subjects/data/subject.dart';
 import '../../subjects/data/subject_repository.dart';
-
-import '../../subjects/data/chapter.dart';
 import '../../subjects/data/chapter_repository.dart';
-
-import '../../subjects/data/lesson.dart';
 import '../../subjects/data/lesson_repository.dart';
-
 import '../data/live_class.dart';
 import '../data/live_class_repository.dart';
 
 class LiveClassesListScreen extends ConsumerStatefulWidget {
-  const LiveClassesListScreen({
-    super.key,
-  });
+  const LiveClassesListScreen({super.key});
 
   @override
   ConsumerState<LiveClassesListScreen> createState() =>
@@ -35,245 +23,185 @@ class LiveClassesListScreen extends ConsumerStatefulWidget {
 
 class _LiveClassesListScreenState extends ConsumerState<LiveClassesListScreen> {
   final searchController = TextEditingController();
-
   late Future<LiveClassPage> result;
-
   String search = '';
-
   String? statusFilter;
-
   int page = 1;
+  bool creating = false;
 
   @override
   void initState() {
     super.initState();
-
     reload();
-  }
-
-  void reload() {
-    result = ref.read(liveClassRepositoryProvider).list(
-          page: page,
-          search: search,
-          status: statusFilter,
-        );
-  }
-
-  void applySearch() {
-    setState(() {
-      search = searchController.text.trim();
-
-      page = 1;
-
-      reload();
-    });
-  }
-
-  void refresh() {
-    setState(reload);
-  }
-
-  void changePage(int value) {
-    setState(() {
-      page = value;
-
-      reload();
-    });
-  }
-
-  Future<void> createLiveClass() async {
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (_) => const _ScheduleLiveClassDialog(),
-    );
-
-    if (created == true && mounted) {
-      setState(() {
-        page = 1;
-
-        reload();
-      });
-    }
   }
 
   @override
   void dispose() {
     searchController.dispose();
-
     super.dispose();
   }
 
-  void _setStatus(String? value) {
-    setState(() {
-      statusFilter = value;
-      page = 1;
-      reload();
-    });
+  void reload() {
+    result = ref.read(liveClassRepositoryProvider).list(
+      page: page, search: search, status: statusFilter,
+    );
+  }
+
+  void refresh() => setState(reload);
+
+  void applySearch() => setState(() {
+    search = searchController.text.trim();
+    page = 1;
+    reload();
+  });
+
+  void setStatus(String? value) => setState(() {
+    statusFilter = value;
+    page = 1;
+    reload();
+  });
+
+  Future<void> createLiveClass() async {
+    if (creating) return;
+    setState(() => creating = true);
+    try {
+      final created = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _ScheduleLiveClassDialog(),
+      );
+      if (!mounted || created != true) return;
+      setState(() {
+        searchController.clear();
+        search = '';
+        statusFilter = null;
+        page = 1;
+        reload();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Live class scheduled successfully.')),
+      );
+    } finally {
+      if (mounted) setState(() => creating = false);
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AdminPageHeader(
-          eyebrow: const AdminEyebrow(
-            section: 'Virtual campus',
-            detail: 'Live classes & lectures',
-          ),
-          title: 'Live classes',
-          titleTrailing: [
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: refresh,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
-          actions: [
-            GradientButton(
-              label: 'Schedule class',
-              icon: Icons.video_call_outlined,
-              onPressed: createLiveClass,
-            ),
-          ],
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      AdminPageHeader(
+        eyebrow: const AdminEyebrow(
+          section: 'Virtual campus', detail: 'Live classes & lectures',
         ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: FutureBuilder<LiveClassPage>(
-            future: result,
-            builder: (context, snapshot) {
-              final state = adminFutureState(
-                snapshot,
-                noun: 'live classes',
-                onRetry: refresh,
-              );
-              final data = snapshot.data;
-              final rows = data?.results ?? const <LiveClass>[];
-              int countOf(String status) => rows
-                  .where((c) => c.status.toUpperCase() == status)
-                  .length;
-
-              return ListView(
-                padding: const EdgeInsets.only(bottom: 24),
-                children: [
-                  AdminKpiGrid(
-                    children: [
-                      AdminKpiCard(
-                        label: 'Total classes',
-                        value: data == null ? '…' : '${data.count}',
-                        icon: Icons.video_library_outlined,
-                      ),
-                      AdminKpiCard(
-                        label: 'Live now',
-                        value: data == null ? '…' : '${countOf('LIVE')}',
-                        icon: Icons.podcasts_rounded,
-                        iconBackground: const Color(0xFFFFF1F2),
-                        iconForeground: const Color(0xFFE11D48),
-                        caption: 'On this page',
-                      ),
-                      AdminKpiCard(
-                        label: 'Scheduled',
-                        value: data == null ? '…' : '${countOf('SCHEDULED')}',
-                        icon: Icons.event_available_outlined,
-                        iconBackground: const Color(0xFFF0F9FF),
-                        iconForeground: const Color(0xFF0284C7),
-                        caption: 'On this page',
-                      ),
-                      AdminKpiCard(
-                        label: 'Completed',
-                        value: data == null ? '…' : '${countOf('COMPLETED')}',
-                        icon: Icons.task_alt_rounded,
-                        iconBackground: const Color(0xFFECFDF5),
-                        iconForeground: const Color(0xFF059669),
-                        caption: 'On this page',
-                      ),
-                    ],
+        title: 'Live classes',
+        titleTrailing: [
+          IconButton(
+            tooltip: 'Refresh', onPressed: refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+        actions: [
+          GradientButton(
+            label: 'Schedule class', icon: Icons.video_call_outlined,
+            onPressed: creating ? null : createLiveClass,
+          ),
+        ],
+      ),
+      const SizedBox(height: 20),
+      Expanded(
+        child: FutureBuilder<LiveClassPage>(
+          future: result,
+          builder: (context, snapshot) {
+            final state = adminFutureState(
+              snapshot, noun: 'live classes', onRetry: refresh,
+            );
+            final data = state == null ? snapshot.data : null;
+            final rows = data?.results ?? const <LiveClass>[];
+            int countOf(String status) =>
+                rows.where((c) => c.status.toUpperCase() == status).length;
+            return ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                AdminKpiGrid(children: [
+                  AdminKpiCard(
+                    label: 'Matching classes', value: data == null ? '…' : '${data.count}',
+                    icon: Icons.video_library_outlined,
                   ),
-                  const SizedBox(height: 18),
-                  AdminToolbar(
-                    controller: searchController,
-                    hint: 'Search by title or course name…',
-                    onSearch: applySearch,
-                    filters: [
-                      for (final entry in const [
-                        ['ALL', null],
-                        ['LIVE', 'LIVE'],
-                        ['SCHEDULED', 'SCHEDULED'],
-                        ['COMPLETED', 'COMPLETED'],
-                        ['CANCELLED', 'CANCELLED'],
-                      ])
-                        CountFilterPill(
-                          label: entry[0]!,
-                          selected: statusFilter == entry[1],
-                          onTap: () => _setStatus(entry[1]),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  if (state != null)
-                    state
-                  else if (rows.isEmpty)
+                  for (final status in ['LIVE', 'SCHEDULED', 'COMPLETED'])
+                    AdminKpiCard(
+                      label: status, value: data == null ? '…' : '${countOf(status)}',
+                      icon: Icons.videocam_outlined, caption: 'On this page',
+                    ),
+                ]),
+                const SizedBox(height: 18),
+                AdminToolbar(
+                  controller: searchController,
+                  hint: 'Search by title or course name…',
+                  onSearch: applySearch,
+                  filters: [
+                    for (final status in [null, 'LIVE', 'SCHEDULED', 'COMPLETED', 'CANCELLED'])
+                      CountFilterPill(
+                        label: status ?? 'ALL', selected: statusFilter == status,
+                        onTap: () => setStatus(status),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (state != null)
+                  state
+                else ...[
+                  if (rows.isEmpty)
                     AdminStateMessage(
                       icon: Icons.video_call_outlined,
                       title: 'No live classes found',
-                      message: 'Schedule a class or change the filters.',
+                      message: 'Schedule a class or change the filters/page.',
                       actionLabel: 'Schedule class',
-                      onAction: createLiveClass,
-                    )
-                  else ...[
-                    for (final liveClass in rows)
-                      AdminListRow(
-                        title: liveClass.title,
-                        icon: liveClass.status.toUpperCase() == 'LIVE'
-                            ? Icons.podcasts_rounded
-                            : Icons.videocam_outlined,
-                        subtitle: liveClass.description,
-                        meta: [
-                          MetaChip(
-                            icon: Icons.auto_stories_outlined,
-                            label: liveClass.courseName,
-                          ),
-                          if (liveClass.teacherName.isNotEmpty)
-                            MetaChip(
-                              icon: Icons.person_outline_rounded,
-                              label: liveClass.teacherName,
-                            ),
-                          MetaChip(
-                            icon: Icons.schedule_rounded,
-                            label: _formatDateTime(liveClass.scheduledStartAt),
-                          ),
-                          if ((liveClass.subjectName ?? '').isNotEmpty)
-                            MetaChip(
-                              icon: Icons.menu_book_outlined,
-                              label: liveClass.subjectName!,
-                            ),
-                        ],
-                        trailing: [
-                          _LiveStatusChip(status: liveClass.status),
-                        ],
-                        onTap: () async {
-                          await context.push(
-                            '/live-classes/${liveClass.uuid}',
-                          );
-                          if (mounted) refresh();
-                        },
-                      ),
-                    AdminPager(
-                      page: page,
-                      pageSize: 20,
-                      total: data!.count,
-                      noun: 'classes',
-                      onPage: changePage,
+                      onAction: creating ? null : createLiveClass,
                     ),
-                  ],
+                  for (final liveClass in rows)
+                    AdminListRow(
+                      title: liveClass.title,
+                      icon: Icons.videocam_outlined,
+                      subtitle: liveClass.description,
+                      meta: [
+                        MetaChip(icon: Icons.auto_stories_outlined, label: liveClass.courseName),
+                        MetaChip(icon: Icons.person_outline_rounded, label: liveClass.teacherName),
+                        MetaChip(icon: Icons.schedule_rounded, label: _formatDateTime(liveClass.scheduledStartAt)),
+                        if ((liveClass.subjectName ?? '').isNotEmpty)
+                          MetaChip(icon: Icons.menu_book_outlined, label: liveClass.subjectName!),
+                      ],
+                      trailing: [_LiveStatusChip(status: liveClass.status)],
+                      onTap: () async {
+                        await context.push('/live-classes/${liveClass.uuid}');
+                        if (mounted) refresh();
+                      },
+                    ),
+                  if (data!.count > 0 || page > 1)
+                    AdminPager(
+                      page: page, pageSize: 20, total: data.count, noun: 'classes',
+                      onPage: (next) => setState(() { page = next; reload(); }),
+                    ),
                 ],
-              );
-            },
-          ),
+              ],
+            );
+          },
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
+
+class _Choice {
+  const _Choice(this.uuid, this.label);
+  final String uuid;
+  final String label;
+}
+
+class _ChoicePage {
+  const _ChoicePage(this.count, this.items);
+  final int count;
+  final List<_Choice> items;
 }
 
 class _ScheduleLiveClassDialog extends ConsumerStatefulWidget {
@@ -284,169 +212,32 @@ class _ScheduleLiveClassDialog extends ConsumerStatefulWidget {
       _ScheduleLiveClassDialogState();
 }
 
-class _ScheduleLiveClassDialogState
-    extends ConsumerState<_ScheduleLiveClassDialog> {
+class _ScheduleLiveClassDialogState extends ConsumerState<_ScheduleLiveClassDialog> {
   final formKey = GlobalKey<FormState>();
-
   final title = TextEditingController();
   final description = TextEditingController();
   final meetingUrl = TextEditingController();
   final meetingId = TextEditingController();
   final meetingPassword = TextEditingController();
-
-  Course? selectedCourse;
-  Teacher? selectedTeacher;
-
-  Subject? selectedSubject;
-  Chapter? selectedChapter;
-  Lesson? selectedLesson;
-
-  List<Course> courses = [];
-  List<Teacher> teachers = [];
-
-  List<Subject> subjects = [];
-  List<Chapter> chapters = [];
-  List<Lesson> lessons = [];
-
-  bool loadingCourses = false;
-  bool loadingTeachers = false;
-  bool loadingSubjects = false;
-  bool loadingChapters = false;
-  bool loadingLessons = false;
-
+  final selected = <String, String?>{};
+  final options = <String, List<_Choice>>{};
+  final loading = <String, bool>{};
+  final errors = <String, String?>{};
+  final tickets = <String, int>{};
+  static const hierarchy = ['course', 'subject', 'chapter', 'lesson'];
   DateTime? startAt;
   DateTime? endAt;
-
   bool saving = false;
+  bool pickingDate = false;
   String? error;
+
+  bool get waiting => loading.values.any((value) => value);
 
   @override
   void initState() {
     super.initState();
-    loadInitialData();
-  }
-
-  Future<void> loadInitialData() async {
-    if (!mounted) return;
-    setState(() {
-      loadingCourses = true;
-      loadingTeachers = true;
-      loadingSubjects = true;
-    });
-
-    try {
-      final cResult = await ref.read(courseRepositoryProvider).list();
-      final tResult = await ref.read(teacherRepositoryProvider).list(isActive: true);
-      final sResult = await ref.read(subjectRepositoryProvider).list();
-
-      if (mounted) {
-        setState(() {
-          courses = cResult.results;
-          teachers = tResult.results;
-          subjects = sResult.results;
-        });
-      }
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() {
-          loadingCourses = false;
-          loadingTeachers = false;
-          loadingSubjects = false;
-        });
-      }
-    }
-  }
-
-  Future<void> loadSubjects(String courseUuid) async {
-    if (!mounted) return;
-    setState(() {
-      loadingSubjects = true;
-      selectedSubject = null;
-      selectedChapter = null;
-      selectedLesson = null;
-      chapters = [];
-      lessons = [];
-    });
-
-    try {
-      final result = await ref.read(subjectRepositoryProvider).list(
-            courseUuid: courseUuid,
-          );
-
-      if (mounted) {
-        setState(() {
-          if (result.results.isNotEmpty) {
-            subjects = result.results;
-          }
-        });
-      }
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() {
-          loadingSubjects = false;
-        });
-      }
-    }
-  }
-
-  Future<void> loadChapters(String subjectUuid) async {
-    if (!mounted) return;
-    setState(() {
-      loadingChapters = true;
-      selectedChapter = null;
-      selectedLesson = null;
-      chapters = [];
-      lessons = [];
-    });
-
-    try {
-      final result = await ref.read(chapterRepositoryProvider).list(
-            subjectUuid: subjectUuid,
-          );
-
-      if (mounted) {
-        setState(() {
-          chapters = result.results;
-        });
-      }
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() {
-          loadingChapters = false;
-        });
-      }
-    }
-  }
-
-  Future<void> loadLessons(String chapterUuid) async {
-    if (!mounted) return;
-    setState(() {
-      loadingLessons = true;
-      selectedLesson = null;
-      lessons = [];
-    });
-
-    try {
-      final result = await ref.read(lessonRepositoryProvider).list(
-            chapterUuid: chapterUuid,
-          );
-
-      if (mounted) {
-        setState(() {
-          lessons = result.results;
-        });
-      }
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() {
-          loadingLessons = false;
-        });
-      }
-    }
+    loadOptions('course');
+    loadOptions('teacher');
   }
 
   @override
@@ -456,484 +247,293 @@ class _ScheduleLiveClassDialogState
     meetingUrl.dispose();
     meetingId.dispose();
     meetingPassword.dispose();
-
     super.dispose();
   }
 
-  Future<DateTime?> selectDateTime(
-    DateTime? current,
-  ) async {
-    final initial = current ?? DateTime.now();
+  String? parentOf(String kind) => switch (kind) {
+    'subject' => selected['course'],
+    'chapter' => selected['subject'],
+    'lesson' => selected['chapter'],
+    _ => null,
+  };
 
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime.now().subtract(
-        const Duration(days: 1),
-      ),
-      lastDate: DateTime(2100),
-    );
-
-    if (date == null || !mounted) {
-      return null;
+  Future<_ChoicePage> fetchOptions(String kind, String? parent, int page) async {
+    switch (kind) {
+      case 'course': {
+        final data = await ref.read(courseRepositoryProvider).list(page: page);
+        return _ChoicePage(data.count, [
+          for (final c in data.results) _Choice(c.uuid, '${c.name} (${c.code})'),
+        ]);
+      }
+      case 'teacher': {
+        final data = await ref.read(teacherRepositoryProvider).list(isActive: true, page: page);
+        return _ChoicePage(data.count, [
+          for (final t in data.results) _Choice(t.uuid, '${t.fullName} (${t.employeeId})'),
+        ]);
+      }
+      case 'subject': {
+        final data = await ref.read(subjectRepositoryProvider).list(courseUuid: parent!, page: page);
+        return _ChoicePage(data.count, [
+          for (final s in data.results) _Choice(s.uuid, s.name),
+        ]);
+      }
+      case 'chapter': {
+        final data = await ref.read(chapterRepositoryProvider).list(subjectUuid: parent!, page: page);
+        return _ChoicePage(data.count, [
+          for (final c in data.results) _Choice(c.uuid, c.title),
+        ]);
+      }
+      case 'lesson': {
+        final data = await ref.read(lessonRepositoryProvider).list(chapterUuid: parent!, page: page);
+        return _ChoicePage(data.count, [
+          for (final l in data.results) _Choice(l.uuid, l.title),
+        ]);
+      }
+      default:
+        throw StateError('Unknown dropdown');
     }
+  }
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        initial,
-      ),
-    );
-
-    if (time == null) {
-      return null;
+  Future<void> loadOptions(String kind) async {
+    if (saving) return;
+    final parent = parentOf(kind);
+    if (hierarchy.indexOf(kind) > 0 && parent == null) return;
+    final ticket = (tickets[kind] ?? 0) + 1;
+    tickets[kind] = ticket;
+    setState(() { loading[kind] = true; errors[kind] = null; });
+    try {
+      final all = <String, _Choice>{};
+      var page = 1;
+      while (true) {
+        final data = await fetchOptions(kind, parent, page);
+        if (!mounted || tickets[kind] != ticket) return;
+        for (final item in data.items) {
+          all[item.uuid] = item;
+        }
+        if (data.items.isEmpty || page * 20 >= data.count) break;
+        page++;
+      }
+      setState(() => options[kind] = all.values.toList());
+    } on ApiException catch (e) {
+      if (mounted && tickets[kind] == ticket) {
+        setState(() => errors[kind] = e.message);
+      }
+    } catch (_) {
+      if (mounted && tickets[kind] == ticket) {
+        setState(() => errors[kind] = 'Could not load $kind options. Please retry.');
+      }
+    } finally {
+      if (mounted && tickets[kind] == ticket) {
+        setState(() => loading[kind] = false);
+      }
     }
+  }
 
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
+  void select(String kind, String? value) {
+    if (saving) return;
+    final index = hierarchy.indexOf(kind);
+    setState(() {
+      selected[kind] = value;
+      error = null;
+      if (index >= 0) {
+        for (final child in hierarchy.skip(index + 1)) {
+          tickets[child] = (tickets[child] ?? 0) + 1;
+          selected[child] = null;
+          options[child] = [];
+          errors[child] = null;
+          loading[child] = false;
+        }
+      }
+    });
+    if (value != null && index >= 0 && index < hierarchy.length - 1) {
+      loadOptions(hierarchy[index + 1]);
+    }
+  }
+
+  Future<void> pickDate(bool start) async {
+    if (saving || pickingDate) return;
+    setState(() => pickingDate = true);
+    try {
+      final initial = (start ? startAt : endAt) ??
+          (start ? DateTime.now() : (startAt ?? DateTime.now()).add(const Duration(hours: 1)));
+      final date = await showDatePicker(
+        context: context, initialDate: initial.toLocal(),
+        firstDate: DateTime(2000), lastDate: DateTime(2100, 12, 31),
+      );
+      if (!mounted || date == null) return;
+      final time = await showTimePicker(
+        context: context, initialTime: TimeOfDay.fromDateTime(initial.toLocal()),
+      );
+      if (!mounted || time == null) return;
+      final value = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      setState(() {
+        if (start) { startAt = value; } else { endAt = value; }
+        error = null;
+      });
+    } finally {
+      if (mounted) setState(() => pickingDate = false);
+    }
   }
 
   Future<void> save() async {
-    if (!formKey.currentState!.validate()) {
+    if (saving || waiting || pickingDate || !formKey.currentState!.validate()) return;
+    if (startAt == null || endAt == null || !endAt!.isAfter(startAt!)) {
+      setState(() => error = 'Select start/end times. End must be after start.');
       return;
     }
-
-    if (selectedCourse == null) {
-      setState(() {
-        error = 'Please select a course.';
-      });
-
-      return;
-    }
-
-    if (selectedTeacher == null) {
-      setState(() {
-        error = 'Please select a teacher.';
-      });
-
-      return;
-    }
-
-    if (startAt == null) {
-      setState(() {
-        error = 'Please select class start time.';
-      });
-
-      return;
-    }
-
-    if (endAt == null) {
-      setState(() {
-        error = 'Please select class end time.';
-      });
-
-      return;
-    }
-
-    if (!endAt!.isAfter(startAt!)) {
-      setState(() {
-        error = 'End time must be after start time.';
-      });
-
-      return;
-    }
-
-    setState(() {
-      saving = true;
-      error = null;
-    });
-
+    setState(() { saving = true; error = null; });
     try {
-      await ref
-          .read(
-            liveClassRepositoryProvider,
-          )
-          .create(
-            courseUuid: selectedCourse!.uuid,
-            teacherUuid: selectedTeacher!.uuid,
-            subjectUuid: selectedSubject?.uuid,
-            chapterUuid: selectedChapter?.uuid,
-            lessonUuid: selectedLesson?.uuid,
-            title: title.text,
-            description: description.text,
-            scheduledStartAt: startAt!,
-            scheduledEndAt: endAt!,
-            meetingUrl: meetingUrl.text,
-            meetingId: meetingId.text,
-            meetingPassword: meetingPassword.text,
-          );
-
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
-      }
+      await ref.read(liveClassRepositoryProvider).create(
+        courseUuid: selected['course']!,
+        teacherUuid: selected['teacher']!,
+        subjectUuid: selected['subject'],
+        chapterUuid: selected['chapter'],
+        lessonUuid: selected['lesson'],
+        title: title.text,
+        description: description.text,
+        scheduledStartAt: startAt!,
+        scheduledEndAt: endAt!,
+        meetingUrl: meetingUrl.text,
+        meetingId: meetingId.text,
+        meetingPassword: meetingPassword.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not schedule class. Please try again.');
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Schedule Live Class'),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextFormField(
-                  controller: title,
-                  decoration: const InputDecoration(
-                    labelText: 'Class Title',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Required';
-                    }
-
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: description,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('course_dd_${courses.length}'),
-                  value: courses.any((c) => c.uuid == selectedCourse?.uuid)
-                      ? selectedCourse?.uuid
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Course',
-                  ),
-                  items: courses
-                      .map(
-                        (course) => DropdownMenuItem<String>(
-                          value: course.uuid,
-                          child: Text('${course.name} (${course.code})'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) async {
-                    if (value == null) return;
-                    final course = courses.firstWhere((c) => c.uuid == value);
-                    setState(() {
-                      selectedCourse = course;
-                      error = null;
-                    });
-
-                    await loadSubjects(course.uuid);
-                  },
-                ),
-                if (loadingCourses) const LinearProgressIndicator(),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('subject_dd_${selectedCourse?.uuid}_${subjects.length}'),
-                  value: subjects.any((s) => s.uuid == selectedSubject?.uuid)
-                      ? selectedSubject?.uuid
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Subject (Optional)',
-                  ),
-                  items: subjects
-                      .map(
-                        (subject) => DropdownMenuItem<String>(
-                          value: subject.uuid,
-                          child: Text(
-                            subject.courseName.isNotEmpty
-                                ? '${subject.name} (${subject.courseName})'
-                                : subject.name,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) async {
-                    if (value == null) return;
-
-                    final subject = subjects.firstWhere(
-                      (item) => item.uuid == value,
-                    );
-
-                    setState(() {
-                      selectedSubject = subject;
-                    });
-
-                    await loadChapters(
-                      subject.uuid,
-                    );
-                  },
-                ),
-                if (loadingSubjects) const LinearProgressIndicator(),
-                if (selectedSubject != null) ...[
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey('chapter_dd_${selectedSubject?.uuid}_${chapters.length}'),
-                    value: chapters.any((c) => c.uuid == selectedChapter?.uuid)
-                        ? selectedChapter?.uuid
-                        : null,
-                    decoration: const InputDecoration(
-                      labelText: 'Chapter (Optional)',
-                    ),
-                    items: chapters
-                        .map(
-                          (chapter) => DropdownMenuItem<String>(
-                            value: chapter.uuid,
-                            child: Text(
-                              chapter.title,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) async {
-                      if (value == null) return;
-
-                      final chapter = chapters.firstWhere(
-                        (item) => item.uuid == value,
-                      );
-
-                      setState(() {
-                        selectedChapter = chapter;
-                      });
-
-                      await loadLessons(
-                        chapter.uuid,
-                      );
-                    },
-                  ),
-                  if (loadingChapters) const LinearProgressIndicator(),
-                ],
-                if (selectedChapter != null) ...[
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey('lesson_dd_${selectedChapter?.uuid}_${lessons.length}'),
-                    value: lessons.any((l) => l.uuid == selectedLesson?.uuid)
-                        ? selectedLesson?.uuid
-                        : null,
-                    decoration: const InputDecoration(
-                      labelText: 'Lesson (Optional)',
-                    ),
-                    items: lessons
-                        .map(
-                          (lesson) => DropdownMenuItem<String>(
-                            value: lesson.uuid,
-                            child: Text(
-                              lesson.title,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-
-                      setState(() {
-                        selectedLesson = lessons.firstWhere(
-                          (item) => item.uuid == value,
-                        );
-                      });
-                    },
-                  ),
-                  if (loadingLessons) const LinearProgressIndicator(),
-                ],
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('teacher_dd_${teachers.length}'),
-                  value: teachers.any((t) => t.uuid == selectedTeacher?.uuid)
-                      ? selectedTeacher?.uuid
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Teacher',
-                  ),
-                  items: teachers
-                      .map(
-                        (teacher) => DropdownMenuItem<String>(
-                          value: teacher.uuid,
-                          child: Text('${teacher.fullName} (${teacher.employeeId})'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-
-                    setState(() {
-                      selectedTeacher = teachers.firstWhere(
-                        (t) => t.uuid == value,
-                      );
-                    });
-                  },
-                ),
-                if (loadingTeachers) const LinearProgressIndicator(),
-                const SizedBox(height: 20),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Scheduled Start',
-                  ),
-                  subtitle: Text(
-                    _formatDateTime(
-                      startAt,
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.calendar_month,
-                  ),
-                  onTap: () async {
-                    final value = await selectDateTime(
-                      startAt,
-                    );
-
-                    if (value != null && mounted) {
-                      setState(() {
-                        startAt = value;
-                      });
-                    }
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Scheduled End',
-                  ),
-                  subtitle: Text(
-                    _formatDateTime(
-                      endAt,
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.calendar_month,
-                  ),
-                  onTap: () async {
-                    final value = await selectDateTime(
-                      endAt,
-                    );
-
-                    if (value != null && mounted) {
-                      setState(() {
-                        endAt = value;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: meetingUrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Meeting URL',
-                    hintText: 'https://...',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: meetingId,
-                  decoration: const InputDecoration(
-                    labelText: 'Meeting ID',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: meetingPassword,
-                  decoration: const InputDecoration(
-                    labelText: 'Meeting Password',
-                  ),
-                ),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: 12,
-                    ),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+  Widget dropdown(String kind, String label, {bool required = false}) {
+    final items = options[kind] ?? const <_Choice>[];
+    final busy = saving || loading[kind] == true;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey('$kind-${parentOf(kind)}-${selected[kind]}'),
+          value: selected[kind],
+          isExpanded: true,
+          decoration: adminFieldDecoration(
+            context, hint: label,
+            suffix: !required && selected[kind] != null
+                ? IconButton(
+              tooltip: 'Clear $label', onPressed: saving ? null : () => select(kind, null),
+              icon: const Icon(Icons.clear),
+            )
+                : null,
+          ).copyWith(labelText: label),
+          items: [
+            for (final item in items)
+              DropdownMenuItem(value: item.uuid, child: Text(item.label, overflow: TextOverflow.ellipsis)),
+          ],
+          onChanged: busy || errors[kind] != null || items.isEmpty ? null : (value) => select(kind, value),
+          validator: (value) => required && value == null ? 'Please select $kind.' : null,
+        ),
+        if (loading[kind] == true) const LinearProgressIndicator(),
+        if (errors[kind] != null) ...[
+          Text(errors[kind]!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(onPressed: saving ? null : () => loadOptions(kind), child: Text('Retry $kind')),
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Scheduling...' : 'Schedule Class',
-          ),
-        ),
-      ],
+        ] else if (loading[kind] != true && items.isEmpty)
+          Text('No $kind options available.'),
+      ]),
     );
   }
+
+  Widget field(TextEditingController controller, String label, {
+    int? maxLength, int lines = 1, bool obscure = false, String? Function(String?)? validator,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextFormField(
+      controller: controller, enabled: !saving,
+      maxLength: maxLength, maxLines: lines, obscureText: obscure,
+      decoration: adminFieldDecoration(context, hint: label).copyWith(labelText: label),
+      validator: validator,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving && !pickingDate,
+    child: AdminFormDialog(
+      icon: Icons.video_call_outlined,
+      title: 'Schedule live class',
+      subtitle: 'Select course, teacher and optional curriculum mapping.',
+      onClose: saving || pickingDate ? null : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          field(title, 'Class title', maxLength: 255,
+              validator: (value) => (value ?? '').trim().isEmpty ? 'Title is required.' : null),
+          field(description, 'Description', lines: 3),
+          dropdown('course', 'Course', required: true),
+          if (selected['course'] != null) dropdown('subject', 'Subject (optional)'),
+          if (selected['subject'] != null) dropdown('chapter', 'Chapter (optional)'),
+          if (selected['chapter'] != null) dropdown('lesson', 'Lesson (optional)'),
+          dropdown('teacher', 'Teacher', required: true),
+          for (final start in [true, false])
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(start ? 'Scheduled start (local time)' : 'Scheduled end (local time)'),
+              subtitle: Text(_formatDateTime(start ? startAt : endAt)),
+              trailing: const Icon(Icons.calendar_month_outlined),
+              onTap: saving || pickingDate ? null : () => pickDate(start),
+            ),
+          const SizedBox(height: 12),
+          field(meetingUrl, 'Meeting URL', maxLength: 1000, validator: (value) {
+            final text = (value ?? '').trim();
+            if (text.isEmpty) return null;
+            final uri = Uri.tryParse(text);
+            if (uri == null || !['http', 'https'].contains(uri.scheme) || uri.host.isEmpty) {
+              return 'Enter a valid http/https meeting URL.';
+            }
+            return null;
+          }),
+          field(meetingId, 'Meeting ID', maxLength: 255),
+          field(meetingPassword, 'Meeting password', maxLength: 255, obscure: true),
+          if (error != null)
+            Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ]),
+      ),
+      actions: [
+        AdminOutlineButton(
+          label: 'Cancel', onPressed: saving || pickingDate ? null : () => Navigator.of(context).pop(),
+        ),
+        GradientButton(
+          label: 'Schedule class', loading: saving,
+          onPressed: saving || waiting || pickingDate ? null : save,
+        ),
+      ],
+    ),
+  );
 }
 
 class _LiveStatusChip extends StatelessWidget {
-  const _LiveStatusChip({
-    required this.status,
-  });
-
+  const _LiveStatusChip({required this.status});
   final String status;
 
   @override
-  Widget build(BuildContext context) {
-    final tone = switch (status.toUpperCase()) {
+  Widget build(BuildContext context) => StatusPill(
+    label: status.toUpperCase(), compact: true,
+    tone: switch (status.toUpperCase()) {
       'LIVE' => PillTone.danger,
       'SCHEDULED' => PillTone.info,
       'COMPLETED' => PillTone.success,
       _ => PillTone.neutral,
-    };
-    return StatusPill(
-      label: status.toUpperCase(),
-      tone: tone,
-      compact: true,
-    );
-  }
+    },
+  );
 }
 
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return 'Not selected';
-  }
-
+String _formatDateTime(DateTime? value) {
+  if (value == null) return 'Not selected';
   final local = value.toLocal();
-
-  String twoDigits(int number) => number.toString().padLeft(
-        2,
-        '0',
-      );
-
-  return '${twoDigits(local.day)}/'
-      '${twoDigits(local.month)}/'
-      '${local.year} '
-      '${twoDigits(local.hour)}:'
-      '${twoDigits(local.minute)}';
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(local.day)}/${two(local.month)}/${local.year} '
+      '${two(local.hour)}:${two(local.minute)}';
 }

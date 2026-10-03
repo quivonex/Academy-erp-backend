@@ -13,8 +13,8 @@ class SubjectRepository {
   final Dio _dio;
 
   Future<T> _request<T>(
-    Future<T> Function() operation,
-  ) async {
+      Future<T> Function() operation,
+      ) async {
     try {
       return await operation();
     } on DioException catch (e) {
@@ -43,8 +43,8 @@ class SubjectRepository {
       });
 
   Future<Subject> detail(
-    String uuid,
-  ) =>
+      String uuid,
+      ) =>
       _request(() async {
         final response = await _dio.get<Map<String, dynamic>>(
           ApiUrls.subjectDetail(uuid),
@@ -88,6 +88,7 @@ class SubjectRepository {
     String code = '',
     String description = '',
     String? teacherUuid,
+    bool updateTeacher = false,
   }) =>
       _request(() async {
         final response = await _dio.patch<Map<String, dynamic>>(
@@ -95,8 +96,8 @@ class SubjectRepository {
           data: {
             'name': name.trim(),
             'code': code.trim(),
-            if (description.trim().isNotEmpty) 'description': description.trim(),
-            if (teacherUuid != null && teacherUuid.isNotEmpty)
+            'description': description.trim(),
+            if (updateTeacher || (teacherUuid != null && teacherUuid.isNotEmpty))
               'teacher_uuid': teacherUuid,
           },
         );
@@ -113,3 +114,4 @@ final subjectRepositoryProvider = Provider<SubjectRepository>((ref) {
     ref.watch(dioProvider),
   );
 });
+
