@@ -148,10 +148,22 @@ class ApiUrls {
   static const String studentCoursePayments =
       '/student/course-payments/';
 
-  // Admin Payments
+  // Admin Payments (legacy)
+  // NOTE: the backend retired the student-submitted payment flow.
+  // GET still lists old requests, but PATCH .../review/ now returns 410 Gone.
+  // Use fee accounts + installments below instead.
   static const String payments =
       '/payments/';
 
   static String paymentReview(String uuid) =>
       '/payments/$uuid/review/';
+
+  // Fees (admin / staff)
+  static const String feeAccounts = '/payments/fee-accounts/';
+  static const String installments = '/payments/installments/';
+  static String installmentVoid(String uuid) =>
+      '/payments/installments/$uuid/void/';
+
+  // Fees (student)
+  static const String studentFeeAccounts = '/student/fee-accounts/';
 }

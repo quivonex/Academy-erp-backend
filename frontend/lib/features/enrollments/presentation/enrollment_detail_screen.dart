@@ -248,16 +248,31 @@ class _EnrollmentDetailScreenState
 
               const SizedBox(height: 20),
 
-              FilledButton.icon(
-                onPressed: () =>
-                    editEnrollment(
-                  enrollment,
-                ),
-                icon:
-                    const Icon(Icons.edit),
-                label: const Text(
-                  'Manage Enrollment',
-                ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () =>
+                        editEnrollment(
+                      enrollment,
+                    ),
+                    icon:
+                        const Icon(Icons.edit),
+                    label: const Text(
+                      'Manage Enrollment',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(
+                      '/fees/${enrollment.uuid}',
+                    ),
+                    icon: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                    ),
+                    label: const Text('Fees & payments'),
+                  ),
+                ],
               ),
             ],
           ),
