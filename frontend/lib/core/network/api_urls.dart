@@ -27,6 +27,79 @@ class ApiUrls {
   static String studentEnableLogin(String uuid) => '/students/$uuid/enable-login/';
   static const String courses = '/courses/';
   static String courseDetail(String uuid) => '/courses/$uuid/';
+
+  // Course Categories
+  static const String courseCategories = '/course-categories/';
+  static String courseCategoryDetail(String uuid) => '/course-categories/$uuid/';
+
+  // Teachers
+  static const String teachers = '/teachers/';
+  static String teacherDetail(String uuid) => '/teachers/$uuid/';
+  static String teacherActivate(String uuid) => '/teachers/$uuid/activate/';
+  static String teacherDeactivate(String uuid) => '/teachers/$uuid/deactivate/';
+
+  // Staff
+  static const String staff = '/staff/';
+  static String staffDetail(String uuid) => '/staff/$uuid/';
+  static String staffActivate(String uuid) => '/staff/$uuid/activate/';
+  static String staffDeactivate(String uuid) => '/staff/$uuid/deactivate/';
+
+  // Enrollments
+  static const String enrollments = '/enrollments/';
+  static String enrollmentDetail(String uuid) => '/enrollments/$uuid/';
+  static const String bulkEnrollmentByAdmissionDate =
+      '/enrollments/bulk-assign-by-admission-date/';
+
+  // Live Classes
+  static const String liveClasses = '/live-classes/';
+  static String liveClassDetail(String uuid) => '/live-classes/$uuid/';
+  static String liveClassStart(String uuid) => '/live-classes/$uuid/start/';
+  static String liveClassComplete(String uuid) => '/live-classes/$uuid/complete/';
+  static String liveClassCancel(String uuid) => '/live-classes/$uuid/cancel/';
+
+  // Materials
+  static const String materials = '/materials/';
+  static String materialDetail(String uuid) => '/materials/$uuid/';
+
+  // Assignments
+  static const String assignments = '/assignments/';
+  static String adminAssignmentDetail(String uuid) =>
+      '/assignments/$uuid/';
+  static String assignmentQuestions(String uuid) =>
+      '/assignments/$uuid/questions/';
+  static String assignmentQuestionDetail(
+    String assignmentUuid,
+    String questionUuid,
+  ) =>
+      '/assignments/$assignmentUuid/questions/$questionUuid/';
+  static String assignmentPublish(String uuid) =>
+      '/assignments/$uuid/publish/';
+  static String assignmentUnpublish(String uuid) =>
+      '/assignments/$uuid/unpublish/';
+  static const String assignmentPdfImport =
+      '/assignments/import-pdf/';
+  static String assignmentSubmissions(String uuid) =>
+      '/assignments/$uuid/submissions/';
+  static String assignmentSubmissionDetail(
+    String submissionUuid,
+  ) =>
+      '/assignments/submissions/$submissionUuid/';
+  static String assignmentSubmissionGrade(
+    String submissionUuid,
+  ) =>
+      '/assignments/submissions/$submissionUuid/grade/';
+
+  // Subjects
+  static const String subjects = '/subjects/';
+  static String subjectDetail(String uuid) => '/subjects/$uuid/';
+
+  // Chapters
+  static const String chapters = '/chapters/';
+  static String chapterDetail(String uuid) => '/chapters/$uuid/';
+
+  // Lessons
+  static const String lessons = '/lessons/';
+  static String lessonDetail(String uuid) => '/lessons/$uuid/';
   static const String studentRegister = '/auth/student/register/';
 
   static const String publicCourses = '/public/courses/';
@@ -40,6 +113,10 @@ class ApiUrls {
   static String myCourseClasses(String uuid) =>
       '/student/courses/$uuid/live-classes/';
   static const String publicBanners = '/public/banners/';
+
+  // Banners - Admin
+  static const String banners = '/banners/';
+  static String bannerDetail(String uuid) => '/banners/$uuid/';
 
   static String studentMaterial(String uuid) =>
       '/student/materials/$uuid/';
@@ -66,4 +143,15 @@ class ApiUrls {
 
   static String assignmentResult(String uuid) =>
       '/student/assignments/$uuid/result/';
+
+  // Student Payments
+  static const String studentCoursePayments =
+      '/student/course-payments/';
+
+  // Admin Payments
+  static const String payments =
+      '/payments/';
+
+  static String paymentReview(String uuid) =>
+      '/payments/$uuid/review/';
 }

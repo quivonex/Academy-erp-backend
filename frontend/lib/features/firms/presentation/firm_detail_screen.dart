@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/admin_ui.dart';
 import '../../../core/widgets/status_pill.dart';
 import '../data/firm_model.dart';
 import '../data/firm_repository.dart';
 import 'firm_admins_section.dart';
+import 'firms_list_screen.dart' show FirmStatusPanel;
 
 class FirmDetailScreen extends ConsumerWidget {
   const FirmDetailScreen({super.key, required this.firmUuid});
@@ -18,96 +22,105 @@ class FirmDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final firmAsync = ref.watch(firmDetailProvider(firmUuid));
     final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
 
     return firmAsync.when(
       data: (firm) => SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Breadcrumb
+            Row(
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => context.go('/firms'),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Text(
+                      'Firms',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colors.textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.chevron_right_rounded,
+                      size: 18, color: colors.textSubtle),
+                ),
+                Flexible(
+                  child: Text(
+                    firm.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             _Header(
               firm: firm,
               onEdit: () => _showEditDialog(context, ref, firm),
               onToggleActive: () => _toggleActive(context, ref, firm),
             ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _InfoCard(label: 'Code', value: firm.code),
-                _InfoCard(label: 'Email', value: firm.email ?? '—'),
-                _InfoCard(label: 'Phone', value: firm.phone ?? '—'),
-                _InfoCard(label: 'Status', value: firm.status),
-                _InfoCard(
-                  label: 'Is Active',
-                  value: firm.isActive ? 'Yes' : 'No',
-                ),
-                _InfoCard(label: 'UUID', value: firm.uuid),
-                _InfoCard(
-                  label: 'Created',
-                  value: formatDate(firm.createdAt),
-                ),
-                _InfoCard(
-                  label: 'Updated',
-                  value: firm.updatedAt != null
-                      ? formatDate(firm.updatedAt!)
-                      : '—',
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            _InfoGrid(firm: firm),
             if (firm.address != null && firm.address!.isNotEmpty) ...[
-              Text(
-                'ADDRESS',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colors.borderSubtle),
-                ),
-                child: Text(
-                  firm.address!,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // ─── Firm admins section (GET/POST /firms/{uuid}/admins/) ───
-            FirmAdminsSection(firmUuid: firm.uuid),
-            const SizedBox(height: 24),
-
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+              const SizedBox(height: 16),
+              AdminCard(
+                padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline,
-                        color: colors.textMuted, size: 18),
-                    const SizedBox(width: 8),
+                    const AdminIconTile(
+                      icon: Icons.location_on_outlined,
+                      size: 40,
+                    ),
+                    const SizedBox(width: 14),
                     Expanded(
-                      child: Text(
-                        'Users, students, batches and billing panels plug into '
-                            'this firm the same way — each via its own '
-                            'scoped endpoint.',
-                        style: TextStyle(color: colors.textMuted),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Registered address',
+                              style: _tileLabel(context)),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            firm.address!,
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
+            const SizedBox(height: 28),
+
+            // ─── Firm admins section (GET/POST /firms/{uuid}/admins/) ───
+            FirmAdminsSection(firmUuid: firm.uuid, firmName: firm.name),
+            const SizedBox(height: 24),
           ],
         ),
       ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) =>
-          Center(child: Text('Could not load firm: $error')),
+      error: (error, _) => SingleChildScrollView(
+        child: AdminStateMessage(
+          icon: Icons.cloud_off_rounded,
+          title: 'Could not load firm',
+          message: '$error',
+          actionLabel: 'Retry',
+          onAction: () => ref.invalidate(firmDetailProvider(firmUuid)),
+          isError: true,
+        ),
+      ),
     );
   }
 
@@ -158,6 +171,13 @@ class FirmDetailScreen extends ConsumerWidget {
   }
 }
 
+TextStyle? _tileLabel(BuildContext context) =>
+    Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: const Color(0xFF64748B),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
+        );
+
 class _Header extends StatelessWidget {
   const _Header({
     required this.firm,
@@ -172,118 +192,301 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+    final compact = MediaQuery.sizeOf(context).width < 760;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final identity = Row(
       children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: colors.primary.withOpacity(0.1),
-          child: Text(
-            firm.name.isNotEmpty ? firm.name[0].toUpperCase() : '?',
-            style: TextStyle(color: colors.primary, fontSize: 20),
-          ),
+        GradientAvatar(
+          label: firm.name.isNotEmpty ? firm.name[0].toUpperCase() : '?',
+          seed: firm.code,
+          size: 64,
+          statusDot: firm.isActive
+              ? const Color(0xFF10B981)
+              : const Color(0xFF94A3B8),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 18),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                firm.name,
-                style: Theme.of(context).textTheme.displayMedium,
-              ),
-              const SizedBox(height: 6),
-              Row(
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
-                    firm.code,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: colors.textMuted),
+                    firm.name,
+                    style: jakarta(
+                      textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  _StatusPill(status: firm.status),
+                  StatusPill(
+                    label: firm.status.toUpperCase(),
+                    tone: toneForStatus(firm.status),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SoftBadge(
+                    label: firm.code,
+                    monospace: true,
+                    background: const Color(0xFFF1F5F9),
+                    foreground: const Color(0xFF334155),
+                  ),
+                  Text(
+                    '•  Educational institution',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF475569),
+                    ),
+                  ),
+                  if (firm.address?.trim().isNotEmpty == true)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 280),
+                      child: Text(
+                        '•  ${firm.address!.trim()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF475569),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
-        OutlinedButton.icon(
-          onPressed: onEdit,
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: const Text('Edit'),
-        ),
-        const SizedBox(width: 8),
-        firm.isActive
-            ? OutlinedButton.icon(
-          onPressed: onToggleActive,
-          icon: const Icon(Icons.block, size: 18),
-          label: const Text('Deactivate'),
-        )
-            : FilledButton.icon(
-          onPressed: onToggleActive,
-          icon: const Icon(Icons.check_circle_outline, size: 18),
-          label: const Text('Activate'),
-        ),
       ],
     );
-  }
-}
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
-  final String status;
+    final actions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        AdminOutlineButton(
+          label: 'Edit firm',
+          icon: Icons.edit_outlined,
+          onPressed: onEdit,
+        ),
+        firm.isActive
+            ? AdminOutlineButton(
+                label: 'Deactivate',
+                icon: Icons.block_rounded,
+                danger: true,
+                onPressed: onToggleActive,
+              )
+            : GradientButton(
+                label: 'Activate',
+                icon: Icons.check_circle_outline_rounded,
+                onPressed: onToggleActive,
+              ),
+      ],
+    );
 
-  @override
-  Widget build(BuildContext context) {
-    final tone = switch (status.toUpperCase()) {
-      'ACTIVE' => PillTone.success,
-      'INACTIVE' => PillTone.neutral,
-      'SUSPENDED' => PillTone.danger,
-      _ => PillTone.neutral,
-    };
-    return StatusPill(
-      label: status.toUpperCase(),
-      tone: tone,
-      compact: true,
+    return AdminCard(
+      gradientWash: true,
+      padding: const EdgeInsets.all(24),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [identity, const SizedBox(height: 18), actions],
+            )
+          : Row(
+              children: [
+                Expanded(child: identity),
+                const SizedBox(width: 16),
+                actions,
+              ],
+            ),
     );
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.label, required this.value});
-  final String label;
-  final String value;
+class _InfoGrid extends StatelessWidget {
+  const _InfoGrid({required this.firm});
+
+  final Firm firm;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.borderSubtle),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 4),
-          SelectableText(
-            value,
-            style: Theme.of(context).textTheme.bodyLarge,
-            maxLines: 2,
-          ),
-        ],
-      ),
+    final textTheme = Theme.of(context).textTheme;
+    final valueStyle = textTheme.titleSmall?.copyWith(
+      color: const Color(0xFF0F172A),
+      fontWeight: FontWeight.w600,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1000
+            ? 4
+            : constraints.maxWidth >= 560
+                ? 2
+                : 1;
+        const gap = 16.0;
+        final unit = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final wide = columns >= 2 ? unit * 2 + gap : unit;
+
+        Widget tile({
+          required String label,
+          required Widget child,
+          Widget? trailing,
+          double? width,
+        }) {
+          return SizedBox(
+            width: width ?? unit,
+            child: AdminCard(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                height: 58,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(label, style: _tileLabel(context)),
+                        ),
+                        if (trailing != null) trailing,
+                      ],
+                    ),
+                    child,
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            tile(
+              label: 'Firm code',
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SoftBadge(
+                  label: firm.code,
+                  monospace: true,
+                  background: const Color(0xFFF1F5F9),
+                  foreground: const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+            tile(
+              label: 'Official email',
+              child: SelectableText(
+                firm.email?.isNotEmpty == true ? firm.email! : '—',
+                maxLines: 1,
+                style: valueStyle?.copyWith(
+                  color: firm.email?.isNotEmpty == true
+                      ? colors.primary
+                      : colors.textSubtle,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            tile(
+              label: 'Contact phone',
+              child: SelectableText(
+                firm.phone?.isNotEmpty == true ? firm.phone! : '—',
+                maxLines: 1,
+                style: valueStyle,
+              ),
+            ),
+            tile(
+              label: 'Firm status',
+              trailing: Text(
+                'Active: ${firm.isActive ? 'Yes' : 'No'}',
+                style: textTheme.labelSmall?.copyWith(
+                  color: colors.textMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: StatusPill(
+                  label: firm.status.toUpperCase(),
+                  tone: toneForStatus(firm.status),
+                  compact: true,
+                ),
+              ),
+            ),
+            tile(
+              label: 'System UUID',
+              width: wide,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SelectableText(
+                      firm.uuid,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Copy UUID',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: firm.uuid));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('UUID copied')),
+                        );
+                      }
+                    },
+                    icon: Icon(Icons.copy_rounded,
+                        size: 18, color: colors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            tile(
+              label: 'Created date',
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 16, color: colors.textMuted),
+                  const SizedBox(width: 8),
+                  Text(formatDate(firm.createdAt), style: valueStyle),
+                ],
+              ),
+            ),
+            tile(
+              label: 'Last updated',
+              child: Row(
+                children: [
+                  Icon(Icons.schedule_rounded,
+                      size: 16, color: colors.textMuted),
+                  const SizedBox(width: 8),
+                  Text(
+                    firm.updatedAt != null
+                        ? formatDate(firm.updatedAt!)
+                        : '—',
+                    style: valueStyle,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -337,99 +540,116 @@ class _EditFirmDialogState extends ConsumerState<_EditFirmDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit Firm'),
-      content: Form(
+    return AdminFormDialog(
+      icon: Icons.edit_note_rounded,
+      title: 'Edit firm',
+      subtitle: 'Update institution details for ${widget.firm.name}.',
+      onClose:
+          _isSubmitting ? null : () => Navigator.of(context).pop(false),
+      body: Form(
         key: _formKey,
-        child: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FormRow(
+              left: FieldLabel(
+                label: 'Firm name',
+                required: true,
+                child: TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Firm name'),
+                  decoration: adminFieldDecoration(
+                    context,
+                    icon: Icons.school_outlined,
+                  ),
                   validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
+              ),
+              right: FieldLabel(
+                label: 'Firm code',
+                required: true,
+                child: TextFormField(
                   controller: _codeController,
-                  decoration: const InputDecoration(labelText: 'Firm code'),
+                  decoration: adminFieldDecoration(
+                    context,
+                    icon: Icons.tag_rounded,
+                  ),
                   validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
+              ),
+            ),
+            const SizedBox(height: 16),
+            FormRow(
+              left: FieldLabel(
+                label: 'Email',
+                child: TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: adminFieldDecoration(
+                    context,
+                    icon: Icons.mail_outline_rounded,
+                  ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return null;
                     if (!v.contains('@')) return 'Enter a valid email';
                     return null;
                   },
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
+              ),
+              right: FieldLabel(
+                label: 'Contact phone',
+                child: TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _addressController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Address'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: const [
-                    DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
-                    DropdownMenuItem(
-                        value: 'INACTIVE', child: Text('INACTIVE')),
-                    DropdownMenuItem(
-                        value: 'SUSPENDED', child: Text('SUSPENDED')),
-                  ],
-                  onChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Is Active'),
-                  value: _isActive,
-                  onChanged: (v) => setState(() => _isActive = v),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: TextStyle(color: context.colors.danger),
+                  decoration: adminFieldDecoration(
+                    context,
+                    icon: Icons.call_outlined,
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 16),
+            FieldLabel(
+              label: 'Campus address',
+              child: TextFormField(
+                controller: _addressController,
+                maxLines: 2,
+                decoration: adminFieldDecoration(
+                  context,
+                  icon: Icons.location_on_outlined,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            FirmStatusPanel(
+              status: _status,
+              isActive: _isActive,
+              onStatusChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
+              onActiveChanged: (v) => setState(() => _isActive = v),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 14),
+              AdminErrorBanner(message: _error!),
+            ],
+          ],
         ),
       ),
       actions: [
         TextButton(
           onPressed:
-          _isSubmitting ? null : () => Navigator.of(context).pop(false),
+              _isSubmitting ? null : () => Navigator.of(context).pop(false),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF334155),
+            minimumSize: const Size(0, 44),
+          ),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        GradientButton(
+          label: 'Save changes',
+          icon: Icons.check_rounded,
+          loading: _isSubmitting,
           onPressed: _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-              : const Text('Save Changes'),
         ),
       ],
     );
