@@ -38,39 +38,56 @@ class FirmAdminsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Firm admins',
-                    style: jakarta(
-                      textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
-                      ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final heading = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Firm admins',
+                  style: jakarta(
+                    textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0F172A),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    firmName == null || firmName!.isEmpty
-                        ? 'Authorized personnel managing this firm'
-                        : 'Authorized personnel managing $firmName',
-                    style: textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            GradientButton(
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  firmName == null || firmName!.isEmpty
+                      ? 'Authorized personnel managing this firm'
+                      : 'Authorized personnel managing $firmName',
+                  style: textTheme.bodySmall,
+                ),
+              ],
+            );
+            final addButton = GradientButton(
               label: 'Add firm admin',
               icon: Icons.person_add_alt_1_rounded,
               height: 40,
-              onPressed: () => _showCreateDialog(context, ref),
-            ),
-          ],
+              onPressed: () => _showCreateDialog(context),
+            );
+
+            if (constraints.maxWidth < 560) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  heading,
+                  const SizedBox(height: 12),
+                  addButton,
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: 16),
+                addButton,
+              ],
+            );
+          },
         ),
         const SizedBox(height: 14),
         adminsAsync.when(
@@ -102,7 +119,7 @@ class FirmAdminsSection extends ConsumerWidget {
     );
   }
 
-  void _showCreateDialog(BuildContext context, WidgetRef ref) {
+  void _showCreateDialog(BuildContext context) {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -145,7 +162,7 @@ class _AdminsTable extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             // Narrow screens: stacked cards instead of a table.
-            if (constraints.maxWidth < 720) {
+            if (constraints.maxWidth < 1000) {
               return Column(
                 children: [
                   for (var i = 0; i < admins.length; i++)
@@ -155,8 +172,8 @@ class _AdminsTable extends StatelessWidget {
                         border: i == 0
                             ? null
                             : const Border(
-                                top: BorderSide(color: Color(0xFFEEF0F5)),
-                              ),
+                          top: BorderSide(color: Color(0xFFEEF0F5)),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -172,20 +189,23 @@ class _AdminsTable extends StatelessWidget {
                                     style: textTheme.bodySmall),
                                 Text(
                                   '${admins[i].phone ?? '—'}  •  Joined '
-                                  '${formatDate(admins[i].dateJoined)}',
+                                      '${formatDate(admins[i].dateJoined)}',
                                   style: textTheme.bodySmall?.copyWith(
                                     color: colors.textSubtle,
                                   ),
                                 ),
+                                const SizedBox(height: 6),
+                                StatusPill(
+                                  label: admins[i].isActive
+                                      ? 'ACTIVE'
+                                      : 'INACTIVE',
+                                  tone: admins[i].isActive
+                                      ? PillTone.success
+                                      : PillTone.neutral,
+                                  compact: true,
+                                ),
                               ],
                             ),
-                          ),
-                          StatusPill(
-                            label: admins[i].isActive ? 'ACTIVE' : 'INACTIVE',
-                            tone: admins[i].isActive
-                                ? PillTone.success
-                                : PillTone.neutral,
-                            compact: true,
                           ),
                         ],
                       ),
@@ -202,13 +222,13 @@ class _AdminsTable extends StatelessWidget {
                   color: header ? const Color(0xFFF8FAFC) : Colors.white,
                   border: header
                       ? const Border(
-                          bottom: BorderSide(color: Color(0xFFE2E8F0)),
-                        )
+                    bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                  )
                       : i == 0
-                          ? null
-                          : const Border(
-                              top: BorderSide(color: Color(0xFFEEF0F5)),
-                            ),
+                      ? null
+                      : const Border(
+                    top: BorderSide(color: Color(0xFFEEF0F5)),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -282,6 +302,8 @@ class _AdminsTable extends StatelessWidget {
                         admins[i].phone?.isNotEmpty == true
                             ? admins[i].phone!
                             : '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: mono,
                       ),
                       Text(
@@ -455,12 +477,12 @@ class _CreateFirmAdminDialogState
                       icon: Icons.lock_outline_rounded,
                       suffix: IconButton(
                         tooltip:
-                            _obscure ? 'Show passwords' : 'Hide passwords',
+                        _obscure ? 'Show passwords' : 'Hide passwords',
                         onPressed: _isSubmitting
                             ? null
                             : () => setState(
-                                  () => _obscure = !_obscure,
-                                ),
+                              () => _obscure = !_obscure,
+                        ),
                         icon: Icon(
                           _obscure
                               ? Icons.visibility_outlined
@@ -569,9 +591,9 @@ class _CreateFirmAdminDialogState
 
     try {
       await ref.read(firmAdminRepositoryProvider).create(
-            widget.firmUuid,
-            request,
-          );
+        widget.firmUuid,
+        request,
+      );
 
       if (!mounted) return;
 
@@ -597,8 +619,8 @@ class _CreateFirmAdminDialogState
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error =
-              'Could not create admin. Please try again.',
+              () => _error =
+          'Could not create admin. Please try again.',
         );
       }
     } finally {

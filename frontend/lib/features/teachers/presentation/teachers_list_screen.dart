@@ -29,6 +29,8 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
 
   int page = 1;
 
+  bool creating = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,10 +40,10 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
 
   void reload() {
     result = ref.read(teacherRepositoryProvider).list(
-          search: search,
-          isActive: activeFilter,
-          page: page,
-        );
+      search: search,
+      isActive: activeFilter,
+      page: page,
+    );
   }
 
   void refresh() {
@@ -74,18 +76,28 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
   }
 
   Future<void> _openCreate() async {
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (_) => _CreateTeacherDialog(
-        ref.read(teacherRepositoryProvider),
-      ),
-    );
-
-    if (created == true && mounted) {
+    if (creating) return;
+    final repository = ref.read(teacherRepositoryProvider);
+    setState(() => creating = true);
+    try {
+      final created = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _CreateTeacherDialog(repository),
+      );
+      if (!mounted || created != true) return;
       setState(() {
+        searchController.clear();
+        search = '';
+        activeFilter = null;
         page = 1;
         reload();
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Teacher created successfully.')),
+      );
+    } finally {
+      if (mounted) setState(() => creating = false);
     }
   }
 
@@ -119,7 +131,7 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
             GradientButton(
               label: 'Add teacher',
               icon: Icons.person_add_alt_1_rounded,
-              onPressed: _openCreate,
+              onPressed: creating ? null : _openCreate,
             ),
           ],
         ),
@@ -133,7 +145,10 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
                 noun: 'teachers',
                 onRetry: refresh,
               );
-              final data = snapshot.data;
+              final data = snapshot.connectionState == ConnectionState.done &&
+                  !snapshot.hasError
+                  ? snapshot.data
+                  : null;
               final rows = data?.results ?? const <Teacher>[];
               final activeHere = rows.where((t) => t.isActive).length;
               final subjects = rows
@@ -144,8 +159,8 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
               final avgExp = rows.isEmpty
                   ? 0
                   : (rows.fold<int>(0, (a, t) => a + t.experienceYears) /
-                          rows.length)
-                      .round();
+                  rows.length)
+                  .round();
 
               return ListView(
                 padding: const EdgeInsets.only(bottom: 24),
@@ -153,14 +168,16 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
                   AdminKpiGrid(
                     children: [
                       AdminKpiCard(
-                        label: 'Total teachers',
+                        label: search.isEmpty && activeFilter == null
+                            ? 'Total teachers'
+                            : 'Matching teachers',
                         value: data == null ? '…' : '${data.count}',
                         icon: Icons.co_present_outlined,
                         caption: activeFilter == null
                             ? 'All statuses'
                             : activeFilter!
-                                ? 'Active filter'
-                                : 'Inactive filter',
+                            ? 'Active filter'
+                            : 'Inactive filter',
                       ),
                       AdminKpiCard(
                         label: 'Active on this page',
@@ -220,50 +237,50 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
                       message: 'Try another search or status filter.',
                     )
                   else ...[
-                    for (final teacher in rows)
-                      AdminListRow(
-                        title: teacher.fullName,
-                        initials: adminInitials(teacher.fullName),
-                        seed: teacher.employeeId,
-                        titleBadge: SoftBadge(
-                          label: teacher.employeeId,
-                          monospace: true,
-                          background: const Color(0xFFF1F5F9),
-                          foreground: const Color(0xFF334155),
-                        ),
-                        subtitle: teacher.specialization.isEmpty
-                            ? 'No specialization'
-                            : teacher.specialization,
-                        meta: [
-                          MetaChip(
-                            icon: Icons.workspace_premium_outlined,
-                            label: '${teacher.experienceYears} yrs experience',
+                      for (final teacher in rows)
+                        AdminListRow(
+                          title: teacher.fullName,
+                          initials: adminInitials(teacher.fullName),
+                          seed: teacher.employeeId,
+                          titleBadge: SoftBadge(
+                            label: teacher.employeeId,
+                            monospace: true,
+                            background: const Color(0xFFF1F5F9),
+                            foreground: const Color(0xFF334155),
                           ),
-                          if (teacher.email.isNotEmpty)
+                          subtitle: teacher.specialization.isEmpty
+                              ? 'No specialization'
+                              : teacher.specialization,
+                          meta: [
                             MetaChip(
-                              icon: Icons.mail_outline_rounded,
-                              label: teacher.email,
+                              icon: Icons.workspace_premium_outlined,
+                              label: '${teacher.experienceYears} yrs experience',
                             ),
-                          if (teacher.phone.isNotEmpty)
-                            MetaChip(
-                              icon: Icons.call_outlined,
-                              label: teacher.phone,
-                            ),
-                        ],
-                        trailing: [ActiveBadge(active: teacher.isActive)],
-                        onTap: () async {
-                          await context.push('/teachers/${teacher.uuid}');
-                          if (mounted) refresh();
-                        },
+                            if (teacher.email.isNotEmpty)
+                              MetaChip(
+                                icon: Icons.mail_outline_rounded,
+                                label: teacher.email,
+                              ),
+                            if (teacher.phone.isNotEmpty)
+                              MetaChip(
+                                icon: Icons.call_outlined,
+                                label: teacher.phone,
+                              ),
+                          ],
+                          trailing: [ActiveBadge(active: teacher.isActive)],
+                          onTap: () async {
+                            await context.push('/teachers/${teacher.uuid}');
+                            if (mounted) refresh();
+                          },
+                        ),
+                      AdminPager(
+                        page: page,
+                        pageSize: 20,
+                        total: data!.count,
+                        noun: 'teachers',
+                        onPage: changePage,
                       ),
-                    AdminPager(
-                      page: page,
-                      pageSize: 20,
-                      total: data!.count,
-                      noun: 'teachers',
-                      onPage: changePage,
-                    ),
-                  ],
+                    ],
                 ],
               );
             },
@@ -276,8 +293,8 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
 
 class _CreateTeacherDialog extends StatefulWidget {
   const _CreateTeacherDialog(
-    this.repository,
-  );
+      this.repository,
+      );
 
   final TeacherRepository repository;
 
@@ -287,27 +304,17 @@ class _CreateTeacherDialog extends StatefulWidget {
 
 class _CreateTeacherDialogState extends State<_CreateTeacherDialog> {
   final formKey = GlobalKey<FormState>();
-
   final employeeId = TextEditingController();
-
   final firstName = TextEditingController();
-
   final lastName = TextEditingController();
-
   final email = TextEditingController();
-
   final phone = TextEditingController();
-
   final qualification = TextEditingController();
-
   final specialization = TextEditingController();
-
   final experience = TextEditingController(text: '0');
-
   final address = TextEditingController();
 
   bool saving = false;
-
   String? error;
 
   @override
@@ -321,20 +328,19 @@ class _CreateTeacherDialogState extends State<_CreateTeacherDialog> {
     specialization.dispose();
     experience.dispose();
     address.dispose();
-
     super.dispose();
   }
 
   Future<void> save() async {
-    if (!formKey.currentState!.validate()) {
-      return;
-    }
+    if (saving) return;
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    FocusScope.of(context).unfocus();
 
+    final years = int.parse(experience.text.trim());
     setState(() {
       saving = true;
       error = null;
     });
-
     try {
       await widget.repository.create(
         employeeId: employeeId.text,
@@ -344,157 +350,165 @@ class _CreateTeacherDialogState extends State<_CreateTeacherDialog> {
         phone: phone.text,
         qualification: qualification.text,
         specialization: specialization.text,
-        experienceYears: int.tryParse(
-              experience.text,
-            ) ??
-            0,
+        experienceYears: years,
         address: address.text,
       );
-
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (!mounted) return;
+      setState(() => saving = false);
+      Navigator.of(context).pop(true);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
-        setState(() {
-          error = e.message;
-        });
+        setState(() => error = 'Could not create teacher. Please try again.');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted && saving) setState(() => saving = false);
     }
   }
 
+  Widget field({
+    required String label,
+    required TextEditingController controller,
+    bool mandatory = false,
+    int? maxLength,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    FormFieldValidator<String>? validator,
+    TextInputAction textInputAction = TextInputAction.next,
+  }) {
+    return FieldLabel(
+      label: label,
+      required: mandatory,
+      child: TextFormField(
+        controller: controller,
+        enabled: !saving,
+        maxLength: maxLength,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autocorrect: keyboardType != TextInputType.emailAddress,
+        decoration: adminFieldDecoration(
+          context,
+          hint: mandatory ? 'Enter ${label.toLowerCase()}' : 'Optional',
+        ),
+        validator: validator ?? (mandatory ? requiredField : null),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Teacher'),
-      content: SizedBox(
-        width: 450,
-        child: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: employeeId,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee ID',
-                  ),
-                  validator: requiredField,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: firstName,
-                  decoration: const InputDecoration(
-                    labelText: 'First Name',
-                  ),
-                  validator: requiredField,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: lastName,
-                  decoration: const InputDecoration(
-                    labelText: 'Last Name',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: phone,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: qualification,
-                  decoration: const InputDecoration(
-                    labelText: 'Qualification',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: specialization,
-                  decoration: const InputDecoration(
-                    labelText: 'Specialization',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: experience,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Experience Years',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: address,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                  ),
-                ),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: 12,
-                    ),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-              ],
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.person_add_alt_1_rounded,
+      title: 'Add teacher',
+      subtitle: 'Create a teacher record for your academy.',
+      onClose: saving ? null : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            field(
+              label: 'Employee ID',
+              controller: employeeId,
+              mandatory: true,
+              maxLength: 50,
             ),
-          ),
+            const SizedBox(height: 16),
+            FormRow(
+              left: field(
+                label: 'First name',
+                controller: firstName,
+                mandatory: true,
+                maxLength: 100,
+              ),
+              right: field(
+                label: 'Last name',
+                controller: lastName,
+                maxLength: 100,
+              ),
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Email',
+              controller: email,
+              maxLength: 254,
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                final text = (value ?? '').trim();
+                if (text.isEmpty) return null;
+                return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                    .hasMatch(text)
+                    ? null
+                    : 'Enter a valid email';
+              },
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Phone',
+              controller: phone,
+              maxLength: 20,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Qualification',
+              controller: qualification,
+              maxLength: 255,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Specialization',
+              controller: specialization,
+              maxLength: 255,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Experience years',
+              controller: experience,
+              mandatory: true,
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                final years = int.tryParse((value ?? '').trim());
+                return years == null || years < 0
+                    ? 'Enter a whole number, 0 or greater'
+                    : null;
+              },
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Address',
+              controller: address,
+              maxLines: 3,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 16),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: saving
-              ? null
-              : () => Navigator.pop(
-                    context,
-                  ),
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        GradientButton(
+          label: 'Save teacher',
+          icon: Icons.check_rounded,
+          loading: saving,
           onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Teacher',
-          ),
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
-String? requiredField(
-  String? value,
-) {
-  if (value == null || value.trim().isEmpty) {
-    return 'Required';
-  }
-
-  return null;
-}
+String? requiredField(String? value) =>
+    value == null || value.trim().isEmpty ? 'Required' : null;

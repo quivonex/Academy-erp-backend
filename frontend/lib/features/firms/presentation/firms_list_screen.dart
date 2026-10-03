@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../../../core/widgets/status_pill.dart';
+
 import '../data/firm_model.dart';
 import '../data/firm_repository.dart';
 
@@ -18,7 +19,8 @@ class FirmsListScreen extends ConsumerStatefulWidget {
       _FirmsListScreenState();
 }
 
-class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
+class _FirmsListScreenState
+    extends ConsumerState<FirmsListScreen> {
   final _searchController = TextEditingController();
 
   String _search = '';
@@ -43,6 +45,7 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
   void _openRegisterDialog() {
     showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (_) => const _RegisterFirmDialog(),
     );
   }
@@ -56,10 +59,12 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
           firm.code,
           firm.email ?? '',
           firm.phone ?? '',
-        ].any((value) => value.toLowerCase().contains(query));
+        ].any(
+              (value) => value.toLowerCase().contains(query),
+        );
 
-    final matchesStatus =
-        _status == 'ALL' || firm.status.toUpperCase() == _status;
+    final matchesStatus = _status == 'ALL' ||
+        firm.status.toUpperCase() == _status;
 
     return matchesSearch && matchesStatus;
   }
@@ -71,24 +76,37 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     final all = firmsAsync.valueOrNull;
-    int countFor(String status) => all == null
-        ? 0
-        : status == 'ALL'
-            ? all.length
-            : all.where((f) => f.status.toUpperCase() == status).length;
+
+    int countFor(String status) {
+      if (all == null) return 0;
+
+      if (status == 'ALL') {
+        return all.length;
+      }
+
+      return all
+          .where(
+            (firm) => firm.status.toUpperCase() == status,
+      )
+          .length;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AdminPageHeader(
           title: 'Firm Management Directory',
-          subtitle: 'Manage educational institutes, portal access and '
+          subtitle:
+          'Manage educational institutes, portal access and '
               'academy credentials.',
           titleTrailing: [
             IconButton(
               tooltip: 'Refresh',
               onPressed: _refresh,
-              icon: Icon(Icons.sync_rounded, color: colors.textMuted),
+              icon: Icon(
+                Icons.sync_rounded,
+                color: colors.textMuted,
+              ),
             ),
             if (all != null)
               SoftBadge(
@@ -112,7 +130,9 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
         AdminSearchField(
           controller: _searchController,
           hint: 'Search by firm name, code, email or phone…',
-          onChanged: (value) => setState(() => _search = value),
+          onChanged: (value) {
+            setState(() => _search = value);
+          },
           onClear: () {
             _searchController.clear();
             setState(() => _search = '');
@@ -134,16 +154,22 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
                   ])
                     CountFilterPill(
                       label: status,
-                      count: all == null ? null : countFor(status),
+                      count: all == null
+                          ? null
+                          : countFor(status),
                       selected: _status == status,
-                      onTap: () => setState(() => _status = status),
+                      onTap: () {
+                        setState(() => _status = status);
+                      },
                     ),
                 ],
               ),
             ),
-            if (all != null && MediaQuery.sizeOf(context).width >= 700)
+            if (all != null &&
+                MediaQuery.sizeOf(context).width >= 700)
               Text(
-                'Showing ${all.where(_matches).length} of ${all.length} firms',
+                'Showing ${all.where(_matches).length} '
+                    'of ${all.length} firms',
                 style: textTheme.bodySmall,
               ),
           ],
@@ -151,8 +177,9 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
         const SizedBox(height: 16),
         Expanded(
           child: firmsAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(
+              child: CircularProgressIndicator(),
+            ),
             error: (error, _) => SingleChildScrollView(
               child: AdminStateMessage(
                 icon: Icons.cloud_off_rounded,
@@ -164,15 +191,21 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
               ),
             ),
             data: (firms) {
-              final filtered = firms.where(_matches).toList();
+              final filtered = firms
+                  .where(_matches)
+                  .toList();
 
               return RefreshIndicator(
                 onRefresh: _refresh,
                 child: ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
+                  physics:
+                  const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: 24),
-                  itemCount: filtered.isEmpty ? 1 : filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemCount: filtered.isEmpty
+                      ? 1
+                      : filtered.length,
+                  separatorBuilder: (_, __) =>
+                  const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     if (filtered.isEmpty) {
                       return AdminStateMessage(
@@ -183,12 +216,27 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
                             ? 'No firms registered yet'
                             : 'No matching firms',
                         message: firms.isEmpty
-                            ? 'Register your first academy to get started.'
-                            : 'No firms match your search or filter.',
+                            ? 'Register your first academy '
+                            'to get started.'
+                            : 'No firms match your search '
+                            'or filter.',
                       );
                     }
 
-                    return _FirmCard(firm: filtered[index]);
+                    final firm = filtered[index];
+
+                    return _FirmCard(
+                      firm: firm,
+                      onTap: () async {
+                        await context.push(
+                          '/firms/${firm.uuid}',
+                        );
+
+                        if (mounted) {
+                          await _refresh();
+                        }
+                      },
+                    );
                   },
                 ),
               );
@@ -201,37 +249,48 @@ class _FirmsListScreenState extends ConsumerState<FirmsListScreen> {
 }
 
 class _FirmCard extends StatelessWidget {
-  const _FirmCard({required this.firm});
+  const _FirmCard({
+    required this.firm,
+    required this.onTap,
+  });
 
   final Firm firm;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final textTheme = Theme.of(context).textTheme;
+
     final metaStyle = textTheme.bodySmall?.copyWith(
       color: const Color(0xFF475569),
     );
 
-    Widget meta(IconData icon, String text) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: colors.textSubtle),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: metaStyle,
-              ),
+    Widget meta(IconData icon, String text) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: colors.textSubtle,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: metaStyle,
             ),
-          ],
-        );
+          ),
+        ],
+      );
+    }
 
     return AdminCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
-      onTap: () => context.push('/firms/${firm.uuid}'),
+      onTap: onTap,
       child: Row(
         children: [
           GradientAvatar(
@@ -247,7 +306,8 @@ class _FirmCard extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                  crossAxisAlignment:
+                  WrapCrossAlignment.center,
                   children: [
                     Text(
                       firm.name,
@@ -258,9 +318,16 @@ class _FirmCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    StatusPill(
+                      label: firm.status.toUpperCase(),
+                      tone: toneForStatus(firm.status),
+                    ),
                     if (firm.isActive)
-                      Icon(Icons.verified_rounded,
-                          size: 18, color: colors.primary),
+                      Icon(
+                        Icons.verified_rounded,
+                        size: 18,
+                        color: colors.primary,
+                      ),
                     SoftBadge(
                       label: 'Code: ${firm.code}',
                       monospace: true,
@@ -268,7 +335,9 @@ class _FirmCard extends StatelessWidget {
                       foreground: const Color(0xFF334155),
                     ),
                     Text(
-                      firm.isActive ? '•  Enabled' : '•  Disabled',
+                      firm.isActive
+                          ? '•  Enabled'
+                          : '•  Disabled',
                       style: textTheme.labelMedium?.copyWith(
                         color: firm.isActive
                             ? const Color(0xFF475569)
@@ -283,9 +352,15 @@ class _FirmCard extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     if (firm.email?.isNotEmpty == true)
-                      meta(Icons.mail_outline_rounded, firm.email!),
+                      meta(
+                        Icons.mail_outline_rounded,
+                        firm.email!,
+                      ),
                     if (firm.phone?.isNotEmpty == true)
-                      meta(Icons.call_outlined, firm.phone!),
+                      meta(
+                        Icons.call_outlined,
+                        firm.phone!,
+                      ),
                     meta(
                       Icons.calendar_today_outlined,
                       'Created: ${formatDate(firm.createdAt)}',
@@ -295,22 +370,17 @@ class _FirmCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          StatusPill(
-            label: firm.status.toUpperCase(),
-            tone: toneForStatus(firm.status),
-          ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right_rounded, color: colors.textSubtle),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: colors.textSubtle,
+          ),
         ],
       ),
     );
   }
 }
 
-/// ---------------------------------------------
-/// Register New Firm Dialog  →  POST /firms/
-/// ---------------------------------------------
 class _RegisterFirmDialog extends ConsumerStatefulWidget {
   const _RegisterFirmDialog();
 
@@ -319,8 +389,10 @@ class _RegisterFirmDialog extends ConsumerStatefulWidget {
       _RegisterFirmDialogState();
 }
 
-class _RegisterFirmDialogState extends ConsumerState<_RegisterFirmDialog> {
+class _RegisterFirmDialogState
+    extends ConsumerState<_RegisterFirmDialog> {
   final _formKey = GlobalKey<FormState>();
+
   final _nameController = TextEditingController();
   final _codeController = TextEditingController();
   final _emailController = TextEditingController();
@@ -342,138 +414,12 @@ class _RegisterFirmDialogState extends ConsumerState<_RegisterFirmDialog> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final textTheme = Theme.of(context).textTheme;
-
-    return AdminFormDialog(
-      icon: Icons.domain_add_rounded,
-      title: 'Register new firm',
-      subtitle: 'Enter institution details to provision a new tenant portal.',
-      onClose: _isSubmitting ? null : () => Navigator.of(context).pop(),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            FormRow(
-              left: FieldLabel(
-                label: 'Firm name',
-                required: true,
-                child: TextFormField(
-                  controller: _nameController,
-                  decoration: adminFieldDecoration(
-                    context,
-                    hint: 'e.g. Oxford STEM Academy',
-                    icon: Icons.school_outlined,
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-              ),
-              right: FieldLabel(
-                label: 'Firm code',
-                required: true,
-                child: TextFormField(
-                  controller: _codeController,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: adminFieldDecoration(
-                    context,
-                    hint: 'e.g. ABC003',
-                    icon: Icons.tag_rounded,
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            FormRow(
-              left: FieldLabel(
-                label: 'Email',
-                child: TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: adminFieldDecoration(
-                    context,
-                    hint: 'admin@academy.edu',
-                    icon: Icons.mail_outline_rounded,
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null;
-                    if (!v.contains('@')) return 'Enter a valid email';
-                    return null;
-                  },
-                ),
-              ),
-              right: FieldLabel(
-                label: 'Contact phone',
-                child: TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: adminFieldDecoration(
-                    context,
-                    hint: '+91 98765 43210',
-                    icon: Icons.call_outlined,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            FieldLabel(
-              label: 'Campus address',
-              child: TextFormField(
-                controller: _addressController,
-                maxLines: 2,
-                decoration: adminFieldDecoration(
-                  context,
-                  hint: 'Street, city, state',
-                  icon: Icons.location_on_outlined,
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            FirmStatusPanel(
-              status: _status,
-              isActive: _isActive,
-              onStatusChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
-              onActiveChanged: (v) => setState(() => _isActive = v),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              AdminErrorBanner(message: _error!),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              'Fields marked * are required.',
-              style: textTheme.bodySmall?.copyWith(color: colors.textSubtle),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed:
-              _isSubmitting ? null : () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF334155),
-            minimumSize: const Size(0, 44),
-          ),
-          child: const Text('Cancel'),
-        ),
-        GradientButton(
-          label: 'Register firm',
-          icon: Icons.add_rounded,
-          loading: _isSubmitting,
-          onPressed: _isSubmitting ? null : _submit,
-        ),
-      ],
-    );
-  }
-
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSubmitting ||
+        !_formKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
       _error = null;
@@ -481,22 +427,23 @@ class _RegisterFirmDialogState extends ConsumerState<_RegisterFirmDialog> {
 
     try {
       await ref.read(firmRepositoryProvider).create(
-            FirmCreateRequest(
-              name: _nameController.text.trim(),
-              code: _codeController.text.trim(),
-              email: _emailController.text.trim().isEmpty
-                  ? null
-                  : _emailController.text.trim(),
-              phone: _phoneController.text.trim().isEmpty
-                  ? null
-                  : _phoneController.text.trim(),
-              address: _addressController.text.trim().isEmpty
-                  ? null
-                  : _addressController.text.trim(),
-              status: _status,
-              isActive: _isActive,
-            ),
-          );
+        FirmCreateRequest(
+          name: _nameController.text.trim(),
+          code: _codeController.text.trim(),
+          email: _emailController.text.trim().isEmpty
+              ? null
+              : _emailController.text.trim(),
+          phone: _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
+          address:
+          _addressController.text.trim().isEmpty
+              ? null
+              : _addressController.text.trim(),
+          status: _status,
+          isActive: _isActive,
+        ),
+      );
 
       if (!mounted) return;
 
@@ -508,7 +455,10 @@ class _RegisterFirmDialogState extends ConsumerState<_RegisterFirmDialog> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Could not register firm. Please try again.');
+        setState(() {
+          _error =
+          'Could not register firm. Please try again.';
+        });
       }
     } finally {
       if (mounted) {
@@ -516,11 +466,176 @@ class _RegisterFirmDialogState extends ConsumerState<_RegisterFirmDialog> {
       }
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: AdminFormDialog(
+        icon: Icons.domain_add_rounded,
+        title: 'Register new firm',
+        subtitle:
+        'Enter institution details to provision '
+            'a new tenant portal.',
+        onClose: _isSubmitting
+            ? null
+            : () => Navigator.of(context).pop(),
+        body: IgnorePointer(
+          ignoring: _isSubmitting,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment:
+              CrossAxisAlignment.stretch,
+              children: [
+                FormRow(
+                  left: FieldLabel(
+                    label: 'Firm name',
+                    required: true,
+                    child: TextFormField(
+                      controller: _nameController,
+                      decoration: adminFieldDecoration(
+                        context,
+                        hint: 'e.g. Oxford STEM Academy',
+                        icon: Icons.school_outlined,
+                      ),
+                      validator: (value) {
+                        return value == null ||
+                            value.trim().isEmpty
+                            ? 'Required'
+                            : null;
+                      },
+                    ),
+                  ),
+                  right: FieldLabel(
+                    label: 'Firm code',
+                    required: true,
+                    child: TextFormField(
+                      controller: _codeController,
+                      textCapitalization:
+                      TextCapitalization.characters,
+                      decoration: adminFieldDecoration(
+                        context,
+                        hint: 'e.g. ABC003',
+                        icon: Icons.tag_rounded,
+                      ),
+                      validator: (value) {
+                        return value == null ||
+                            value.trim().isEmpty
+                            ? 'Required'
+                            : null;
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FormRow(
+                  left: FieldLabel(
+                    label: 'Email',
+                    child: TextFormField(
+                      controller: _emailController,
+                      keyboardType:
+                      TextInputType.emailAddress,
+                      decoration: adminFieldDecoration(
+                        context,
+                        hint: 'admin@academy.edu',
+                        icon: Icons.mail_outline_rounded,
+                      ),
+                      validator: (value) {
+                        if (value == null ||
+                            value.trim().isEmpty) {
+                          return null;
+                        }
+
+                        if (!value.contains('@')) {
+                          return 'Enter a valid email';
+                        }
+
+                        return null;
+                      },
+                    ),
+                  ),
+                  right: FieldLabel(
+                    label: 'Contact phone',
+                    child: TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: adminFieldDecoration(
+                        context,
+                        hint: '+91 98765 43210',
+                        icon: Icons.call_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FieldLabel(
+                  label: 'Campus address',
+                  child: TextFormField(
+                    controller: _addressController,
+                    maxLines: 2,
+                    decoration: adminFieldDecoration(
+                      context,
+                      hint: 'Street, city, state',
+                      icon: Icons.location_on_outlined,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FirmStatusPanel(
+                  status: _status,
+                  isActive: _isActive,
+                  onStatusChanged: (value) {
+                    setState(() {
+                      _status = value ?? 'ACTIVE';
+                    });
+                  },
+                  onActiveChanged: (value) {
+                    setState(() => _isActive = value);
+                  },
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  AdminErrorBanner(message: _error!),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  'Fields marked * are required.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.textSubtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _isSubmitting
+                ? null
+                : () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF334155),
+              minimumSize: const Size(0, 44),
+            ),
+            child: const Text('Cancel'),
+          ),
+          GradientButton(
+            label: 'Register firm',
+            icon: Icons.add_rounded,
+            loading: _isSubmitting,
+            onPressed: _isSubmitting ? null : _submit,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-
-/// Status dropdown + active switch in a tinted panel (shared by the
-/// register and edit firm dialogs).
+// Shared by Register Firm and Edit Firm dialogs.
 class FirmStatusPanel extends StatelessWidget {
   const FirmStatusPanel({
     required this.status,
@@ -543,7 +658,9 @@ class FirmStatusPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
       ),
       child: Column(
         children: [
@@ -562,19 +679,28 @@ class FirmStatusPanel extends StatelessWidget {
                 child: DropdownButtonFormField<String>(
                   initialValue: status,
                   isDense: true,
-                  decoration: adminFieldDecoration(context).copyWith(
+                  decoration:
+                  adminFieldDecoration(context).copyWith(
                     fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
+                    contentPadding:
+                    const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
                     ),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
                     DropdownMenuItem(
-                        value: 'INACTIVE', child: Text('INACTIVE')),
+                      value: 'ACTIVE',
+                      child: Text('ACTIVE'),
+                    ),
                     DropdownMenuItem(
-                        value: 'SUSPENDED', child: Text('SUSPENDED')),
+                      value: 'INACTIVE',
+                      child: Text('INACTIVE'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'SUSPENDED',
+                      child: Text('SUSPENDED'),
+                    ),
                   ],
                   onChanged: onStatusChanged,
                 ),
@@ -583,13 +709,17 @@ class FirmStatusPanel extends StatelessWidget {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+            child: Divider(
+              height: 1,
+              color: Color(0xFFE2E8F0),
+            ),
           ),
           Row(
             children: [
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Portal access enabled',
@@ -598,13 +728,17 @@ class FirmStatusPanel extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Sets the firm\'s active flag (Is Active).',
+                      'Sets the firm\'s active flag '
+                          '(Is Active).',
                       style: textTheme.bodySmall,
                     ),
                   ],
                 ),
               ),
-              Switch(value: isActive, onChanged: onActiveChanged),
+              Switch(
+                value: isActive,
+                onChanged: onActiveChanged,
+              ),
             ],
           ),
         ],

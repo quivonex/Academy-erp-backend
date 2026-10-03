@@ -40,11 +40,11 @@ class _EnrollmentsListScreenState
   void reload() {
     result = ref
         .read(
-          enrollmentManagementRepositoryProvider,
-        )
+      enrollmentManagementRepositoryProvider,
+    )
         .list(
-          page: page,
-        );
+      page: page,
+    );
   }
 
   void refresh() {
@@ -197,57 +197,57 @@ class _EnrollmentsListScreenState
                       onAction: addEnrollment,
                     )
                   else ...[
-                    for (final enrollment in rows)
-                      AdminListRow(
-                        title: enrollment.studentName,
-                        initials: adminInitials(enrollment.studentName),
-                        seed: enrollment.admissionNumber,
-                        titleBadge: enrollment.admissionNumber.isEmpty
-                            ? null
-                            : SoftBadge(
-                                label: enrollment.admissionNumber,
-                                monospace: true,
-                                background: const Color(0xFFF1F5F9),
-                                foreground: const Color(0xFF334155),
-                              ),
-                        subtitle:
-                            '${enrollment.courseName} (${enrollment.courseCode})',
-                        meta: [
-                          if (enrollment.enrolledAt != null)
-                            MetaChip(
-                              icon: Icons.event_available_outlined,
-                              label:
-                                  'Enrolled ${_date(enrollment.enrolledAt)}',
-                            ),
-                          if (enrollment.accessEndAt != null)
-                            MetaChip(
-                              icon: Icons.lock_clock_outlined,
-                              label:
-                                  'Access until ${_date(enrollment.accessEndAt)}',
-                            ),
-                        ],
-                        trailing: [
-                          StatusPill(
-                            label: enrollment.status.toUpperCase(),
-                            tone: toneForStatus(enrollment.status),
-                            compact: true,
+                      for (final enrollment in rows)
+                        AdminListRow(
+                          title: enrollment.studentName,
+                          initials: adminInitials(enrollment.studentName),
+                          seed: enrollment.admissionNumber,
+                          titleBadge: enrollment.admissionNumber.isEmpty
+                              ? null
+                              : SoftBadge(
+                            label: enrollment.admissionNumber,
+                            monospace: true,
+                            background: const Color(0xFFF1F5F9),
+                            foreground: const Color(0xFF334155),
                           ),
-                        ],
-                        onTap: () async {
-                          await context.push(
-                            '/enrollments/${enrollment.uuid}',
-                          );
-                          if (mounted) refresh();
-                        },
+                          subtitle:
+                          '${enrollment.courseName} (${enrollment.courseCode})',
+                          meta: [
+                            if (enrollment.enrolledAt != null)
+                              MetaChip(
+                                icon: Icons.event_available_outlined,
+                                label:
+                                'Enrolled ${_date(enrollment.enrolledAt)}',
+                              ),
+                            if (enrollment.accessEndAt != null)
+                              MetaChip(
+                                icon: Icons.lock_clock_outlined,
+                                label:
+                                'Access until ${_date(enrollment.accessEndAt)}',
+                              ),
+                          ],
+                          trailing: [
+                            StatusPill(
+                              label: enrollment.status.toUpperCase(),
+                              tone: toneForStatus(enrollment.status),
+                              compact: true,
+                            ),
+                          ],
+                          onTap: () async {
+                            await context.push(
+                              '/enrollments/${enrollment.uuid}',
+                            );
+                            if (mounted) refresh();
+                          },
+                        ),
+                      AdminPager(
+                        page: page,
+                        pageSize: 20,
+                        total: data!.count,
+                        noun: 'enrollments',
+                        onPage: changePage,
                       ),
-                    AdminPager(
-                      page: page,
-                      pageSize: 20,
-                      total: data!.count,
-                      noun: 'enrollments',
-                      onPage: changePage,
-                    ),
-                  ],
+                    ],
                 ],
               );
             },
@@ -295,16 +295,42 @@ class _CreateEnrollmentDialogState
     });
 
     try {
-      final sResult = await ref.read(studentRepositoryProvider).list();
-      final cResult = await ref.read(courseRepositoryProvider).list();
+      final loadedStudents = <Student>[];
+      final loadedCourses = <Course>[];
+      final studentRepository = ref.read(studentRepositoryProvider);
+      final courseRepository = ref.read(courseRepositoryProvider);
+      int studentPage = 1;
+      while (true) {
+        final response = await studentRepository.list(page: studentPage);
+        loadedStudents.addAll(response.results);
+        if (response.results.isEmpty || loadedStudents.length >= response.count) {
+          break;
+        }
+        studentPage++;
+      }
+      int coursePage = 1;
+      while (true) {
+        final response = await courseRepository.list(page: coursePage);
+        loadedCourses.addAll(response.results);
+        if (response.results.isEmpty || loadedCourses.length >= response.count) {
+          break;
+        }
+        coursePage++;
+      }
 
       if (mounted) {
         setState(() {
-          students = sResult.results;
-          courses = cResult.results;
+          students = loadedStudents;
+          courses = loadedCourses;
+          error = null;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          error = 'Could not load students or courses: $e';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -337,10 +363,10 @@ class _CreateEnrollmentDialogState
 
     try {
       await ref.read(enrollmentManagementRepositoryProvider).create(
-            studentUuid: selectedStudent!.uuid,
-            courseUuid: selectedCourse!.uuid,
-            status: status,
-          );
+        studentUuid: selectedStudent!.uuid,
+        courseUuid: selectedCourse!.uuid,
+        status: status,
+      );
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -372,6 +398,7 @@ class _CreateEnrollmentDialogState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 key: ValueKey('student_dd_${students.length}'),
                 value: students.any((s) => s.uuid == selectedStudent?.uuid)
                     ? selectedStudent?.uuid
@@ -382,10 +409,10 @@ class _CreateEnrollmentDialogState
                 items: students
                     .map(
                       (student) => DropdownMenuItem<String>(
-                        value: student.uuid,
-                        child: Text('${student.fullName} (${student.admissionNumber})'),
-                      ),
-                    )
+                    value: student.uuid,
+                    child: Text('${student.fullName} (${student.admissionNumber})'),
+                  ),
+                )
                     .toList(),
                 onChanged: (value) {
                   if (value == null) return;
@@ -398,6 +425,7 @@ class _CreateEnrollmentDialogState
               if (loadingStudents) const LinearProgressIndicator(),
               const SizedBox(height: 18),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 key: ValueKey('course_dd_${courses.length}'),
                 value: courses.any((c) => c.uuid == selectedCourse?.uuid)
                     ? selectedCourse?.uuid
@@ -408,10 +436,10 @@ class _CreateEnrollmentDialogState
                 items: courses
                     .map(
                       (course) => DropdownMenuItem<String>(
-                        value: course.uuid,
-                        child: Text('${course.name} (${course.code})'),
-                      ),
-                    )
+                    value: course.uuid,
+                    child: Text('${course.name} (${course.code})'),
+                  ),
+                )
                     .toList(),
                 onChanged: (value) {
                   if (value == null) return;
@@ -424,6 +452,7 @@ class _CreateEnrollmentDialogState
               if (loadingCourses) const LinearProgressIndicator(),
               const SizedBox(height: 18),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 value: status,
                 decoration: const InputDecoration(
                   labelText: 'Enrollment Status',
@@ -472,7 +501,7 @@ class _CreateEnrollmentDialogState
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: saving ? null : save,
+          onPressed: saving || loadingStudents || loadingCourses ? null : save,
           child: Text(
             saving ? 'Enrolling...' : 'Enroll Student',
           ),
@@ -523,12 +552,21 @@ class _BulkEnrollmentDialogState
     });
 
     try {
-      final response = await ref.read(courseRepositoryProvider).list();
-
+      final loadedCourses = <Course>[];
+      final repository = ref.read(courseRepositoryProvider);
+      int nextPage = 1;
+      while (true) {
+        final response = await repository.list(page: nextPage);
+        loadedCourses.addAll(response.results);
+        if (response.results.isEmpty || loadedCourses.length >= response.count) {
+          break;
+        }
+        nextPage++;
+      }
       if (!mounted) return;
-
       setState(() {
-        courses = response.results;
+        courses = loadedCourses;
+        error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -546,8 +584,8 @@ class _BulkEnrollmentDialogState
   }
 
   Future<DateTime?> pickDate(
-    DateTime? current,
-  ) async {
+      DateTime? current,
+      ) async {
     return showDatePicker(
       context: context,
       initialDate: current ?? DateTime.now(),
@@ -557,14 +595,14 @@ class _BulkEnrollmentDialogState
   }
 
   Future<DateTime?> pickDateTime(
-    DateTime? current,
-  ) async {
+      DateTime? current,
+      ) async {
     final initial = current ?? DateTime.now();
 
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime.now(),
+      firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
 
@@ -617,7 +655,8 @@ class _BulkEnrollmentDialogState
       return;
     }
 
-    if (accessStartAt != null &&
+    if (grantAccess &&
+        accessStartAt != null &&
         accessEndAt != null &&
         !accessEndAt!.isAfter(accessStartAt!)) {
       setState(() {
@@ -636,16 +675,16 @@ class _BulkEnrollmentDialogState
     try {
       final response = await ref
           .read(
-            enrollmentManagementRepositoryProvider,
-          )
+        enrollmentManagementRepositoryProvider,
+      )
           .bulkAssignByAdmissionDate(
-            courseUuid: selectedCourse!.uuid,
-            joinedDateFrom: joinedDateFrom!,
-            joinedDateTo: joinedDateTo,
-            grantAccess: grantAccess,
-            accessStartAt: accessStartAt,
-            accessEndAt: accessEndAt,
-          );
+        courseUuid: selectedCourse!.uuid,
+        joinedDateFrom: joinedDateFrom!,
+        joinedDateTo: joinedDateTo,
+        grantAccess: grantAccess,
+        accessStartAt: grantAccess ? accessStartAt : null,
+        accessEndAt: grantAccess ? accessEndAt : null,
+      );
 
       if (!mounted) return;
 
@@ -668,8 +707,8 @@ class _BulkEnrollmentDialogState
   }
 
   String formatDate(
-    DateTime? value,
-  ) {
+      DateTime? value,
+      ) {
     if (value == null) {
       return 'Not selected';
     }
@@ -680,8 +719,8 @@ class _BulkEnrollmentDialogState
   }
 
   String formatDateTime(
-    DateTime? value,
-  ) {
+      DateTime? value,
+      ) {
     if (value == null) {
       return 'Not selected';
     }
@@ -693,8 +732,8 @@ class _BulkEnrollmentDialogState
 
   @override
   Widget build(
-    BuildContext context,
-  ) {
+      BuildContext context,
+      ) {
     return AlertDialog(
       title: const Text('Bulk Assign Course'),
       content: SizedBox(
@@ -705,6 +744,7 @@ class _BulkEnrollmentDialogState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 key: ValueKey('bulk_course_dd_${courses.length}'),
                 value: courses.any((c) => c.uuid == selectedCourse?.uuid)
                     ? selectedCourse?.uuid
@@ -715,28 +755,28 @@ class _BulkEnrollmentDialogState
                 items: courses
                     .map(
                       (course) => DropdownMenuItem<String>(
-                        value: course.uuid,
-                        child: Text(
-                          '${course.name} (${course.code})',
-                        ),
-                      ),
-                    )
+                    value: course.uuid,
+                    child: Text(
+                      '${course.name} (${course.code})',
+                    ),
+                  ),
+                )
                     .toList(),
                 onChanged: loadingCourses
                     ? null
                     : (value) {
-                        if (value == null) {
-                          return;
-                        }
+                  if (value == null) {
+                    return;
+                  }
 
-                        setState(() {
-                          selectedCourse = courses.firstWhere(
-                            (c) => c.uuid == value,
-                          );
+                  setState(() {
+                    selectedCourse = courses.firstWhere(
+                          (c) => c.uuid == value,
+                    );
 
-                          error = null;
-                        });
-                      },
+                    error = null;
+                  });
+                },
               ),
               if (loadingCourses) const LinearProgressIndicator(),
               const SizedBox(
@@ -912,29 +952,29 @@ class _BulkEnrollmentDialogState
           onPressed: saving
               ? null
               : () {
-                  Navigator.pop(
-                    context,
-                    result != null,
-                  );
-                },
+            Navigator.pop(
+              context,
+              result != null,
+            );
+          },
           child: Text(
             result == null ? 'Cancel' : 'Close',
           ),
         ),
         if (result == null)
           FilledButton.icon(
-            onPressed: saving ? null : submit,
+            onPressed: saving || loadingCourses ? null : submit,
             icon: saving
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
-                  )
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            )
                 : const Icon(
-                    Icons.group_add,
-                  ),
+              Icons.group_add,
+            ),
             label: Text(
               saving ? 'Assigning...' : 'Assign Course',
             ),

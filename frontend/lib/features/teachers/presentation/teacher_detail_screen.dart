@@ -3,15 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
 import '../data/teacher.dart';
 import '../data/teacher_repository.dart';
 
 class TeacherDetailScreen extends ConsumerStatefulWidget {
-  const TeacherDetailScreen({
-    super.key,
-    required this.teacherUuid,
-  });
-
+  const TeacherDetailScreen({super.key, required this.teacherUuid});
   final String teacherUuid;
 
   @override
@@ -21,8 +18,7 @@ class TeacherDetailScreen extends ConsumerStatefulWidget {
 
 class _TeacherDetailScreenState extends ConsumerState<TeacherDetailScreen> {
   late Future<Teacher> result;
-
-  bool changingStatus = false;
+  bool busy = false;
 
   @override
   void initState() {
@@ -30,295 +26,278 @@ class _TeacherDetailScreenState extends ConsumerState<TeacherDetailScreen> {
     reload();
   }
 
+  @override
+  void didUpdateWidget(covariant TeacherDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teacherUuid != widget.teacherUuid) reload();
+  }
+
   void reload() {
     result = ref.read(teacherRepositoryProvider).detail(widget.teacherUuid);
   }
 
+  void goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/teachers');
+    }
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> toggleStatus(Teacher teacher) async {
-    setState(() {
-      changingStatus = true;
-    });
-
+    if (busy) return;
+    final repository = ref.read(teacherRepositoryProvider);
+    final uuid = teacher.uuid;
+    setState(() => busy = true);
     try {
-      await ref.read(teacherRepositoryProvider).setActive(
-            teacher.uuid,
-            !teacher.isActive,
-          );
-
-      if (mounted) {
-        setState(reload);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              teacher.isActive
-                  ? 'Teacher deactivated successfully.'
-                  : 'Teacher activated successfully.',
-            ),
-          ),
-        );
-      }
+      final updated = await repository.setActive(uuid, !teacher.isActive);
+      if (!mounted || widget.teacherUuid != uuid) return;
+      setState(() => result = Future<Teacher>.value(updated));
+      showMessage(updated.isActive
+          ? 'Teacher activated successfully.'
+          : 'Teacher deactivated successfully.');
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-          ),
-        );
+      if (mounted && widget.teacherUuid == uuid) showMessage(e.message);
+    } catch (_) {
+      if (mounted && widget.teacherUuid == uuid) {
+        showMessage('Could not update teacher status. Please try again.');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          changingStatus = false;
-        });
-      }
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> editTeacher(Teacher teacher) async {
+    if (busy) return;
+    final repository = ref.read(teacherRepositoryProvider);
+    final uuid = teacher.uuid;
+    setState(() => busy = true);
+    try {
+      final updated = await showDialog<Teacher>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EditTeacherDialog(
+          teacher: teacher,
+          repository: repository,
+        ),
+      );
+      if (!mounted || updated == null || widget.teacherUuid != uuid) return;
+      setState(() => result = Future<Teacher>.value(updated));
+      showMessage('Teacher updated successfully.');
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Teacher>(
-      future: result,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Could not load teacher:\n${snapshot.error}',
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    setState(reload);
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final teacher = snapshot.data!;
-
+  Widget build(BuildContext context) => FutureBuilder<Teacher>(
+    future: result,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData) {
+        final error = snapshot.error;
         return SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextButton.icon(
-                onPressed: () => context.pop(),
-                icon: const Icon(
-                  Icons.arrow_back,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: goBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Teachers'),
                 ),
+              ),
+              AdminStateMessage(
+                icon: Icons.cloud_off_rounded,
+                title: 'Could not load teacher',
+                message: error is ApiException
+                    ? error.message
+                    : 'Please try again.',
+                actionLabel: 'Retry',
+                onAction: () => setState(reload),
+                isError: true,
+              ),
+            ],
+          ),
+        );
+      }
+
+      final teacher = snapshot.data!;
+      final name = teacher.fullName.trim().isEmpty
+          ? teacher.employeeId
+          : teacher.fullName;
+      return SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: goBack,
+                icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Teachers'),
               ),
-              const SizedBox(height: 8),
-              Row(
+            ),
+            const SizedBox(height: 8),
+            AdminCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    child: Text(
-                      teacher.fullName.isNotEmpty
-                          ? teacher.fullName[0].toUpperCase()
-                          : 'T',
-                      style: const TextStyle(
-                        fontSize: 22,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
+                  InitialsBadge(label: adminInitials(name)),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          teacher.fullName,
+                          name,
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          teacher.employeeId,
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SoftBadge(
+                              label: teacher.employeeId,
+                              monospace: true,
+                            ),
+                            ActiveBadge(active: teacher.isActive),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  Chip(
-                    label: Text(
-                      teacher.isActive ? 'Active' : 'Inactive',
-                    ),
+                  IconButton(
+                    onPressed: busy ? null : () => setState(reload),
+                    tooltip: 'Refresh',
+                    icon: const Icon(Icons.refresh_rounded),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Teacher Information',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 18),
-                      _InfoRow(
-                        label: 'Employee ID',
-                        value: teacher.employeeId,
-                      ),
-                      _InfoRow(
-                        label: 'First Name',
-                        value: teacher.firstName,
-                      ),
-                      _InfoRow(
-                        label: 'Last Name',
-                        value: teacher.lastName,
-                      ),
-                      _InfoRow(
-                        label: 'Email',
-                        value: teacher.email.isEmpty ? '—' : teacher.email,
-                      ),
-                      _InfoRow(
-                        label: 'Phone',
-                        value: teacher.phone.isEmpty ? '—' : teacher.phone,
-                      ),
-                      _InfoRow(
-                        label: 'Gender',
-                        value: teacher.gender?.isNotEmpty == true
-                            ? teacher.gender!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Qualification',
-                        value: teacher.qualification?.isNotEmpty == true
-                            ? teacher.qualification!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Specialization',
-                        value: teacher.specialization.isEmpty
-                            ? '—'
-                            : teacher.specialization,
-                      ),
-                      _InfoRow(
-                        label: 'Experience Years',
-                        value: teacher.experienceYears.toString(),
-                      ),
-                      _InfoRow(
-                        label: 'Joined Date',
-                        value: teacher.joinedDate?.isNotEmpty == true
-                            ? teacher.joinedDate!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Academy',
-                        value: teacher.firmName?.isNotEmpty == true
-                            ? teacher.firmName!
-                            : '—',
-                      ),
-                      _InfoRow(
-                        label: 'Address',
-                        value: teacher.address?.isNotEmpty == true
-                            ? teacher.address!
-                            : '—',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 10,
+            ),
+            const SizedBox(height: 18),
+            AdminCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Edit Teacher'),
-                    onPressed: () async {
-                      final updated = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => _EditTeacherDialog(
-                          teacher: teacher,
-                          repository: ref.read(
-                            teacherRepositoryProvider,
-                          ),
-                        ),
-                      );
-
-                      if (updated == true && mounted) {
-                        setState(reload);
-                      }
-                    },
+                  Text(
+                    'Teacher information',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  OutlinedButton.icon(
-                    icon: Icon(
-                      teacher.isActive ? Icons.block : Icons.check_circle,
-                    ),
-                    label: Text(
-                      changingStatus
-                          ? 'Updating...'
-                          : teacher.isActive
-                              ? 'Deactivate Teacher'
-                              : 'Activate Teacher',
-                    ),
-                    onPressed: changingStatus
-                        ? null
-                        : () => toggleStatus(
-                              teacher,
-                            ),
+                  const SizedBox(height: 14),
+                  _InfoRow(label: 'Employee ID', value: teacher.employeeId),
+                  _InfoRow(label: 'First name', value: teacher.firstName),
+                  _InfoRow(label: 'Last name', value: teacher.lastName),
+                  _InfoRow(label: 'Email', value: teacher.email),
+                  _InfoRow(label: 'Phone', value: teacher.phone),
+                  _InfoRow(label: 'Gender', value: teacher.gender ?? ''),
+                  _InfoRow(
+                    label: 'Qualification',
+                    value: teacher.qualification ?? '',
                   ),
+                  _InfoRow(
+                    label: 'Specialization',
+                    value: teacher.specialization,
+                  ),
+                  _InfoRow(
+                    label: 'Experience years',
+                    value: teacher.experienceYears.toString(),
+                  ),
+                  _InfoRow(
+                    label: 'Joined date',
+                    value: teacher.joinedDate ?? '',
+                  ),
+                  _InfoRow(
+                    label: 'Academy',
+                    value: teacher.firmName ?? '',
+                  ),
+                  _InfoRow(label: 'Address', value: teacher.address ?? ''),
                 ],
               ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                GradientButton(
+                  label: 'Edit teacher',
+                  icon: Icons.edit_outlined,
+                  onPressed: busy ? null : () => editTeacher(teacher),
+                ),
+                AdminOutlineButton(
+                  label: teacher.isActive
+                      ? 'Deactivate teacher'
+                      : 'Activate teacher',
+                  icon: teacher.isActive
+                      ? Icons.person_off_outlined
+                      : Icons.person_outline_rounded,
+                  danger: teacher.isActive,
+                  onPressed: busy ? null : () => toggleStatus(teacher),
+                ),
+              ],
+            ),
+            if (busy) ...[
+              const SizedBox(height: 14),
+              const LinearProgressIndicator(),
             ],
-          ),
-        );
-      },
-    );
-  }
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final labelWidget = Text(label, style: textTheme.bodySmall);
+    final valueWidget = SelectableText(
+      value.trim().isEmpty ? '—' : value,
+      style: textTheme.bodyMedium,
+    );
+
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 170,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(
-              value,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                labelWidget,
+                const SizedBox(height: 4),
+                valueWidget,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 160, child: labelWidget),
+              const SizedBox(width: 16),
+              Expanded(child: valueWidget),
+            ],
+          );
+        },
       ),
     );
   }
@@ -339,71 +318,20 @@ class _EditTeacherDialog extends StatefulWidget {
 
 class _EditTeacherDialogState extends State<_EditTeacherDialog> {
   final formKey = GlobalKey<FormState>();
-
-  late final TextEditingController employeeId;
-
-  late final TextEditingController firstName;
-
-  late final TextEditingController lastName;
-
-  late final TextEditingController email;
-
-  late final TextEditingController phone;
-
-  late final TextEditingController qualification;
-
-  late final TextEditingController specialization;
-
-  late final TextEditingController experience;
-
-  late final TextEditingController address;
+  late final employeeId = TextEditingController(text: widget.teacher.employeeId);
+  late final firstName = TextEditingController(text: widget.teacher.firstName);
+  late final lastName = TextEditingController(text: widget.teacher.lastName);
+  late final email = TextEditingController(text: widget.teacher.email);
+  late final phone = TextEditingController(text: widget.teacher.phone);
+  late final qualification = TextEditingController(text: widget.teacher.qualification ?? '');
+  late final specialization = TextEditingController(text: widget.teacher.specialization);
+  late final experience = TextEditingController(
+    text: widget.teacher.experienceYears.toString(),
+  );
+  late final address = TextEditingController(text: widget.teacher.address ?? '');
 
   bool saving = false;
-
   String? error;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final teacher = widget.teacher;
-
-    employeeId = TextEditingController(
-      text: teacher.employeeId,
-    );
-
-    firstName = TextEditingController(
-      text: teacher.firstName,
-    );
-
-    lastName = TextEditingController(
-      text: teacher.lastName,
-    );
-
-    email = TextEditingController(
-      text: teacher.email,
-    );
-
-    phone = TextEditingController(
-      text: teacher.phone,
-    );
-
-    qualification = TextEditingController(
-      text: teacher.qualification ?? '',
-    );
-
-    specialization = TextEditingController(
-      text: teacher.specialization,
-    );
-
-    experience = TextEditingController(
-      text: teacher.experienceYears.toString(),
-    );
-
-    address = TextEditingController(
-      text: teacher.address ?? '',
-    );
-  }
 
   @override
   void dispose() {
@@ -416,22 +344,21 @@ class _EditTeacherDialogState extends State<_EditTeacherDialog> {
     specialization.dispose();
     experience.dispose();
     address.dispose();
-
     super.dispose();
   }
 
   Future<void> save() async {
-    if (!formKey.currentState!.validate()) {
-      return;
-    }
+    if (saving) return;
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    FocusScope.of(context).unfocus();
 
+    final years = int.parse(experience.text.trim());
     setState(() {
       saving = true;
       error = null;
     });
-
     try {
-      await widget.repository.update(
+      final updated = await widget.repository.update(
         widget.teacher.uuid,
         employeeId: employeeId.text,
         firstName: firstName.text,
@@ -440,155 +367,165 @@ class _EditTeacherDialogState extends State<_EditTeacherDialog> {
         phone: phone.text,
         qualification: qualification.text,
         specialization: specialization.text,
-        experienceYears: int.tryParse(
-              experience.text,
-            ) ??
-            0,
+        experienceYears: years,
         address: address.text,
       );
-
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (!mounted) return;
+      setState(() => saving = false);
+      Navigator.of(context).pop(updated);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
-        setState(() {
-          error = e.message;
-        });
+        setState(() => error = 'Could not update teacher. Please try again.');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted && saving) setState(() => saving = false);
     }
   }
 
+  Widget field({
+    required String label,
+    required TextEditingController controller,
+    bool mandatory = false,
+    int? maxLength,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    FormFieldValidator<String>? validator,
+    TextInputAction textInputAction = TextInputAction.next,
+  }) {
+    return FieldLabel(
+      label: label,
+      required: mandatory,
+      child: TextFormField(
+        controller: controller,
+        enabled: !saving,
+        maxLength: maxLength,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autocorrect: keyboardType != TextInputType.emailAddress,
+        decoration: adminFieldDecoration(
+          context,
+          hint: mandatory ? 'Enter ${label.toLowerCase()}' : 'Optional',
+        ),
+        validator: validator ?? (mandatory ? requiredField : null),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit Teacher'),
-      content: SizedBox(
-        width: 450,
-        child: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: employeeId,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee ID',
-                  ),
-                  validator: requiredField,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: firstName,
-                  decoration: const InputDecoration(
-                    labelText: 'First Name',
-                  ),
-                  validator: requiredField,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: lastName,
-                  decoration: const InputDecoration(
-                    labelText: 'Last Name',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: email,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: qualification,
-                  decoration: const InputDecoration(
-                    labelText: 'Qualification',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: specialization,
-                  decoration: const InputDecoration(
-                    labelText: 'Specialization',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: experience,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Experience Years',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: address,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                  ),
-                ),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: 10,
-                    ),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-              ],
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.edit_outlined,
+      title: 'Edit teacher',
+      subtitle: 'Update this teacher’s information.',
+      onClose: saving ? null : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            field(
+              label: 'Employee ID',
+              controller: employeeId,
+              mandatory: true,
+              maxLength: 50,
             ),
-          ),
+            const SizedBox(height: 16),
+            FormRow(
+              left: field(
+                label: 'First name',
+                controller: firstName,
+                mandatory: true,
+                maxLength: 100,
+              ),
+              right: field(
+                label: 'Last name',
+                controller: lastName,
+                maxLength: 100,
+              ),
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Email',
+              controller: email,
+              maxLength: 254,
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                final text = (value ?? '').trim();
+                if (text.isEmpty) return null;
+                return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                    .hasMatch(text)
+                    ? null
+                    : 'Enter a valid email';
+              },
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Phone',
+              controller: phone,
+              maxLength: 20,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Qualification',
+              controller: qualification,
+              maxLength: 255,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Specialization',
+              controller: specialization,
+              maxLength: 255,
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Experience years',
+              controller: experience,
+              mandatory: true,
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                final years = int.tryParse((value ?? '').trim());
+                return years == null || years < 0
+                    ? 'Enter a whole number, 0 or greater'
+                    : null;
+              },
+            ),
+            const SizedBox(height: 16),
+            field(
+              label: 'Address',
+              controller: address,
+              maxLines: 3,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 16),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: saving
-              ? null
-              : () => Navigator.pop(
-                    context,
-                  ),
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        GradientButton(
+          label: 'Save changes',
+          icon: Icons.check_rounded,
+          loading: saving,
           onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Changes',
-          ),
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
-String? requiredField(
-  String? value,
-) {
-  if (value == null || value.trim().isEmpty) {
-    return 'Required';
-  }
-
-  return null;
-}
+String? requiredField(String? value) =>
+    value == null || value.trim().isEmpty ? 'Required' : null;
