@@ -26,6 +26,7 @@ from courses.access import (
 from classes.models import LiveClass
 
 from .portal_serializers import (
+    StudentChapterVideoCourseSerializer,
     StudentCourseSerializer,
     StudentLiveClassSerializer,
     StudentLearningMaterialSerializer,
@@ -42,7 +43,6 @@ class StudentMyCoursesView(APIView):
     def get(self, request):
         student = request.user.student_profile
         now = timezone.now()
-
         enrollments = (
             Enrollment.objects
             .filter(
@@ -65,23 +65,83 @@ class StudentMyCoursesView(APIView):
             )
             .order_by("-enrolled_at")
         )
-
-        paginator = StandardResultsSetPagination()
-
-        page = paginator.paginate_queryset(
+        full_course_ids = list(
+            enrollments.values_list(
+                "course_id",
+                flat=True,
+            )
+        )
+        chapter_accesses = (
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                is_active=True,
+                course__is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .exclude(course_id__in=full_course_ids)
+            .select_related(
+                "course",
+                "course__category",
+                "chapter",
+            )
+            .order_by(
+                "course__name",
+                "chapter__sequence",
+            )
+        )
+        chapters_by_course_id = {}
+        first_access_by_course_id = {}
+        for access in chapter_accesses:
+            if access.course_id not in first_access_by_course_id:
+                first_access_by_course_id[
+                    access.course_id
+                ] = access
+            chapters_by_course_id.setdefault(
+                access.course_id,
+                [],
+            ).append(
+                {
+                    "uuid": str(access.chapter.uuid),
+                    "title": access.chapter.title,
+                    "sequence": access.chapter.sequence,
+                }
+            )
+        full_course_data = StudentCourseSerializer(
             enrollments,
+            many=True,
+        ).data
+        chapter_only_course_data = (
+            StudentChapterVideoCourseSerializer(
+                list(first_access_by_course_id.values()),
+                many=True,
+                context={
+                    "chapters_by_course_id": (
+                        chapters_by_course_id
+                    ),
+                },
+            ).data
+        )
+        courses = (
+            full_course_data
+            + chapter_only_course_data
+        )
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(
+            courses,
             request,
         )
-
-        serializer = StudentCourseSerializer(
-            page,
-            many=True,
-        )
-
         return paginator.get_paginated_response(
-            serializer.data
-        )
-        
+            page
+        )    
         
 class StudentCourseDetailView(APIView):
     permission_classes = [
@@ -92,15 +152,19 @@ class StudentCourseDetailView(APIView):
     def get(self, request, course_uuid):
         student = request.user.student_profile
         now = timezone.now()
-
+        course = get_object_or_404(
+            Course,
+            uuid=course_uuid,
+            firm=request.user.firm,
+            is_active=True,
+        )
         enrollment = (
             Enrollment.objects
             .filter(
                 firm=request.user.firm,
                 student=student,
-                course__uuid=course_uuid,
+                course=course,
                 status=Enrollment.Status.ACTIVE,
-                course__is_active=True,
             )
             .filter(
                 Q(access_start_at__isnull=True)
@@ -116,21 +180,67 @@ class StudentCourseDetailView(APIView):
             )
             .first()
         )
-
-        if not enrollment:
+        if enrollment:
+            return success_response(
+                message="Course retrieved successfully",
+                data=StudentCourseSerializer(
+                    enrollment
+                ).data,
+            )
+        chapter_accesses = (
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=request.user.firm,
+                student=student,
+                course=course,
+                is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .select_related(
+                "course",
+                "course__category",
+                "chapter",
+            )
+            .order_by("chapter__sequence")
+        )
+        first_access = chapter_accesses.first()
+        if not first_access:
             return error_response(
                 message="You do not have access to this course.",
                 errors={},
-                status_code=404,
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-
+        accessible_chapters = [
+            {
+                "uuid": str(access.chapter.uuid),
+                "title": access.chapter.title,
+                "sequence": access.chapter.sequence,
+            }
+            for access in chapter_accesses
+        ]
         return success_response(
-            message="Course retrieved successfully",
-            data=StudentCourseSerializer(
-                enrollment
+            message=(
+                "Chapter video course retrieved successfully"
+            ),
+            data=StudentChapterVideoCourseSerializer(
+                first_access,
+                context={
+                    "chapters_by_course_id": {
+                        course.id: accessible_chapters,
+                    },
+                },
             ).data,
-        )        
-
+        )
+            
+            
+    
 class StudentLiveClassListView(APIView):
     permission_classes = [
         IsAuthenticated,
