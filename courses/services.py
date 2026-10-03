@@ -260,6 +260,15 @@ def create_enrollment(*, firm, granted_by, validated_data):
         **validated_data,
     )
 
+    if enrollment.status == Enrollment.Status.ACTIVE:
+        from notifications.services import (
+            create_course_access_notification,
+        )
+
+        transaction.on_commit(
+            lambda: create_course_access_notification(enrollment)
+        )
+
     return enrollment
 
 
@@ -390,6 +399,18 @@ def bulk_assign_course_by_admission_date(
     created_enrollments = Enrollment.objects.bulk_create(
         new_enrollments
     )
+
+    if enrollment_status == Enrollment.Status.ACTIVE:
+        from notifications.services import (
+            create_course_access_notification,
+        )
+
+        for enrollment in created_enrollments:
+            transaction.on_commit(
+                lambda enrollment=enrollment: (
+                    create_course_access_notification(enrollment)
+                )
+            )
 
     return {
         "course": course,

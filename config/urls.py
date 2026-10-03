@@ -82,7 +82,8 @@ urlpatterns = [
 
     path("api/v1/dashboard/", include("dashboard.urls")),
     
-    
+    path("api/v1/notifications/", include("notifications.urls"),),
+
 ]
 
 from django.conf import settings

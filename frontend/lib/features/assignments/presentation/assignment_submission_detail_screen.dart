@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
 import '../data/assignment_submission.dart';
 import '../data/assignment_repository.dart';
 
-class AssignmentSubmissionDetailScreen
-    extends ConsumerStatefulWidget {
+class AssignmentSubmissionDetailScreen extends ConsumerStatefulWidget {
   const AssignmentSubmissionDetailScreen({
     super.key,
     required this.submissionUuid,
@@ -16,567 +16,410 @@ class AssignmentSubmissionDetailScreen
   final String submissionUuid;
 
   @override
-  ConsumerState<AssignmentSubmissionDetailScreen>
-      createState() =>
-          _AssignmentSubmissionDetailScreenState();
+  ConsumerState<AssignmentSubmissionDetailScreen> createState() =>
+      _AssignmentSubmissionDetailScreenState();
 }
 
 class _AssignmentSubmissionDetailScreenState
-    extends ConsumerState<
-        AssignmentSubmissionDetailScreen> {
+    extends ConsumerState<AssignmentSubmissionDetailScreen> {
   late Future<AssignmentSubmissionReview> result;
+  bool grading = false;
+  int revision = 0;
 
   @override
   void initState() {
     super.initState();
-
     reload();
+  }
+
+  @override
+  void didUpdateWidget(
+      covariant AssignmentSubmissionDetailScreen oldWidget,
+      ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.submissionUuid != widget.submissionUuid) {
+      revision++;
+      grading = false;
+      reload();
+    }
   }
 
   void reload() {
     result = ref
         .read(assignmentRepositoryProvider)
-        .submissionDetail(
-          widget.submissionUuid,
-        );
+        .submissionDetail(widget.submissionUuid);
   }
 
   void refresh() {
-    setState(reload);
+    if (!grading) setState(reload);
+  }
+
+  void back() {
+    if (grading) return;
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      final uuid =
+      GoRouterState.of(context).pathParameters['assignmentUuid'];
+
+      context.go(
+        uuid == null
+            ? '/assignments'
+            : '/assignments/$uuid/submissions',
+      );
+    }
+  }
+
+  Future<void> grade(
+      AssignmentSubmissionReview submission,
+      ) async {
+    if (grading || !_canGrade(submission)) return;
+
+    final ticket = revision;
+    setState(() => grading = true);
+
+    try {
+      final updated = await showDialog<AssignmentSubmissionReview>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _GradeDialog(submission: submission),
+      );
+
+      if (!mounted || ticket != revision || updated == null) return;
+
+      setState(() => result = Future.value(updated));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Submission graded successfully.'),
+        ),
+      );
+    } finally {
+      if (mounted && ticket == revision) {
+        setState(() => grading = false);
+      }
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<
-        AssignmentSubmissionReview>(
-      future: result,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot.connectionState !=
-            ConnectionState.done) {
-          return const Center(
-            child:
-                CircularProgressIndicator(),
-          );
-        }
+  Widget build(BuildContext context) => PopScope(
+    canPop: !grading,
+    child: ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: grading ? null : back,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Submissions'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FutureBuilder<AssignmentSubmissionReview>(
+          future: result,
+          builder: (context, snapshot) {
+            final state = adminFutureState(
+              snapshot,
+              noun: 'submission',
+              onRetry: refresh,
+            );
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+            if (state != null) return state;
+
+            final s = snapshot.data!;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Could not load submission:\n'
-                  '${snapshot.error}',
-                ),
-
-                const SizedBox(height: 8),
-
-                TextButton(
-                  onPressed: refresh,
-                  child:
-                      const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final submission =
-            snapshot.data!;
-
-        final manualAnswers =
-            submission.answers.where(
-          (answer) =>
-              answer.answerType ==
-                  'TEXT' ||
-              answer.answerType ==
-                  'FILE',
-        );
-
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              TextButton.icon(
-                onPressed:
-                    () => context.pop(),
-                icon: const Icon(
-                  Icons.arrow_back,
-                ),
-                label: const Text(
-                  'Submissions',
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 28,
-                    child: Icon(
-                      Icons.person_outline,
+                AdminPageHeader(
+                  title: s.studentName,
+                  subtitle: s.assignmentTitle,
+                  titleTrailing: [
+                    SoftBadge(label: s.status),
+                  ],
+                  actions: [
+                    AdminOutlineButton(
+                      label: 'Refresh',
+                      icon: Icons.refresh,
+                      onPressed: grading ? null : refresh,
                     ),
-                  ),
-
-                  const SizedBox(width: 16),
-
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          submission.studentName,
-                          style:
-                              Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall,
-                        ),
-
-                        const SizedBox(
-                          height: 4,
-                        ),
-
-                        Text(
-                          submission
-                              .admissionNumber,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Chip(
-                    label: Text(
-                      submission.status,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              Card(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.all(20),
+                    if (_canGrade(s))
+                      GradientButton(
+                        label: s.status == 'GRADED'
+                            ? 'Update Grade'
+                            : 'Grade Submission',
+                        icon: Icons.fact_check_outlined,
+                        onPressed: grading ? null : () => grade(s),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                AdminCard(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Submission Information',
-                        style:
-                            Theme.of(context)
-                                .textTheme
-                                .titleLarge,
+                        'Submission information',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-
-                      const SizedBox(
-                        height: 16,
-                      ),
-
+                      const SizedBox(height: 16),
                       _InfoRow(
-                        label:
-                            'Assignment',
-                        value: submission
-                            .assignmentTitle,
+                        label: 'Admission number',
+                        value: s.admissionNumber,
                       ),
-
                       _InfoRow(
-                        label:
-                            'Maximum Marks',
-                        value: submission
-                            .assignmentMaxMarks
-                            .toString(),
+                        label: 'Assignment',
+                        value: s.assignmentTitle,
                       ),
-
                       _InfoRow(
-                        label:
-                            'Status',
-                        value:
-                            submission.status,
+                        label: 'Maximum marks',
+                        value: _marks(s.assignmentMaxMarks),
                       ),
-
                       _InfoRow(
-                        label:
-                            'Submitted At',
-                        value:
-                            _formatDateTime(
-                          submission.submittedAt,
-                        ),
+                        label: 'Marks obtained',
+                        value: s.totalMarksObtained == null
+                            ? null
+                            : _marks(s.totalMarksObtained!),
                       ),
-
                       _InfoRow(
-                        label:
-                            'Marks Obtained',
-                        value: submission
-                                    .totalMarksObtained ==
-                                null
-                            ? '—'
-                            : submission
-                                .totalMarksObtained
-                                .toString(),
+                        label: 'Submitted at',
+                        value: _date(s.submittedAt),
                       ),
-
                       _InfoRow(
-                        label:
-                            'Graded At',
-                        value:
-                            _formatDateTime(
-                          submission.gradedAt,
-                        ),
+                        label: 'Graded at',
+                        value: _date(s.gradedAt),
                       ),
-
                       _InfoRow(
-                        label:
-                            'Graded By',
-                        value: submission
-                                    .gradedByName
-                                    ?.isNotEmpty ==
-                                true
-                            ? submission
-                                .gradedByName!
-                            : '—',
+                        label: 'Graded by',
+                        value: s.gradedByName,
                       ),
-
                       _InfoRow(
-                        label:
-                            'Feedback',
-                        value: submission
-                                .feedback
-                                .isEmpty
-                            ? '—'
-                            : submission
-                                .feedback,
+                        label: 'Overall feedback',
+                        value: s.feedback,
                       ),
                     ],
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Text(
-                'Student Answers',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge,
-              ),
-
-              const SizedBox(height: 10),
-
-              ...submission.answers.map(
-                (answer) => _AnswerCard(
-                  answer: answer,
+                const SizedBox(height: 16),
+                if (!['SUBMITTED', 'GRADED'].contains(s.status))
+                  const Text(
+                    'Only submitted or graded work can be graded.',
+                  ),
+                if (!s.answers.any(_manual))
+                  const Text(
+                    'No text or file answers require manual grading. '
+                        'MCQ marks are automatic.',
+                  ),
+                const SizedBox(height: 24),
+                Text(
+                  'Student answers (${s.answers.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              if (manualAnswers.isNotEmpty)
-                FilledButton.icon(
-                  onPressed: () async {
-                    final graded =
-                        await showDialog<
-                            bool>(
-                      context: context,
-                      builder: (_) =>
-                          _GradeSubmissionDialog(
-                        submission:
-                            submission,
-                      ),
-                    );
-
-                    if (graded == true &&
-                        mounted) {
-                      refresh();
-                    }
-                  },
-                  icon: const Icon(
-                    Icons.fact_check,
+                const SizedBox(height: 12),
+                if (s.answers.isEmpty)
+                  const AdminStateMessage(
+                    icon: Icons.inbox_outlined,
+                    title: 'No answers',
+                    message:
+                    'No answers are available for this submission.',
                   ),
-                  label: Text(
-                    submission.status ==
-                            'GRADED'
-                        ? 'Update Grade'
-                        : 'Grade Submission',
-                  ),
-                )
-              else
-                Card(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.all(
-                      16,
-                    ),
-                    child: Text(
-                      submission.status ==
-                              'GRADED'
-                          ? 'This submission contains only auto-graded answers.'
-                          : 'No manual-grade TEXT or FILE answers found.',
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+                for (final answer in s.answers) ...[
+                  _AnswerCard(answer: answer),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 }
 
-class _AnswerCard
-    extends StatelessWidget {
-  const _AnswerCard({
-    required this.answer,
-  });
+class _AnswerCard extends StatelessWidget {
+  const _AnswerCard({required this.answer});
+
+  final SubmissionAnswer answer;
+
+  @override
+  Widget build(BuildContext context) => AdminCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(
+          answer.questionText,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SoftBadge(label: answer.answerType),
+            SoftBadge(
+              label: 'Maximum ${_marks(answer.maxMarks)} marks',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _StudentAnswer(answer: answer),
+        const SizedBox(height: 16),
+        _InfoRow(
+          label: 'Marks obtained',
+          value: answer.marksObtained == null
+              ? 'Not graded'
+              : '${_marks(answer.marksObtained!)} / '
+              '${_marks(answer.maxMarks)}',
+        ),
+        if (answer.feedback.isNotEmpty)
+          _InfoRow(
+            label: 'Feedback',
+            value: answer.feedback,
+          ),
+      ],
+    ),
+  );
+}
+
+class _StudentAnswer extends StatelessWidget {
+  const _StudentAnswer({required this.answer});
 
   final SubmissionAnswer answer;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 12,
-      ),
-      child: Padding(
-        padding:
-            const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+    switch (answer.answerType) {
+      case 'TEXT':
+        return SelectableText(
+          answer.textAnswer.trim().isEmpty
+              ? 'No text answer provided.'
+              : answer.textAnswer,
+        );
+
+      case 'FILE':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    answer.questionText,
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.w600,
-                    ),
-                  ),
-                ),
-
-                Chip(
-                  label: Text(
-                    answer.answerType,
-                  ),
-                ),
-              ],
+            const Text('Submitted file'),
+            const SizedBox(height: 6),
+            SelectableText(
+              answer.fileKey.isEmpty
+                  ? 'No file submitted.'
+                  : answer.fileKey,
             ),
-
-            const SizedBox(height: 10),
-
-            Text(
-              'Maximum Marks: ${answer.maxMarks}',
-            ),
-
-            const SizedBox(height: 10),
-
-            if (answer.answerType ==
-                'TEXT') ...[
-              const Text(
-                'Student Answer',
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 4),
-
-              SelectableText(
-                answer.textAnswer.isEmpty
-                    ? 'No answer provided'
-                    : answer.textAnswer,
-              ),
-            ],
-
-            if (answer.answerType ==
-                'FILE') ...[
-              const Text(
-                'Submitted File',
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 4),
-
-              SelectableText(
-                answer.fileKey.isEmpty
-                    ? 'No file submitted'
-                    : answer.fileKey,
-              ),
-            ],
-
-            if (answer.answerType ==
-                'MCQ') ...[
-              const Text(
-                'Selected Option',
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                answer.selectedOption.isEmpty
-                    ? 'No option selected'
-                    : answer.selectedOption,
-              ),
-            ],
-
-            if (answer.marksObtained !=
-                null) ...[
-              const Divider(
-                height: 24,
-              ),
-
-              Text(
-                'Marks Obtained: '
-                '${answer.marksObtained} / '
-                '${answer.maxMarks}',
-              ),
-            ],
-
-            if (answer.feedback
-                .isNotEmpty) ...[
-              const SizedBox(height: 8),
-
-              Text(
-                'Feedback: ${answer.feedback}',
-              ),
-            ],
           ],
-        ),
-      ),
-    );
+        );
+
+      case 'MCQ':
+        return Text(
+          answer.selectedOption.isEmpty
+              ? 'No option selected.'
+              : 'Selected option: ${answer.selectedOption}',
+        );
+
+      default:
+        return const Text(
+          'Answer type is not supported by this screen.',
+        );
+    }
   }
 }
 
-class _GradeSubmissionDialog
-    extends ConsumerStatefulWidget {
-  const _GradeSubmissionDialog({
-    required this.submission,
-  });
+class _GradeInput {
+  _GradeInput(this.answer)
+      : marks = TextEditingController(
+    text: answer.marksObtained?.toStringAsFixed(2) ?? '',
+  ),
+        feedback = TextEditingController(
+          text: answer.feedback,
+        );
 
-  final AssignmentSubmissionReview
-      submission;
+  final SubmissionAnswer answer;
+  final TextEditingController marks;
+  final TextEditingController feedback;
 
-  @override
-  ConsumerState<_GradeSubmissionDialog>
-      createState() =>
-          _GradeSubmissionDialogState();
+  void dispose() {
+    marks.dispose();
+    feedback.dispose();
+  }
 }
 
-class _GradeSubmissionDialogState
-    extends ConsumerState<
-        _GradeSubmissionDialog> {
-  final finalFeedback =
-      TextEditingController();
+class _GradeDialog extends ConsumerStatefulWidget {
+  const _GradeDialog({required this.submission});
 
-  late List<_GradeAnswerInput>
-      manualAnswers;
+  final AssignmentSubmissionReview submission;
+
+  @override
+  ConsumerState<_GradeDialog> createState() => _GradeDialogState();
+}
+
+class _GradeDialogState extends ConsumerState<_GradeDialog> {
+  final form = GlobalKey<FormState>();
+
+  late final TextEditingController overallFeedback;
+  late final List<_GradeInput> inputs;
 
   bool saving = false;
-
   String? error;
 
   @override
   void initState() {
     super.initState();
 
-    finalFeedback.text =
-        widget.submission.feedback;
+    overallFeedback = TextEditingController(
+      text: widget.submission.feedback,
+    );
 
-    manualAnswers =
-        widget.submission.answers
-            .where(
-              (answer) =>
-                  answer.answerType ==
-                      'TEXT' ||
-                  answer.answerType ==
-                      'FILE',
-            )
-            .map(
-              (answer) =>
-                  _GradeAnswerInput(
-                answer: answer,
-              ),
-            )
-            .toList();
+    inputs = widget.submission.answers
+        .where(_manual)
+        .map(_GradeInput.new)
+        .toList();
   }
 
   @override
   void dispose() {
-    finalFeedback.dispose();
+    overallFeedback.dispose();
 
-    for (final item
-        in manualAnswers) {
-      item.dispose();
+    for (final input in inputs) {
+      input.dispose();
     }
 
     super.dispose();
   }
 
-  Future<void> save() async {
-    if (manualAnswers.isEmpty) {
-      setState(() {
-        error =
-            'No manual answers available for grading.';
-      });
+  String? validateMarks(
+      String? value,
+      SubmissionAnswer answer,
+      ) {
+    final cents = _parseCents(value?.trim() ?? '');
 
-      return;
+    if (cents == null) {
+      return 'Enter 0–999999.99 with at most 2 decimal places.';
     }
 
-    for (final item
-        in manualAnswers) {
-      final marks =
-          double.tryParse(
-        item.marksController.text,
-      );
+    if (cents > (answer.maxMarks * 100).round()) {
+      return 'Maximum allowed: ${_marks(answer.maxMarks)}.';
+    }
 
-      if (marks == null) {
-        setState(() {
-          error =
-              'Please enter marks for every manual answer.';
-        });
+    return null;
+  }
 
-        return;
-      }
+  Future<void> save() async {
+    if (saving || !form.currentState!.validate()) return;
+    if (!_canGrade(widget.submission)) return;
 
-      if (marks < 0) {
-        setState(() {
-          error =
-              'Marks cannot be negative.';
-        });
+    final ids = inputs.map((i) => i.answer.uuid).toList();
 
-        return;
-      }
-
-      if (marks >
-          item.answer.maxMarks) {
-        setState(() {
-          error =
-              'Marks for "${item.answer.questionText}" '
-              'cannot exceed ${item.answer.maxMarks}.';
-        });
-
-        return;
-      }
+    if (ids.any((id) => id.isEmpty) ||
+        ids.toSet().length != ids.length) {
+      setState(() {
+        error = 'Could not prepare answers for grading. '
+            'Reload the submission and try again.';
+      });
+      return;
     }
 
     setState(() {
@@ -585,374 +428,212 @@ class _GradeSubmissionDialogState
     });
 
     try {
-      final answers =
-          manualAnswers
-              .map(
-                (item) => {
-                  'answer_uuid':
-                      item.answer.uuid,
-                  'marks_obtained':
-                      double.parse(
-                    item.marksController
-                        .text,
-                  ),
-                  'feedback':
-                      item
-                          .feedbackController
-                          .text
-                          .trim(),
-                },
-              )
-              .toList();
+      final updated =
+      await ref.read(assignmentRepositoryProvider).gradeSubmission(
+        submissionUuid: widget.submission.uuid,
+        feedback: overallFeedback.text.trim(),
+        answers: inputs
+            .map(
+              (input) => <String, dynamic>{
+            'answer_uuid': input.answer.uuid,
+            'marks_obtained': _decimal(
+              _parseCents(input.marks.text.trim())!,
+            ),
+            'feedback': input.feedback.text.trim(),
+          },
+        )
+            .toList(),
+      );
 
-      await ref
-          .read(
-            assignmentRepositoryProvider,
-          )
-          .gradeSubmission(
-            submissionUuid:
-                widget.submission.uuid,
-            feedback:
-                finalFeedback.text,
-            answers:
-                answers,
-          );
-
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (mounted) Navigator.of(context).pop(updated);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          error =
-              e.message;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error =
-              e.toString();
+          error = 'Could not save grade. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title:
-          const Text(
-        'Grade Submission',
-      ),
-      content: SizedBox(
-        width: 650,
-        child:
-            SingleChildScrollView(
-          child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.submission
-                    .studentName,
-                style:
-                    Theme.of(context)
-                        .textTheme
-                        .titleMedium,
-              ),
-
-              Text(
-                widget.submission
-                    .assignmentTitle,
-              ),
-
-              const SizedBox(
-                height: 20,
-              ),
-
-              ...manualAnswers.map(
-                (item) =>
-                    _GradeAnswerCard(
-                  item: item,
-                ),
-              ),
-
-              const SizedBox(
-                height: 18,
-              ),
-
-              TextField(
-                controller:
-                    finalFeedback,
-                maxLines: 3,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'Overall Feedback',
-                ),
-              ),
-
-              if (error != null)
-                Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    top: 12,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color:
-                          Theme.of(context)
-                              .colorScheme
-                              .error,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: saving
-              ? null
-              : () =>
-                  Navigator.pop(
-                    context,
-                  ),
-          child:
-              const Text('Cancel'),
-        ),
-
-        FilledButton(
-          onPressed:
-              saving ? null : save,
-          child: Text(
-            saving
-                ? 'Saving...'
-                : 'Save Grade',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _GradeAnswerCard
-    extends StatelessWidget {
-  const _GradeAnswerCard({
-    required this.item,
-  });
-
-  final _GradeAnswerInput item;
-
-  @override
-  Widget build(BuildContext context) {
-    final answer =
-        item.answer;
-
-    return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 12,
-      ),
-      child: Padding(
-        padding:
-            const EdgeInsets.all(14),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.fact_check_outlined,
+      title: widget.submission.status == 'GRADED'
+          ? 'Update grade'
+          : 'Grade submission',
+      subtitle: widget.submission.studentName,
+      maxWidth: 700,
+      onClose: saving
+          ? null
+          : () => Navigator.of(context).pop(),
+      body: Form(
+        key: form,
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              answer.questionText,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight.w600,
+              widget.submission.assignmentTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Enter marks for every text and file answer. '
+                  'MCQ marks remain automatic.',
+            ),
+            const SizedBox(height: 16),
+            for (final input in inputs) ...[
+              AdminCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SelectableText(
+                      input.answer.questionText,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${input.answer.answerType} • '
+                          'Maximum ${_marks(input.answer.maxMarks)} marks',
+                    ),
+                    const SizedBox(height: 12),
+                    _StudentAnswer(answer: input.answer),
+                    const SizedBox(height: 16),
+                    FieldLabel(
+                      label: 'Marks obtained',
+                      required: true,
+                      child: TextFormField(
+                        controller: input.marks,
+                        enabled: !saving,
+                        keyboardType:
+                        const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: adminFieldDecoration(
+                          context,
+                          hint: '0.00',
+                        ),
+                        validator: (v) =>
+                            validateMarks(v, input.answer),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FieldLabel(
+                      label: 'Answer feedback',
+                      child: TextFormField(
+                        controller: input.feedback,
+                        enabled: !saving,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: adminFieldDecoration(
+                          context,
+                          hint: 'Optional feedback',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            FieldLabel(
+              label: 'Overall feedback',
+              child: TextFormField(
+                controller: overallFeedback,
+                enabled: !saving,
+                minLines: 3,
+                maxLines: 5,
+                decoration: adminFieldDecoration(
+                  context,
+                  hint: 'Optional overall feedback',
+                ),
               ),
             ),
-
-            const SizedBox(
-              height: 8,
-            ),
-
-            Text(
-              'Type: ${answer.answerType}',
-            ),
-
-            Text(
-              'Maximum Marks: ${answer.maxMarks}',
-            ),
-
-            const SizedBox(
-              height: 10,
-            ),
-
-            if (answer.answerType ==
-                'TEXT')
-              SelectableText(
-                answer.textAnswer.isEmpty
-                    ? 'No answer provided'
-                    : answer.textAnswer,
-              ),
-
-            if (answer.answerType ==
-                'FILE')
-              SelectableText(
-                answer.fileKey.isEmpty
-                    ? 'No file submitted'
-                    : answer.fileKey,
-              ),
-
-            const SizedBox(
-              height: 14,
-            ),
-
-            TextField(
-              controller:
-                  item.marksController,
-              keyboardType:
-                  const TextInputType
-                      .numberWithOptions(
-                decimal: true,
-              ),
-              decoration:
-                  InputDecoration(
-                labelText:
-                    'Marks Obtained',
-                helperText:
-                    'Maximum ${answer.maxMarks}',
-              ),
-            ),
-
-            const SizedBox(
-              height: 10,
-            ),
-
-            TextField(
-              controller:
-                  item.feedbackController,
-              maxLines: 2,
-              decoration:
-                  const InputDecoration(
-                labelText:
-                    'Answer Feedback',
-              ),
-            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              AdminErrorBanner(message: error!),
+            ],
           ],
         ),
       ),
-    );
-  }
-}
-
-class _GradeAnswerInput {
-  _GradeAnswerInput({
-    required this.answer,
-  })  : marksController =
-            TextEditingController(
-          text:
-              answer.marksObtained
-                  ?.toString() ??
-              '',
+      actions: [
+        AdminOutlineButton(
+          label: 'Cancel',
+          onPressed: saving
+              ? null
+              : () => Navigator.of(context).pop(),
         ),
-        feedbackController =
-            TextEditingController(
-          text:
-              answer.feedback,
-        );
-
-  final SubmissionAnswer answer;
-
-  final TextEditingController
-      marksController;
-
-  final TextEditingController
-      feedbackController;
-
-  void dispose() {
-    marksController.dispose();
-    feedbackController.dispose();
-  }
+        GradientButton(
+          label: 'Save Grade',
+          icon: Icons.check,
+          loading: saving,
+          onPressed: saving ? null : save,
+        ),
+      ],
+    ),
+  );
 }
 
-class _InfoRow
-    extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, this.value});
 
   final String label;
-  final String value;
+  final String? value;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 6,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: FormRow(
+      left: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge,
       ),
-      child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 170,
-            child: Text(
-              label,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight.w600,
-              ),
-            ),
-          ),
-
-          Expanded(
-            child:
-                SelectableText(
-              value,
-            ),
-          ),
-        ],
+      right: SelectableText(
+        value?.trim().isNotEmpty == true ? value! : '—',
       ),
-    );
-  }
+    ),
+  );
 }
 
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return '—';
-  }
+bool _manual(SubmissionAnswer answer) =>
+    ['TEXT', 'FILE'].contains(answer.answerType);
 
-  final local =
-      value.toLocal();
+bool _canGrade(AssignmentSubmissionReview submission) =>
+    ['SUBMITTED', 'GRADED'].contains(submission.status) &&
+        submission.answers.any(_manual);
 
-  String two(
-    int value,
-  ) =>
-      value
-          .toString()
-          .padLeft(2, '0');
+int? _parseCents(String text) {
+  if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)) return null;
 
-  return '${two(local.day)}/'
-      '${two(local.month)}/'
-      '${local.year} '
-      '${two(local.hour)}:'
-      '${two(local.minute)}';
+  final parts = text.split('.');
+  final whole = int.tryParse(parts[0]);
+
+  if (whole == null || whole < 0 || whole > 999999) return null;
+
+  final fraction = parts.length == 1
+      ? 0
+      : int.parse(parts[1].padRight(2, '0'));
+
+  return whole * 100 + fraction;
+}
+
+String _decimal(int cents) =>
+    '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
+
+String _marks(double value) => value.toStringAsFixed(2);
+
+String _date(DateTime? value) {
+  if (value == null) return '—';
+
+  final d = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+
+  return '${two(d.day)}/${two(d.month)}/${d.year} '
+      '${two(d.hour)}:${two(d.minute)}';
 }

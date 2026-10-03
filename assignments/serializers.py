@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
+from common.storage_urls import get_private_file_url
 import os
 from .models import (
     Assignment,
@@ -380,6 +381,7 @@ class AssignmentAnswerReviewSerializer(
         read_only=True,
     )
 
+    file_url = serializers.SerializerMethodField()
     class Meta:
         model = AssignmentAnswer
 
@@ -391,6 +393,7 @@ class AssignmentAnswerReviewSerializer(
             "max_marks",
             "text_answer",
             "file_key",
+            "file_url",
             "selected_option",
             "marks_obtained",
             "feedback",
@@ -399,6 +402,10 @@ class AssignmentAnswerReviewSerializer(
         )
 
         read_only_fields = fields
+
+    def get_file_url(self, obj):
+        return get_private_file_url(obj.file_key)
+
 
 
 class AssignmentSubmissionReviewSerializer(
