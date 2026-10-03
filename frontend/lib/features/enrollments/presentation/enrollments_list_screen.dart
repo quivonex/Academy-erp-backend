@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/admin_ui.dart';
+import '../../../core/widgets/status_pill.dart';
+
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
@@ -71,174 +74,180 @@ class _EnrollmentsListScreenState
     }
   }
 
+  Future<void> _openBulk() async {
+    final done = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _BulkEnrollmentDialog(),
+    );
+    if (done == true && mounted) {
+      setState(() {
+        page = 1;
+        reload();
+      });
+    }
+  }
+
+  String _date(DateTime? value) {
+    if (value == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final d = value.toLocal();
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Enrollments',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            FilledButton.icon(
-              onPressed: addEnrollment,
-              icon: const Icon(
-                Icons.person_add_alt,
-              ),
-              label: const Text(
-                'Enroll Student',
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final done = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => const _BulkEnrollmentDialog(),
-                );
-
-                if (done == true && mounted) {
-                  setState(() {
-                    page = 1;
-                    reload();
-                  });
-                }
-              },
-              icon: const Icon(
-                Icons.group_add_outlined,
-              ),
-              label: const Text(
-                'Bulk Assign',
-              ),
-            ),
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Admissions',
+            detail: 'Course enrollments & access',
+          ),
+          title: 'Enrollments',
+          titleTrailing: [
             IconButton(
               onPressed: refresh,
-              icon: const Icon(
-                Icons.refresh,
-              ),
+              icon: const Icon(Icons.refresh_rounded),
               tooltip: 'Refresh',
             ),
           ],
+          actions: [
+            AdminOutlineButton(
+              label: 'Bulk assign',
+              icon: Icons.group_add_outlined,
+              onPressed: _openBulk,
+            ),
+            GradientButton(
+              label: 'Enroll student',
+              icon: Icons.person_add_alt_1_rounded,
+              onPressed: addEnrollment,
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<EnrollmentPage>(
             future: result,
-            builder: (
-              context,
-              snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'enrollments',
+                onRetry: refresh,
+              );
+              final data = snapshot.data;
+              final rows = data?.results ?? const <Enrollment>[];
+              final active =
+                  rows.where((e) => e.status.toUpperCase() == 'ACTIVE').length;
+              final now = DateTime.now();
+              final endingSoon = rows.where((e) {
+                final end = e.accessEndAt;
+                return end != null &&
+                    end.isAfter(now) &&
+                    end.difference(now).inDays <= 30;
+              }).length;
+              final courses = rows.map((e) => e.courseCode).toSet().length;
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Could not load enrollments:\n'
-                        '${snapshot.error}',
-                      ),
-                      TextButton(
-                        onPressed: refresh,
-                        child: const Text(
-                          'Retry',
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final data = snapshot.data!;
-
-              if (data.results.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No enrollments found.',
-                  ),
-                );
-              }
-
-              return Column(
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: data.results.length,
-                      itemBuilder: (context, index) {
-                        final enrollment = data.results[index];
-
-                        return Card(
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(
-                                Icons.school,
-                              ),
-                            ),
-                            title: Text(
-                              enrollment.studentName,
-                            ),
-                            subtitle: Text(
-                              '${enrollment.admissionNumber}'
-                              ' • '
-                              '${enrollment.courseName}'
-                              ' (${enrollment.courseCode})',
-                            ),
-                            trailing: Chip(
-                              label: Text(
-                                enrollment.status,
-                              ),
-                            ),
-                            onTap: () async {
-                              await context.push(
-                                '/enrollments/${enrollment.uuid}',
-                              );
-
-                              if (mounted) {
-                                refresh();
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  AdminKpiGrid(
                     children: [
-                      Text(
-                        '${data.count} total • Page $page',
+                      AdminKpiCard(
+                        label: 'Total enrollments',
+                        value: data == null ? '…' : '${data.count}',
+                        icon: Icons.how_to_reg_outlined,
                       ),
-                      IconButton(
-                        onPressed: page > 1
-                            ? () => changePage(
-                                  page - 1,
-                                )
-                            : null,
-                        icon: const Icon(
-                          Icons.chevron_left,
-                        ),
+                      AdminKpiCard(
+                        label: 'Active on this page',
+                        value: data == null ? '…' : '$active',
+                        icon: Icons.verified_outlined,
+                        iconBackground: const Color(0xFFECFDF5),
+                        iconForeground: const Color(0xFF059669),
                       ),
-                      IconButton(
-                        onPressed: page * 20 < data.count
-                            ? () => changePage(
-                                  page + 1,
-                                )
-                            : null,
-                        icon: const Icon(
-                          Icons.chevron_right,
-                        ),
+                      AdminKpiCard(
+                        label: 'Access ending ≤ 30 days',
+                        value: data == null ? '…' : '$endingSoon',
+                        icon: Icons.hourglass_bottom_rounded,
+                        iconBackground: const Color(0xFFFFFBEB),
+                        iconForeground: const Color(0xFFD97706),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'Courses on this page',
+                        value: data == null ? '…' : '$courses',
+                        icon: Icons.auto_stories_outlined,
+                        iconBackground: const Color(0xFFF5F3FF),
+                        iconForeground: const Color(0xFF7C3AED),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 22),
+                  if (state != null)
+                    state
+                  else if (rows.isEmpty)
+                    AdminStateMessage(
+                      icon: Icons.how_to_reg_outlined,
+                      title: 'No enrollments yet',
+                      message: 'Enroll a student into a course to get started.',
+                      actionLabel: 'Enroll student',
+                      onAction: addEnrollment,
+                    )
+                  else ...[
+                    for (final enrollment in rows)
+                      AdminListRow(
+                        title: enrollment.studentName,
+                        initials: adminInitials(enrollment.studentName),
+                        seed: enrollment.admissionNumber,
+                        titleBadge: enrollment.admissionNumber.isEmpty
+                            ? null
+                            : SoftBadge(
+                                label: enrollment.admissionNumber,
+                                monospace: true,
+                                background: const Color(0xFFF1F5F9),
+                                foreground: const Color(0xFF334155),
+                              ),
+                        subtitle:
+                            '${enrollment.courseName} (${enrollment.courseCode})',
+                        meta: [
+                          if (enrollment.enrolledAt != null)
+                            MetaChip(
+                              icon: Icons.event_available_outlined,
+                              label:
+                                  'Enrolled ${_date(enrollment.enrolledAt)}',
+                            ),
+                          if (enrollment.accessEndAt != null)
+                            MetaChip(
+                              icon: Icons.lock_clock_outlined,
+                              label:
+                                  'Access until ${_date(enrollment.accessEndAt)}',
+                            ),
+                        ],
+                        trailing: [
+                          StatusPill(
+                            label: enrollment.status.toUpperCase(),
+                            tone: toneForStatus(enrollment.status),
+                            compact: true,
+                          ),
+                        ],
+                        onTap: () async {
+                          await context.push(
+                            '/enrollments/${enrollment.uuid}',
+                          );
+                          if (mounted) refresh();
+                        },
+                      ),
+                    AdminPager(
+                      page: page,
+                      pageSize: 20,
+                      total: data!.count,
+                      noun: 'enrollments',
+                      onPage: changePage,
+                    ),
+                  ],
                 ],
               );
             },

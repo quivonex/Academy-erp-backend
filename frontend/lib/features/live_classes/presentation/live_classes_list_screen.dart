@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/admin_ui.dart';
+import '../../../core/widgets/status_pill.dart';
+
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
@@ -100,209 +103,169 @@ class _LiveClassesListScreenState extends ConsumerState<LiveClassesListScreen> {
     super.dispose();
   }
 
+  void _setStatus(String? value) {
+    setState(() {
+      statusFilter = value;
+      page = 1;
+      reload();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Live Classes',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            FilledButton.icon(
-              onPressed: createLiveClass,
-              icon: const Icon(
-                Icons.video_call_outlined,
-              ),
-              label: const Text(
-                'Schedule Class',
-              ),
-            ),
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Virtual campus',
+            detail: 'Live classes & lectures',
+          ),
+          title: 'Live classes',
+          titleTrailing: [
             IconButton(
               tooltip: 'Refresh',
               onPressed: refresh,
-              icon: const Icon(
-                Icons.refresh,
-              ),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+          actions: [
+            GradientButton(
+              label: 'Schedule class',
+              icon: Icons.video_call_outlined,
+              onPressed: createLiveClass,
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            SizedBox(
-              width: 350,
-              child: TextField(
-                controller: searchController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search live classes',
-                  hintText: 'Title or course name',
-                ),
-                onSubmitted: (_) => applySearch(),
-              ),
-            ),
-            SizedBox(
-              width: 190,
-              child: DropdownButtonFormField<String>(
-                value: statusFilter ?? 'ALL',
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'ALL',
-                    child: Text('All'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'SCHEDULED',
-                    child: Text('Scheduled'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'LIVE',
-                    child: Text('Live'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'COMPLETED',
-                    child: Text('Completed'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'CANCELLED',
-                    child: Text('Cancelled'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    statusFilter = value == 'ALL' ? null : value;
-
-                    page = 1;
-
-                    reload();
-                  });
-                },
-              ),
-            ),
-            FilledButton(
-              onPressed: applySearch,
-              child: const Text('Search'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<LiveClassPage>(
             future: result,
-            builder: (
-              context,
-              snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'live classes',
+                onRetry: refresh,
+              );
+              final data = snapshot.data;
+              final rows = data?.results ?? const <LiveClass>[];
+              int countOf(String status) => rows
+                  .where((c) => c.status.toUpperCase() == status)
+                  .length;
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Could not load live classes:\n'
-                        '${snapshot.error}',
-                      ),
-                      TextButton(
-                        onPressed: refresh,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final data = snapshot.data!;
-
-              if (data.results.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No live classes found.',
-                  ),
-                );
-              }
-
-              return Column(
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: data.results.length,
-                      itemBuilder: (context, index) {
-                        final liveClass = data.results[index];
-
-                        return Card(
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(
-                                Icons.videocam_outlined,
-                              ),
-                            ),
-                            title: Text(
-                              liveClass.title,
-                            ),
-                            subtitle: Text(
-                              '${liveClass.courseName}'
-                              ' • '
-                              '${liveClass.teacherName}'
-                              '\n'
-                              '${_formatDateTime(liveClass.scheduledStartAt)}',
-                            ),
-                            isThreeLine: true,
-                            trailing: _LiveStatusChip(
-                              status: liveClass.status,
-                            ),
-                            onTap: () async {
-                              await context.push(
-                                '/live-classes/${liveClass.uuid}',
-                              );
-
-                              if (mounted) {
-                                refresh();
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  AdminKpiGrid(
                     children: [
-                      Text(
-                        '${data.count} total • Page $page',
+                      AdminKpiCard(
+                        label: 'Total classes',
+                        value: data == null ? '…' : '${data.count}',
+                        icon: Icons.video_library_outlined,
                       ),
-                      IconButton(
-                        onPressed:
-                            page > 1 ? () => changePage(page - 1) : null,
-                        icon: const Icon(
-                          Icons.chevron_left,
-                        ),
+                      AdminKpiCard(
+                        label: 'Live now',
+                        value: data == null ? '…' : '${countOf('LIVE')}',
+                        icon: Icons.podcasts_rounded,
+                        iconBackground: const Color(0xFFFFF1F2),
+                        iconForeground: const Color(0xFFE11D48),
+                        caption: 'On this page',
                       ),
-                      IconButton(
-                        onPressed: page * 20 < data.count
-                            ? () => changePage(page + 1)
-                            : null,
-                        icon: const Icon(
-                          Icons.chevron_right,
-                        ),
+                      AdminKpiCard(
+                        label: 'Scheduled',
+                        value: data == null ? '…' : '${countOf('SCHEDULED')}',
+                        icon: Icons.event_available_outlined,
+                        iconBackground: const Color(0xFFF0F9FF),
+                        iconForeground: const Color(0xFF0284C7),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'Completed',
+                        value: data == null ? '…' : '${countOf('COMPLETED')}',
+                        icon: Icons.task_alt_rounded,
+                        iconBackground: const Color(0xFFECFDF5),
+                        iconForeground: const Color(0xFF059669),
+                        caption: 'On this page',
                       ),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  AdminToolbar(
+                    controller: searchController,
+                    hint: 'Search by title or course name…',
+                    onSearch: applySearch,
+                    filters: [
+                      for (final entry in const [
+                        ['ALL', null],
+                        ['LIVE', 'LIVE'],
+                        ['SCHEDULED', 'SCHEDULED'],
+                        ['COMPLETED', 'COMPLETED'],
+                        ['CANCELLED', 'CANCELLED'],
+                      ])
+                        CountFilterPill(
+                          label: entry[0]!,
+                          selected: statusFilter == entry[1],
+                          onTap: () => _setStatus(entry[1]),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (state != null)
+                    state
+                  else if (rows.isEmpty)
+                    AdminStateMessage(
+                      icon: Icons.video_call_outlined,
+                      title: 'No live classes found',
+                      message: 'Schedule a class or change the filters.',
+                      actionLabel: 'Schedule class',
+                      onAction: createLiveClass,
+                    )
+                  else ...[
+                    for (final liveClass in rows)
+                      AdminListRow(
+                        title: liveClass.title,
+                        icon: liveClass.status.toUpperCase() == 'LIVE'
+                            ? Icons.podcasts_rounded
+                            : Icons.videocam_outlined,
+                        subtitle: liveClass.description,
+                        meta: [
+                          MetaChip(
+                            icon: Icons.auto_stories_outlined,
+                            label: liveClass.courseName,
+                          ),
+                          if (liveClass.teacherName.isNotEmpty)
+                            MetaChip(
+                              icon: Icons.person_outline_rounded,
+                              label: liveClass.teacherName,
+                            ),
+                          MetaChip(
+                            icon: Icons.schedule_rounded,
+                            label: _formatDateTime(liveClass.scheduledStartAt),
+                          ),
+                          if ((liveClass.subjectName ?? '').isNotEmpty)
+                            MetaChip(
+                              icon: Icons.menu_book_outlined,
+                              label: liveClass.subjectName!,
+                            ),
+                        ],
+                        trailing: [
+                          _LiveStatusChip(status: liveClass.status),
+                        ],
+                        onTap: () async {
+                          await context.push(
+                            '/live-classes/${liveClass.uuid}',
+                          );
+                          if (mounted) refresh();
+                        },
+                      ),
+                    AdminPager(
+                      page: page,
+                      pageSize: 20,
+                      total: data!.count,
+                      noun: 'classes',
+                      onPage: changePage,
+                    ),
+                  ],
                 ],
               );
             },
@@ -940,10 +903,16 @@ class _LiveStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(
-        status.toUpperCase(),
-      ),
+    final tone = switch (status.toUpperCase()) {
+      'LIVE' => PillTone.danger,
+      'SCHEDULED' => PillTone.info,
+      'COMPLETED' => PillTone.success,
+      _ => PillTone.neutral,
+    };
+    return StatusPill(
+      label: status.toUpperCase(),
+      tone: tone,
+      compact: true,
     );
   }
 }

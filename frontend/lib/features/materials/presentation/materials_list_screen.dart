@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/admin_ui.dart';
+
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
@@ -74,181 +76,199 @@ class _MaterialsListScreenState extends ConsumerState<MaterialsListScreen> {
     super.dispose();
   }
 
+  Future<void> _openCreate() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _CreateMaterialDialog(),
+    );
+    if (created == true && mounted) {
+      setState(() {
+        page = 1;
+        reload();
+      });
+    }
+  }
+
+  void _setType(String? value) {
+    setState(() {
+      typeFilter = value;
+      page = 1;
+      reload();
+    });
+  }
+
+  void _goToPage(int value) {
+    setState(() {
+      page = value;
+      reload();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Learning Materials',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                final created = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => const _CreateMaterialDialog(),
-                );
-
-                if (created == true && mounted) {
-                  setState(() {
-                    page = 1;
-                    reload();
-                  });
-                }
-              },
-              icon: const Icon(
-                Icons.upload_file,
-              ),
-              label: const Text(
-                'Add Material',
-              ),
-            ),
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Content library',
+            detail: 'Videos, PDFs, documents & links',
+          ),
+          title: 'Learning materials',
+          titleTrailing: [
             IconButton(
+              tooltip: 'Refresh',
               onPressed: refresh,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+          actions: [
+            GradientButton(
+              label: 'Add material',
+              icon: Icons.upload_file_rounded,
+              onPressed: _openCreate,
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            SizedBox(
-              width: 350,
-              child: TextField(
-                controller: searchController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search materials',
-                ),
-                onSubmitted: (_) => applySearch(),
-              ),
-            ),
-            SizedBox(
-              width: 200,
-              child: DropdownButtonFormField<String>(
-                value: typeFilter ?? 'ALL',
-                decoration: const InputDecoration(
-                  labelText: 'Material Type',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'ALL',
-                    child: Text('All'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'VIDEO',
-                    child: Text('Video'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'PDF',
-                    child: Text('PDF'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'DOCUMENT',
-                    child: Text('Document'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'LINK',
-                    child: Text('Link'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    typeFilter = value == 'ALL' ? null : value;
-
-                    page = 1;
-
-                    reload();
-                  });
-                },
-              ),
-            ),
-            FilledButton(
-              onPressed: applySearch,
-              child: const Text('Search'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<LearningMaterialPage>(
             future: result,
-            builder: (
-              context,
-              snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'materials',
+                onRetry: refresh,
+              );
+              final data = snapshot.data;
+              final rows = data?.results ?? const <LearningMaterial>[];
+              int countOf(String type) => rows
+                  .where((m) => m.materialType.toUpperCase() == type)
+                  .length;
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    'Could not load materials:\n'
-                    '${snapshot.error}',
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: [
+                  AdminKpiGrid(
+                    children: [
+                      AdminKpiCard(
+                        label: 'Total materials',
+                        value: data == null ? '…' : '${data.count}',
+                        icon: Icons.folder_copy_outlined,
+                      ),
+                      AdminKpiCard(
+                        label: 'Videos',
+                        value: data == null ? '…' : '${countOf('VIDEO')}',
+                        icon: Icons.smart_display_outlined,
+                        iconBackground: const Color(0xFFFFF1F2),
+                        iconForeground: const Color(0xFFE11D48),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'PDFs & documents',
+                        value: data == null
+                            ? '…'
+                            : '${countOf('PDF') + countOf('DOCUMENT')}',
+                        icon: Icons.picture_as_pdf_outlined,
+                        iconBackground: const Color(0xFFF0F9FF),
+                        iconForeground: const Color(0xFF0284C7),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'Links',
+                        value: data == null ? '…' : '${countOf('LINK')}',
+                        icon: Icons.link_rounded,
+                        iconBackground: const Color(0xFFF5F3FF),
+                        iconForeground: const Color(0xFF7C3AED),
+                        caption: 'On this page',
+                      ),
+                    ],
                   ),
-                );
-              }
-
-              final data = snapshot.data!;
-
-              if (data.results.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No materials found.',
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                itemCount: data.results.length,
-                itemBuilder: (context, index) {
-                  final material = data.results[index];
-
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        child: Icon(
-                          _iconForType(
-                            material.materialType,
-                          ),
+                  const SizedBox(height: 18),
+                  AdminToolbar(
+                    controller: searchController,
+                    hint: 'Search materials…',
+                    onSearch: applySearch,
+                    filters: [
+                      for (final entry in const [
+                        ['ALL', null],
+                        ['VIDEO', 'VIDEO'],
+                        ['PDF', 'PDF'],
+                        ['DOCUMENT', 'DOCUMENT'],
+                        ['LINK', 'LINK'],
+                      ])
+                        CountFilterPill(
+                          label: entry[0]!,
+                          selected: typeFilter == entry[1],
+                          onTap: () => _setType(entry[1]),
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (state != null)
+                    state
+                  else if (rows.isEmpty)
+                    AdminStateMessage(
+                      icon: Icons.upload_file_rounded,
+                      title: 'No materials found',
+                      message: 'Upload a material or change the filters.',
+                      actionLabel: 'Add material',
+                      onAction: _openCreate,
+                    )
+                  else ...[
+                    for (final material in rows)
+                      AdminListRow(
+                        title: material.title,
+                        icon: _iconForType(material.materialType),
+                        titleBadge: material.isRequired
+                            ? const SoftBadge(
+                                label: 'Required',
+                                background: Color(0xFFFFF1F2),
+                                foreground: Color(0xFFE11D48),
+                              )
+                            : null,
+                        subtitle: material.description,
+                        meta: [
+                          SoftBadge(
+                            label: material.materialType.toUpperCase(),
+                            background: const Color(0xFFF1F5F9),
+                            foreground: const Color(0xFF334155),
+                          ),
+                          MetaChip(
+                            icon: Icons.auto_stories_outlined,
+                            label: material.courseName,
+                          ),
+                          if ((material.subjectName ?? '').isNotEmpty)
+                            MetaChip(
+                              icon: Icons.menu_book_outlined,
+                              label: material.subjectName!,
+                            ),
+                          if ((material.lessonTitle ?? '').isNotEmpty)
+                            MetaChip(
+                              icon: Icons.bookmark_outline_rounded,
+                              label: material.lessonTitle!,
+                            ),
+                          MetaChip(
+                            icon: Icons.cloud_outlined,
+                            label: material.source,
+                          ),
+                        ],
+                        trailing: [ActiveBadge(active: material.isActive)],
+                        onTap: () async {
+                          await context.push('/materials/${material.uuid}');
+                          if (mounted) refresh();
+                        },
                       ),
-                      title: Text(
-                        material.title,
+                    if (data!.count > rows.length || page > 1)
+                      AdminPager(
+                        page: page,
+                        pageSize: 20,
+                        total: data.count,
+                        noun: 'materials',
+                        onPage: _goToPage,
                       ),
-                      subtitle: Text(
-                        '${material.courseName}'
-                        ' • '
-                        '${material.materialType}'
-                        ' • '
-                        '${material.source}',
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                      ),
-                      onTap: () async {
-                        await context.push(
-                          '/materials/${material.uuid}',
-                        );
-
-                        if (mounted) {
-                          refresh();
-                        }
-                      },
-                    ),
-                  );
-                },
+                  ],
+                ],
               );
             },
           ),

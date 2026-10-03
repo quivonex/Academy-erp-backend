@@ -12,6 +12,16 @@ import '../../firms/data/firm_admin_model.dart';
 import '../../firms/data/firm_admin_repository.dart';
 import '../../firms/data/firm_model.dart';
 import '../../firms/data/firm_repository.dart';
+import '../../courses/data/course.dart';
+import '../../courses/data/course_repository.dart';
+import '../../enrollments/data/enrollment.dart';
+import '../../enrollments/data/enrollment_repository.dart';
+import '../../live_classes/data/live_class.dart';
+import '../../live_classes/data/live_class_repository.dart';
+import '../../students/data/student.dart';
+import '../../students/data/student_repository.dart';
+import '../../teachers/data/teacher.dart';
+import '../../teachers/data/teacher_repository.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -21,7 +31,7 @@ class DashboardScreen extends ConsumerWidget {
     final session = ref.watch(sessionControllerProvider);
 
     if (session.role != UserRole.superAdmin) {
-      return _AcademyWelcome(
+      return _AcademyDashboard(
         firmName: session.firmName ?? 'Your academy',
         roleLabel: session.role?.apiValue ?? '',
       );
@@ -684,107 +694,550 @@ class _RecentAdminsCard extends StatelessWidget {
   }
 }
 
-class _AcademyWelcome extends StatelessWidget {
-  const _AcademyWelcome({required this.firmName, required this.roleLabel});
+class _AcademyDashboard extends ConsumerStatefulWidget {
+  const _AcademyDashboard({required this.firmName, required this.roleLabel});
 
   final String firmName;
   final String roleLabel;
 
   @override
+  ConsumerState<_AcademyDashboard> createState() => _AcademyDashboardState();
+}
+
+class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
+  late Future<StudentPage> _students;
+  late Future<TeacherPage> _teachers;
+  late Future<CoursePage> _courses;
+  late Future<EnrollmentPage> _enrollments;
+  late Future<LiveClassPage> _live;
+  late Future<LiveClassPage> _scheduled;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    _students = ref.read(studentRepositoryProvider).list();
+    _teachers = ref.read(teacherRepositoryProvider).list();
+    _courses = ref.read(courseRepositoryProvider).list();
+    _enrollments = ref.read(enrollmentManagementRepositoryProvider).list();
+    _live = ref.read(liveClassRepositoryProvider).list(status: 'LIVE');
+    _scheduled =
+        ref.read(liveClassRepositoryProvider).list(status: 'SCHEDULED');
+  }
+
+  Widget _count<T>(Future<T> future, int Function(T) pick, Widget Function(String) builder) {
+    return FutureBuilder<T>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return builder('—');
+        if (!snapshot.hasData) return builder('…');
+        return builder('${pick(snapshot.data as T)}');
+      },
+    );
+  }
+
+  String _when(DateTime? value) {
+    if (value == null) return 'Time not set';
+    final d = value.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final m = d.minute.toString().padLeft(2, '0');
+    return '${d.day} ${months[d.month - 1]}, $h:$m ${d.hour < 12 ? 'AM' : 'PM'}';
+  }
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final width = MediaQuery.sizeOf(context).width;
 
-    return SingleChildScrollView(
+    final hero = Container(
+      padding: EdgeInsets.all(width < 700 ? 22 : 32),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3525CD), Color(0xFF4F46E5), Color(0xFF6366F1)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x404F46E5),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final info = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SoftBadge(
+                    label: 'Academy workspace',
+                    dot: true,
+                    background: Colors.white.withValues(alpha: 0.16),
+                    foreground: Colors.white,
+                  ),
+                  if (widget.roleLabel.isNotEmpty)
+                    SoftBadge(
+                      label: widget.roleLabel,
+                      background: const Color(0xFF6CF8BB),
+                      foreground: const Color(0xFF00422B),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Welcome to Academy ERP — ${widget.firmName}',
+                style: jakarta(
+                  textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.6,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Students, teachers, courses, live classes and enrollments '
+                'for your academy at a glance.',
+                style: textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFFDAD7FF),
+                ),
+              ),
+            ],
+          );
+
+          Widget heroButton(String label, IconData icon, String route,
+              {bool strong = false}) {
+            return SizedBox(
+              height: 44,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: strong
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.16),
+                  foregroundColor:
+                      strong ? const Color(0xFF3525CD) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () => context.go(route),
+                icon: Icon(icon, size: 18),
+                label: Text(label),
+              ),
+            );
+          }
+
+          final buttons = [
+            heroButton('Add student', Icons.person_add_alt_1_rounded,
+                '/students', strong: true),
+            heroButton('New course', Icons.add_circle_outline_rounded,
+                '/courses'),
+            heroButton('Schedule live class', Icons.sensors_rounded,
+                '/live-classes'),
+          ];
+
+          final actions = constraints.maxWidth >= 900
+              ? IntrinsicWidth(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 10),
+                        buttons[i],
+                      ],
+                    ],
+                  ),
+                )
+              : Wrap(spacing: 10, runSpacing: 10, children: buttons);
+
+          if (constraints.maxWidth < 900) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [info, const SizedBox(height: 20), actions],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: info),
+              const SizedBox(width: 24),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+
+    final kpis = AdminKpiGrid(
+      children: [
+        _count<StudentPage>(
+          _students,
+          (p) => p.count,
+          (v) => AdminKpiCard(
+            label: 'Total students',
+            value: v,
+            icon: Icons.school_outlined,
+          ),
+        ),
+        _count<TeacherPage>(
+          _teachers,
+          (p) => p.count,
+          (v) => AdminKpiCard(
+            label: 'Teachers',
+            value: v,
+            icon: Icons.co_present_outlined,
+            iconBackground: const Color(0xFFF5F3FF),
+            iconForeground: const Color(0xFF7C3AED),
+          ),
+        ),
+        _count<CoursePage>(
+          _courses,
+          (p) => p.count,
+          (v) => AdminKpiCard(
+            label: 'Courses',
+            value: v,
+            icon: Icons.auto_stories_outlined,
+            iconBackground: const Color(0xFFECFDF5),
+            iconForeground: const Color(0xFF059669),
+          ),
+        ),
+        _count<EnrollmentPage>(
+          _enrollments,
+          (p) => p.count,
+          (v) => AdminKpiCard(
+            label: 'Enrollments',
+            value: v,
+            icon: Icons.how_to_reg_outlined,
+            iconBackground: const Color(0xFFF0F9FF),
+            iconForeground: const Color(0xFF0284C7),
+          ),
+        ),
+      ],
+    );
+
+    Widget sectionTitle(String title, String subtitle, IconData icon,
+        {String? route}) {
+      return Row(
+        children: [
+          AdminIconTile(icon: icon, size: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: jakarta(textTheme.titleMedium)),
+                Text(subtitle, style: textTheme.bodySmall),
+              ],
+            ),
+          ),
+          if (route != null)
+            TextButton.icon(
+              onPressed: () => context.go(route),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text('View all'),
+            ),
+        ],
+      );
+    }
+
+    final classes = AdminCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AdminPageHeader(
-            eyebrow: SoftBadge(label: 'Academy workspace', dot: true),
-            title: 'Welcome to Academy ERP',
-            subtitle: 'Manage your students, courses and daily operations.',
+          sectionTitle(
+            'Live & upcoming classes',
+            'Classes streaming now and next on the schedule',
+            Icons.sensors_rounded,
+            route: '/live-classes',
           ),
-          const SizedBox(height: 28),
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF3525CD), Color(0xFF4F46E5), Color(0xFF6366F1)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x404F46E5),
-                  blurRadius: 24,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+          const SizedBox(height: 16),
+          FutureBuilder<List<LiveClassPage>>(
+            future: Future.wait([_live, _scheduled]),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text('Could not load classes.',
+                    style: textTheme.bodySmall);
+              }
+              if (!snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final items = [
+                ...snapshot.data![0].results,
+                ...snapshot.data![1].results,
+              ].take(5).toList();
+              if (items.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text(
-                    adminInitials(firmName),
-                    style: jakarta(
-                      const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                    'No live or scheduled classes right now.',
+                    style: textTheme.bodyMedium,
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (final c in items)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: c.status.toUpperCase() == 'LIVE'
+                            ? const Color(0xFFF4F3FF)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: InkWell(
+                        onTap: () => context.push('/live-classes/${c.uuid}'),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    c.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 4,
+                                    children: [
+                                      MetaChip(
+                                        icon: Icons.person_outline_rounded,
+                                        label: c.teacherName.isEmpty
+                                            ? 'Teacher not set'
+                                            : c.teacherName,
+                                      ),
+                                      MetaChip(
+                                        icon: Icons.schedule_rounded,
+                                        label: _when(c.scheduledStartAt),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            StatusPill(
+                              label: c.status.toUpperCase(),
+                              tone: c.status.toUpperCase() == 'LIVE'
+                                  ? PillTone.danger
+                                  : PillTone.info,
+                              compact: true,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        firmName,
-                        style: jakarta(
-                          textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    final enrollments = AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          sectionTitle(
+            'Recent enrollments',
+            'Latest admissions into your courses',
+            Icons.how_to_reg_outlined,
+            route: '/enrollments',
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<EnrollmentPage>(
+            future: _enrollments,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text('Could not load enrollments.',
+                    style: textTheme.bodySmall);
+              }
+              if (!snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final items = snapshot.data!.results.take(6).toList();
+              if (items.isEmpty) {
+                return Text('No enrollments yet.',
+                    style: textTheme.bodyMedium);
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    InkWell(
+                      onTap: () =>
+                          context.push('/enrollments/${items[i].uuid}'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          border: i == 0
+                              ? null
+                              : const Border(
+                                  top: BorderSide(color: Color(0xFFEEF0F5)),
+                                ),
+                        ),
+                        child: Row(
+                          children: [
+                            InitialsBadge(
+                              label: adminInitials(items[i].studentName),
+                              size: 36,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    items[i].studentName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textTheme.titleSmall,
+                                  ),
+                                  Text(
+                                    items[i].courseName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            StatusPill(
+                              label: items[i].status.toUpperCase(),
+                              tone: toneForStatus(items[i].status),
+                              compact: true,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Signed in as $roleLabel',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFDAD7FF),
-                        ),
-                      ),
-                    ],
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    Widget quick(String title, String subtitle, IconData icon, String route) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Material(
+          color: const Color(0xFFF4F3FF),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => context.go(route),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  AdminIconTile(icon: icon, size: 38),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: textTheme.titleSmall),
+                        Text(subtitle, style: textTheme.bodySmall),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Color(0xFF94A3B8)),
+                ],
+              ),
             ),
           ),
+        ),
+      );
+    }
+
+    final quickActions = AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Quick actions', style: jakarta(textTheme.titleMedium)),
+          const SizedBox(height: 14),
+          quick('Enroll a student', 'Assign course access',
+              Icons.how_to_reg_outlined, '/enrollments'),
+          quick('Upload material', 'Videos, PDFs & links',
+              Icons.upload_file_rounded, '/materials'),
+          quick('Create assignment', 'Or import from a PDF',
+              Icons.assignment_add, '/assignments'),
+          quick('Manage banners', 'Student app home screen',
+              Icons.view_carousel_outlined, '/banners'),
+        ],
+      ),
+    );
+
+    return RefreshIndicator(
+      onRefresh: () async => setState(_load),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          hero,
           const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              GradientButton(
-                label: 'Students',
-                icon: Icons.school_outlined,
-                onPressed: () => context.go('/students'),
-              ),
-              AdminOutlineButton(
-                label: 'Courses',
-                icon: Icons.auto_stories_outlined,
-                onPressed: () => context.go('/courses'),
-              ),
-            ],
+          kpis,
+          const SizedBox(height: 24),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 1000) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    classes,
+                    const SizedBox(height: 20),
+                    enrollments,
+                    const SizedBox(height: 20),
+                    quickActions,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        classes,
+                        const SizedBox(height: 20),
+                        enrollments,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(child: quickActions),
+                ],
+              );
+            },
           ),
         ],
       ),

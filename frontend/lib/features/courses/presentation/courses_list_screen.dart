@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
 
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
@@ -46,124 +47,191 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
     super.dispose();
   }
 
+  Future<void> _openCreate() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _CreateCourseDialog(),
+    );
+    if (created == true && mounted) {
+      setState(() {
+        page = 1;
+        reload();
+      });
+    }
+  }
+
+  String _mode(String raw) {
+    final v = raw.replaceAll('_', ' ').toLowerCase();
+    return v.isEmpty ? 'Course' : v[0].toUpperCase() + v.substring(1);
+  }
+
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Courses', style: Theme.of(context).textTheme.headlineSmall),
-              FilledButton.icon(
-                onPressed: () async {
-                  final created = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => const _CreateCourseDialog(),
-                  );
-                  if (created == true && mounted) {
-                    setState(() {
-                      page = 1;
-                      reload();
-                    });
-                  }
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add course'),
-              ),
+          AdminPageHeader(
+            eyebrow: const AdminEyebrow(
+              section: 'Curriculum',
+              detail: 'Course catalogue',
+            ),
+            title: 'Courses',
+            titleTrailing: [
               IconButton(
                 onPressed: () => setState(reload),
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'Refresh',
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: 'Search course name or code',
-                  ),
-                  onSubmitted: (_) => applySearch(),
-                ),
+            actions: [
+              AdminOutlineButton(
+                label: 'Categories',
+                icon: Icons.category_outlined,
+                onPressed: () => context.go('/course-categories'),
               ),
-              const SizedBox(width: 8),
-              FilledButton(onPressed: applySearch, child: const Text('Search')),
+              GradientButton(
+                label: 'Add course',
+                icon: Icons.add_rounded,
+                onPressed: _openCreate,
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           Expanded(
             child: FutureBuilder<CoursePage>(
               future: result,
               builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Could not load courses: ${snapshot.error}'),
-                        TextButton(
-                          onPressed: () => setState(reload),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                final data = snapshot.data!;
-                return Column(
+                final state = adminFutureState(
+                  snapshot,
+                  noun: 'courses',
+                  onRetry: () => setState(reload),
+                );
+                final data = snapshot.data;
+                final rows = data?.results ?? const <Course>[];
+                final published = rows.where((c) => c.isPublished).length;
+                final featured = rows.where((c) => c.isFeatured).length;
+                final online = rows.where((c) => c.isPurchasableOnline).length;
+
+                return ListView(
+                  padding: const EdgeInsets.only(bottom: 24),
                   children: [
-                    Expanded(
-                      child: data.results.isEmpty
-                          ? const Center(child: Text('No courses found.'))
-                          : ListView.builder(
-                              itemCount: data.results.length,
-                              itemBuilder: (context, index) {
-                                final course = data.results[index];
-                                return Card(
-                                  child: ListTile(
-                                    title: Text(course.name),
-                                    subtitle: Text(
-                                      '${course.code}  •  ₹${course.price}  •  ${course.deliveryMode}',
-                                    ),
-                                    trailing: Chip(
-                                      label: Text(
-                                        course.isPublished ? 'Published' : 'Draft',
-                                      ),
-                                    ),
-                                    onTap: () async {
-                                      await context.push('/courses/${course.uuid}');
-                                      if (mounted) setState(reload);
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    AdminKpiGrid(
                       children: [
-                        Text('${data.count} total  •  Page $page'),
-                        IconButton(
-                          onPressed:
-                              page > 1 ? () => goToPage(page - 1) : null,
-                          icon: const Icon(Icons.chevron_left),
+                        AdminKpiCard(
+                          label: 'Total courses',
+                          value: data == null ? '…' : '${data.count}',
+                          icon: Icons.auto_stories_outlined,
                         ),
-                        IconButton(
-                          onPressed: page * 20 < data.count
-                              ? () => goToPage(page + 1)
-                              : null,
-                          icon: const Icon(Icons.chevron_right),
+                        AdminKpiCard(
+                          label: 'Published on this page',
+                          value: data == null ? '…' : '$published',
+                          icon: Icons.public_rounded,
+                          iconBackground: const Color(0xFFECFDF5),
+                          iconForeground: const Color(0xFF059669),
+                          caption: data == null
+                              ? null
+                              : '${rows.length - published} drafts',
+                        ),
+                        AdminKpiCard(
+                          label: 'Featured',
+                          value: data == null ? '…' : '$featured',
+                          icon: Icons.star_outline_rounded,
+                          iconBackground: const Color(0xFFFFFBEB),
+                          iconForeground: const Color(0xFFD97706),
+                          caption: 'On this page',
+                        ),
+                        AdminKpiCard(
+                          label: 'Sold online',
+                          value: data == null ? '…' : '$online',
+                          icon: Icons.shopping_bag_outlined,
+                          iconBackground: const Color(0xFFF5F3FF),
+                          iconForeground: const Color(0xFF7C3AED),
+                          caption: 'On this page',
                         ),
                       ],
                     ),
+                    const SizedBox(height: 18),
+                    AdminToolbar(
+                      controller: searchController,
+                      hint: 'Search by course name or code…',
+                      onSearch: applySearch,
+                    ),
+                    const SizedBox(height: 18),
+                    if (state != null)
+                      state
+                    else if (rows.isEmpty)
+                      AdminStateMessage(
+                        icon: Icons.auto_stories_outlined,
+                        title: 'No courses found',
+                        message: search.isEmpty
+                            ? 'Add your first course to the catalogue.'
+                            : 'Try a different search.',
+                      )
+                    else ...[
+                      for (final course in rows)
+                        AdminListRow(
+                          title: course.name,
+                          initials: adminInitials(course.code),
+                          seed: course.code,
+                          titleBadge: course.isFeatured
+                              ? const SoftBadge(
+                                  label: 'Featured',
+                                  icon: Icons.star_rounded,
+                                  background: Color(0xFFFFFBEB),
+                                  foreground: Color(0xFFD97706),
+                                )
+                              : null,
+                          subtitle: course.description,
+                          meta: [
+                            SoftBadge(
+                              label: course.code,
+                              monospace: true,
+                              background: const Color(0xFFF1F5F9),
+                              foreground: const Color(0xFF334155),
+                            ),
+                            MetaChip(
+                              icon: Icons.devices_outlined,
+                              label: _mode(course.deliveryMode),
+                            ),
+                            if ((course.categoryName ?? '').isNotEmpty)
+                              MetaChip(
+                                icon: Icons.category_outlined,
+                                label: course.categoryName!,
+                              ),
+                            if (course.durationMonths != null)
+                              MetaChip(
+                                icon: Icons.schedule_rounded,
+                                label: '${course.durationMonths} months',
+                              ),
+                          ],
+                          trailing: [
+                            Text(
+                              '₹${course.price}',
+                              style: jakarta(
+                                Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF3525CD),
+                                    ),
+                              ),
+                            ),
+                            ActiveBadge(
+                              active: course.isPublished,
+                              activeLabel: 'Published',
+                              inactiveLabel: 'Draft',
+                            ),
+                          ],
+                          onTap: () async {
+                            await context.push('/courses/${course.uuid}');
+                            if (mounted) setState(reload);
+                          },
+                        ),
+                      AdminPager(
+                        page: page,
+                        pageSize: 20,
+                        total: data!.count,
+                        noun: 'courses',
+                        onPage: goToPage,
+                      ),
+                    ],
                   ],
                 );
               },

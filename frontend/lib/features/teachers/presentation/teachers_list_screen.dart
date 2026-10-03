@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
 
 import '../data/teacher.dart';
 import '../data/teacher_repository.dart';
@@ -72,222 +73,197 @@ class _TeachersListScreenState extends ConsumerState<TeachersListScreen> {
     super.dispose();
   }
 
+  Future<void> _openCreate() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => _CreateTeacherDialog(
+        ref.read(teacherRepositoryProvider),
+      ),
+    );
+
+    if (created == true && mounted) {
+      setState(() {
+        page = 1;
+        reload();
+      });
+    }
+  }
+
+  void _setFilter(bool? value) {
+    setState(() {
+      activeFilter = value;
+      page = 1;
+      reload();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Teachers',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            FilledButton.icon(
-              icon: const Icon(Icons.person_add),
-              label: const Text('Add Teacher'),
-              onPressed: () async {
-                final created = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => _CreateTeacherDialog(
-                    ref.read(
-                      teacherRepositoryProvider,
-                    ),
-                  ),
-                );
-
-                if (created == true && mounted) {
-                  setState(() {
-                    page = 1;
-
-                    reload();
-                  });
-                }
-              },
-            ),
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Faculty',
+            detail: 'Teacher directory & allotments',
+          ),
+          title: 'Teachers',
+          titleTrailing: [
             IconButton(
               tooltip: 'Refresh',
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               onPressed: refresh,
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            SizedBox(
-              width: 350,
-              child: TextField(
-                controller: searchController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search teacher',
-                  hintText: 'Name, employee ID, phone...',
-                ),
-                onSubmitted: (_) => applySearch(),
-              ),
-            ),
-            SizedBox(
-              width: 180,
-              child: DropdownButtonFormField<String>(
-                value: activeFilter == null
-                    ? 'ALL'
-                    : activeFilter!
-                        ? 'ACTIVE'
-                        : 'INACTIVE',
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'ALL',
-                    child: Text('All'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'ACTIVE',
-                    child: Text('Active'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'INACTIVE',
-                    child: Text('Inactive'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    if (value == 'ACTIVE') {
-                      activeFilter = true;
-                    } else if (value == 'INACTIVE') {
-                      activeFilter = false;
-                    } else {
-                      activeFilter = null;
-                    }
-
-                    page = 1;
-
-                    reload();
-                  });
-                },
-              ),
-            ),
-            FilledButton(
-              onPressed: applySearch,
-              child: const Text('Search'),
+          actions: [
+            GradientButton(
+              label: 'Add teacher',
+              icon: Icons.person_add_alt_1_rounded,
+              onPressed: _openCreate,
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<TeacherPage>(
             future: result,
-            builder: (
-              context,
-              snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'teachers',
+                onRetry: refresh,
+              );
+              final data = snapshot.data;
+              final rows = data?.results ?? const <Teacher>[];
+              final activeHere = rows.where((t) => t.isActive).length;
+              final subjects = rows
+                  .map((t) => t.specialization.trim())
+                  .where((v) => v.isNotEmpty)
+                  .toSet()
+                  .length;
+              final avgExp = rows.isEmpty
+                  ? 0
+                  : (rows.fold<int>(0, (a, t) => a + t.experienceYears) /
+                          rows.length)
+                      .round();
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Could not load teachers:\n${snapshot.error}',
-                      ),
-                      TextButton(
-                        onPressed: refresh,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final data = snapshot.data!;
-
-              if (data.results.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No teachers found.',
-                  ),
-                );
-              }
-
-              return Column(
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: data.results.length,
-                      itemBuilder: (context, index) {
-                        final teacher = data.results[index];
-
-                        return Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                teacher.fullName.isNotEmpty
-                                    ? teacher.fullName[0].toUpperCase()
-                                    : 'T',
-                              ),
-                            ),
-                            title: Text(
-                              teacher.fullName,
-                            ),
-                            subtitle: Text(
-                              '${teacher.employeeId}'
-                              ' • '
-                              '${teacher.specialization.isEmpty ? 'No specialization' : teacher.specialization}',
-                            ),
-                            trailing: Chip(
-                              label: Text(
-                                teacher.isActive ? 'Active' : 'Inactive',
-                              ),
-                            ),
-                            onTap: () async {
-                              await context.push(
-                                '/teachers/${teacher.uuid}',
-                              );
-
-                              if (mounted) {
-                                refresh();
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  AdminKpiGrid(
                     children: [
-                      Text(
-                        '${data.count} total • Page $page',
+                      AdminKpiCard(
+                        label: 'Total teachers',
+                        value: data == null ? '…' : '${data.count}',
+                        icon: Icons.co_present_outlined,
+                        caption: activeFilter == null
+                            ? 'All statuses'
+                            : activeFilter!
+                                ? 'Active filter'
+                                : 'Inactive filter',
                       ),
-                      IconButton(
-                        onPressed:
-                            page > 1 ? () => changePage(page - 1) : null,
-                        icon: const Icon(
-                          Icons.chevron_left,
-                        ),
+                      AdminKpiCard(
+                        label: 'Active on this page',
+                        value: data == null ? '…' : '$activeHere',
+                        icon: Icons.verified_outlined,
+                        iconBackground: const Color(0xFFECFDF5),
+                        iconForeground: const Color(0xFF059669),
                       ),
-                      IconButton(
-                        onPressed: page * 20 < data.count
-                            ? () => changePage(page + 1)
-                            : null,
-                        icon: const Icon(
-                          Icons.chevron_right,
-                        ),
+                      AdminKpiCard(
+                        label: 'Specializations',
+                        value: data == null ? '…' : '$subjects',
+                        icon: Icons.menu_book_outlined,
+                        iconBackground: const Color(0xFFF5F3FF),
+                        iconForeground: const Color(0xFF7C3AED),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'Avg. experience',
+                        value: data == null ? '…' : '$avgExp yrs',
+                        icon: Icons.workspace_premium_outlined,
+                        iconBackground: const Color(0xFFFFFBEB),
+                        iconForeground: const Color(0xFFD97706),
+                        caption: 'On this page',
                       ),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  AdminToolbar(
+                    controller: searchController,
+                    hint: 'Search by name, employee ID or phone…',
+                    onSearch: applySearch,
+                    filters: [
+                      CountFilterPill(
+                        label: 'ALL',
+                        selected: activeFilter == null,
+                        onTap: () => _setFilter(null),
+                      ),
+                      CountFilterPill(
+                        label: 'ACTIVE',
+                        selected: activeFilter == true,
+                        onTap: () => _setFilter(true),
+                      ),
+                      CountFilterPill(
+                        label: 'INACTIVE',
+                        selected: activeFilter == false,
+                        onTap: () => _setFilter(false),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (state != null)
+                    state
+                  else if (rows.isEmpty)
+                    const AdminStateMessage(
+                      icon: Icons.person_search_rounded,
+                      title: 'No teachers found',
+                      message: 'Try another search or status filter.',
+                    )
+                  else ...[
+                    for (final teacher in rows)
+                      AdminListRow(
+                        title: teacher.fullName,
+                        initials: adminInitials(teacher.fullName),
+                        seed: teacher.employeeId,
+                        titleBadge: SoftBadge(
+                          label: teacher.employeeId,
+                          monospace: true,
+                          background: const Color(0xFFF1F5F9),
+                          foreground: const Color(0xFF334155),
+                        ),
+                        subtitle: teacher.specialization.isEmpty
+                            ? 'No specialization'
+                            : teacher.specialization,
+                        meta: [
+                          MetaChip(
+                            icon: Icons.workspace_premium_outlined,
+                            label: '${teacher.experienceYears} yrs experience',
+                          ),
+                          if (teacher.email.isNotEmpty)
+                            MetaChip(
+                              icon: Icons.mail_outline_rounded,
+                              label: teacher.email,
+                            ),
+                          if (teacher.phone.isNotEmpty)
+                            MetaChip(
+                              icon: Icons.call_outlined,
+                              label: teacher.phone,
+                            ),
+                        ],
+                        trailing: [ActiveBadge(active: teacher.isActive)],
+                        onTap: () async {
+                          await context.push('/teachers/${teacher.uuid}');
+                          if (mounted) refresh();
+                        },
+                      ),
+                    AdminPager(
+                      page: page,
+                      pageSize: 20,
+                      total: data!.count,
+                      noun: 'teachers',
+                      onPage: changePage,
+                    ),
+                  ],
                 ],
               );
             },

@@ -987,3 +987,558 @@ class AdminErrorBanner extends StatelessWidget {
     );
   }
 }
+
+// ───────────────────────── List-page building blocks ─────────────────────────
+
+/// Breadcrumb-style eyebrow above a page title:
+/// "ACADEMIC RECORDS • Student lifecycle management".
+class AdminEyebrow extends StatelessWidget {
+  const AdminEyebrow({super.key, required this.section, this.detail});
+
+  final String section;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          section.toUpperCase(),
+          style: textTheme.labelSmall?.copyWith(
+            color: colors.primary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+        if (detail != null) ...[
+          Container(
+            width: 4,
+            height: 4,
+            decoration: const BoxDecoration(
+              color: Color(0xFFCBD5E1),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Text(
+            detail!,
+            style: textTheme.labelMedium?.copyWith(color: colors.textMuted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// KPI tile: label, big tabular value, icon tile and optional caption.
+class AdminKpiCard extends StatelessWidget {
+  const AdminKpiCard({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.caption,
+    this.captionColor,
+    this.iconBackground,
+    this.iconForeground,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final String? caption;
+  final Color? captionColor;
+  final Color? iconBackground;
+  final Color? iconForeground;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return AdminCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: jakarta(
+                    textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                      color: const Color(0xFF0F172A),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                if (caption != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    caption!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: captionColor ?? colors.textMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          AdminIconTile(
+            icon: icon,
+            size: 46,
+            background: iconBackground,
+            foreground: iconForeground,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Responsive KPI grid: 4 / 2 / 1 columns depending on width.
+class AdminKpiGrid extends StatelessWidget {
+  const AdminKpiGrid({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final columns = w >= 1000
+            ? (children.length >= 4 ? 4 : children.length)
+            : w >= 520
+                ? 2
+                : 1;
+        const gap = 16.0;
+        final width = (w - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// White toolbar card holding a search box, a search button and filters.
+class AdminToolbar extends StatelessWidget {
+  const AdminToolbar({
+    super.key,
+    required this.controller,
+    required this.hint,
+    required this.onSearch,
+    this.filters = const [],
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final VoidCallback onSearch;
+  final List<Widget> filters;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: c, width: w),
+        );
+
+    final field = TextField(
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (_) => onSearch(),
+      decoration: InputDecoration(
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        prefixIcon: Icon(Icons.search_rounded, color: colors.textSubtle),
+        border: border(const Color(0xFFE2E8F0)),
+        enabledBorder: border(const Color(0xFFE2E8F0)),
+        focusedBorder: border(const Color(0xFF6366F1), 1.5),
+      ),
+    );
+
+    return AdminCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: field),
+              const SizedBox(width: 10),
+              GradientButton(
+                label: 'Search',
+                icon: Icons.search_rounded,
+                height: 46,
+                onPressed: onSearch,
+              ),
+            ],
+          ),
+          if (filters.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: filters,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Premium list row: initials/icon tile, title, subtitle, meta chips and
+/// trailing widgets. Replaces `Card(child: ListTile(...))` on list pages.
+class AdminListRow extends StatelessWidget {
+  const AdminListRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.initials,
+    this.icon,
+    this.seed,
+    this.meta = const [],
+    this.trailing = const [],
+    this.onTap,
+    this.titleBadge,
+  });
+
+  final String title;
+  final String? subtitle;
+  final String? initials;
+  final IconData? icon;
+  final String? seed;
+  final List<Widget> meta;
+  final List<Widget> trailing;
+  final VoidCallback? onTap;
+  final Widget? titleBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+    final compact = MediaQuery.sizeOf(context).width < 600;
+
+    final leading = initials != null
+        ? GradientAvatar(
+            label: initials!,
+            seed: seed ?? title,
+            size: compact ? 40 : 46,
+          )
+        : AdminIconTile(icon: icon ?? Icons.article_outlined, size: 44);
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              title,
+              style: textTheme.titleSmall?.copyWith(
+                color: const Color(0xFF0F172A),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (titleBadge != null) titleBadge!,
+          ],
+        ),
+        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF475569),
+            ),
+          ),
+        ],
+        if (meta.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 6, children: meta),
+        ],
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AdminCard(
+        padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 14, 10, 14),
+        onTap: onTap,
+        child: compact && trailing.isNotEmpty
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      leading,
+                      const SizedBox(width: 12),
+                      Expanded(child: body),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: trailing,
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  leading,
+                  const SizedBox(width: 16),
+                  Expanded(child: body),
+                  for (final widget in trailing) ...[
+                    const SizedBox(width: 10),
+                    widget,
+                  ],
+                  if (onTap != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.chevron_right_rounded,
+                        color: colors.textSubtle),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+/// Small grey meta chip with an icon ("📧 email", "📅 date").
+class MetaChip extends StatelessWidget {
+  const MetaChip({super.key, required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colors.textSubtle),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF475569),
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Active / inactive badge built on the shared status colors.
+class ActiveBadge extends StatelessWidget {
+  const ActiveBadge({
+    super.key,
+    required this.active,
+    this.activeLabel = 'Active',
+    this.inactiveLabel = 'Inactive',
+  });
+
+  final bool active;
+  final String activeLabel;
+  final String inactiveLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? const Color(0xFF059669) : const Color(0xFF64748B);
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            active ? activeLabel : inactiveLabel,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Showing 1–20 of 312" with previous / next controls.
+class AdminPager extends StatelessWidget {
+  const AdminPager({
+    super.key,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.onPage,
+    this.noun = 'records',
+  });
+
+  final int page;
+  final int pageSize;
+  final int total;
+  final ValueChanged<int> onPage;
+  final String noun;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+    final start = total == 0 ? 0 : (page - 1) * pageSize + 1;
+    final end = (page * pageSize).clamp(0, total);
+    final lastPage = total == 0 ? 1 : ((total - 1) ~/ pageSize) + 1;
+
+    Widget nav(IconData icon, bool enabled, int target) => Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: enabled ? () => onPage(target) : null,
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: Icon(
+                icon,
+                size: 20,
+                color: enabled ? colors.textPrimary : const Color(0xFFCBD5E1),
+              ),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(text: 'Showing '),
+                  TextSpan(
+                    text: '$start–$end',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const TextSpan(text: ' of '),
+                  TextSpan(
+                    text: '$total',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  TextSpan(text: ' $noun'),
+                ],
+              ),
+              style: textTheme.bodySmall?.copyWith(
+                color: const Color(0xFF475569),
+              ),
+            ),
+          ),
+          nav(Icons.chevron_left_rounded, page > 1, page - 1),
+          Container(
+            width: 38,
+            height: 38,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: kAdminGradient,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$page',
+              style: textTheme.labelLarge?.copyWith(color: Colors.white),
+            ),
+          ),
+          nav(Icons.chevron_right_rounded, page < lastPage, page + 1),
+        ],
+      ),
+    );
+  }
+}
+
+/// Loading / error / empty handling for FutureBuilder-driven list pages.
+Widget? adminFutureState<T>(
+  AsyncSnapshot<T> snapshot, {
+  required String noun,
+  required VoidCallback onRetry,
+}) {
+  if (snapshot.connectionState != ConnectionState.done) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 48),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+  if (snapshot.hasError) {
+    return AdminStateMessage(
+      icon: Icons.cloud_off_rounded,
+      title: 'Could not load $noun',
+      message: '${snapshot.error}',
+      actionLabel: 'Retry',
+      onAction: onRetry,
+      isError: true,
+    );
+  }
+  return null;
+}

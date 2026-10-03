@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/admin_ui.dart';
+
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
@@ -80,195 +82,185 @@ class _AssignmentsListScreenState
     super.dispose();
   }
 
+  Future<void> _openCreate() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _CreateAssignmentDialog(),
+    );
+    if (created == true && mounted) {
+      setState(() {
+        page = 1;
+        reload();
+      });
+    }
+  }
+
+  String _marks(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(1);
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Assignments',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                final created = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => const _CreateAssignmentDialog(),
-                );
-
-                if (created == true && mounted) {
-                  setState(() {
-                    page = 1;
-
-                    reload();
-                  });
-                }
-              },
-              icon: const Icon(
-                Icons.assignment_add,
-              ),
-              label: const Text(
-                'Create Assignment',
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () {
-                context.push(
-                  '/assignments/import-pdf',
-                );
-              },
-              icon: const Icon(
-                Icons.picture_as_pdf_outlined,
-              ),
-              label: const Text(
-                'Import PDF',
-              ),
-            ),
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Evaluation hub',
+            detail: 'Assignments & submissions',
+          ),
+          title: 'Assignments',
+          titleTrailing: [
             IconButton(
               onPressed: refresh,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               tooltip: 'Refresh',
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: searchController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search assignments',
-                  hintText: 'Title or description',
-                ),
-                onSubmitted: (_) => applySearch(),
-              ),
+          actions: [
+            AdminOutlineButton(
+              label: 'Import PDF',
+              icon: Icons.picture_as_pdf_outlined,
+              onPressed: () => context.push('/assignments/import-pdf'),
             ),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: applySearch,
-              child: const Text('Search'),
+            GradientButton(
+              label: 'Create assignment',
+              icon: Icons.assignment_add,
+              onPressed: _openCreate,
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Expanded(
           child: FutureBuilder<AssignmentPage>(
             future: result,
-            builder: (
-              context,
-              snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'assignments',
+                onRetry: refresh,
+              );
+              final data = snapshot.data;
+              final rows = data?.results ?? const <Assignment>[];
+              final now = DateTime.now();
+              final published = rows.where((a) => a.isPublished).length;
+              final open = rows
+                  .where((a) => a.dueAt == null || a.dueAt!.isAfter(now))
+                  .length;
+              final dueSoon = rows.where((a) {
+                final due = a.dueAt;
+                return due != null &&
+                    due.isAfter(now) &&
+                    due.difference(now).inDays <= 7;
+              }).length;
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Could not load assignments:\n'
-                        '${snapshot.error}',
-                      ),
-                      TextButton(
-                        onPressed: refresh,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final data = snapshot.data!;
-
-              if (data.results.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No assignments found.',
-                  ),
-                );
-              }
-
-              return Column(
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: data.results.length,
-                      itemBuilder: (context, index) {
-                        final assignment = data.results[index];
-
-                        return Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Icon(
-                                assignment.isPublished
-                                    ? Icons.assignment_turned_in_outlined
-                                    : Icons.assignment_outlined,
-                              ),
-                            ),
-                            title: Text(
-                              assignment.title,
-                            ),
-                            subtitle: Text(
-                              '${assignment.courseName}'
-                              ' • '
-                              '${assignment.maxMarks} Marks'
-                              '\n'
-                              'Due: ${_formatDateTime(assignment.dueAt)}',
-                            ),
-                            isThreeLine: true,
-                            trailing: Chip(
-                              label: Text(
-                                assignment.isPublished ? 'Published' : 'Draft',
-                              ),
-                            ),
-                            onTap: () async {
-                              await context.push(
-                                '/assignments/${assignment.uuid}',
-                              );
-
-                              if (mounted) {
-                                refresh();
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  AdminKpiGrid(
                     children: [
-                      Text(
-                        '${data.count} total • Page $page',
+                      AdminKpiCard(
+                        label: 'Total assignments',
+                        value: data == null ? '…' : '${data.count}',
+                        icon: Icons.assignment_outlined,
                       ),
-                      IconButton(
-                        onPressed:
-                            page > 1 ? () => changePage(page - 1) : null,
-                        icon: const Icon(
-                          Icons.chevron_left,
-                        ),
+                      AdminKpiCard(
+                        label: 'Published',
+                        value: data == null ? '…' : '$published',
+                        icon: Icons.public_rounded,
+                        iconBackground: const Color(0xFFECFDF5),
+                        iconForeground: const Color(0xFF059669),
+                        caption: data == null
+                            ? null
+                            : '${rows.length - published} drafts on this page',
                       ),
-                      IconButton(
-                        onPressed: page * 20 < data.count
-                            ? () => changePage(page + 1)
-                            : null,
-                        icon: const Icon(
-                          Icons.chevron_right,
-                        ),
+                      AdminKpiCard(
+                        label: 'Open for submission',
+                        value: data == null ? '…' : '$open',
+                        icon: Icons.inbox_outlined,
+                        iconBackground: const Color(0xFFF0F9FF),
+                        iconForeground: const Color(0xFF0284C7),
+                        caption: 'On this page',
+                      ),
+                      AdminKpiCard(
+                        label: 'Due in 7 days',
+                        value: data == null ? '…' : '$dueSoon',
+                        icon: Icons.alarm_rounded,
+                        iconBackground: const Color(0xFFFFFBEB),
+                        iconForeground: const Color(0xFFD97706),
+                        caption: 'On this page',
                       ),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  AdminToolbar(
+                    controller: searchController,
+                    hint: 'Search by title or description…',
+                    onSearch: applySearch,
+                  ),
+                  const SizedBox(height: 18),
+                  if (state != null)
+                    state
+                  else if (rows.isEmpty)
+                    AdminStateMessage(
+                      icon: Icons.assignment_add,
+                      title: 'No assignments found',
+                      message: search.isEmpty
+                          ? 'Create an assignment or import one from a PDF.'
+                          : 'Try a different search.',
+                      actionLabel: search.isEmpty ? 'Create assignment' : null,
+                      onAction: search.isEmpty ? _openCreate : null,
+                    )
+                  else ...[
+                    for (final assignment in rows)
+                      AdminListRow(
+                        title: assignment.title,
+                        icon: assignment.isPublished
+                            ? Icons.assignment_turned_in_outlined
+                            : Icons.assignment_outlined,
+                        subtitle: assignment.description,
+                        meta: [
+                          MetaChip(
+                            icon: Icons.auto_stories_outlined,
+                            label: assignment.courseName,
+                          ),
+                          MetaChip(
+                            icon: Icons.star_outline_rounded,
+                            label: '${_marks(assignment.maxMarks)} marks',
+                          ),
+                          MetaChip(
+                            icon: Icons.event_outlined,
+                            label: 'Due ${_formatDateTime(assignment.dueAt)}',
+                          ),
+                          if (assignment.allowLateSubmission)
+                            const SoftBadge(
+                              label: 'Late allowed',
+                              background: Color(0xFFFFFBEB),
+                              foreground: Color(0xFFD97706),
+                            ),
+                        ],
+                        trailing: [
+                          ActiveBadge(
+                            active: assignment.isPublished,
+                            activeLabel: 'Published',
+                            inactiveLabel: 'Draft',
+                          ),
+                        ],
+                        onTap: () async {
+                          await context.push(
+                            '/assignments/${assignment.uuid}',
+                          );
+                          if (mounted) refresh();
+                        },
+                      ),
+                    AdminPager(
+                      page: page,
+                      pageSize: 20,
+                      total: data!.count,
+                      noun: 'assignments',
+                      onPage: changePage,
+                    ),
+                  ],
                 ],
               );
             },

@@ -106,11 +106,95 @@ class AppTheme {
         elevation: 0,
         color: colors.surface,
         surfaceTintColor: Colors.transparent,
-        margin: EdgeInsets.zero,
+        shadowColor: const Color(0x140F172A),
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 12,
+        shadowColor: const Color(0x334F46E5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF0F172A),
+        ),
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: colors.primary,
+        unselectedLabelColor: colors.textMuted,
+        indicatorColor: colors.primary,
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: const Color(0xFFE2E8F0),
+        labelStyle: textTheme.labelLarge,
+        unselectedLabelStyle:
+            textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colors.primaryTonal
+                : colors.surface,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colors.primary
+                : colors.textMuted,
+          ),
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colors.primary,
+        foregroundColor: Colors.white,
+        elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: colors.borderSubtle),
         ),
+      ),
+      expansionTileTheme: ExpansionTileThemeData(
+        backgroundColor: colors.surface,
+        collapsedBackgroundColor: colors.surface,
+        iconColor: colors.primary,
+        textColor: colors.textPrimary,
+        shape: const RoundedRectangleBorder(
+          side: BorderSide(color: Colors.transparent),
+        ),
+        collapsedShape: const RoundedRectangleBorder(
+          side: BorderSide(color: Colors.transparent),
+        ),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: textTheme.labelMedium?.copyWith(color: Colors.white),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -247,17 +331,36 @@ class AppTheme {
       ),
       listTileTheme: ListTileThemeData(
         iconColor: colors.primary,
-        titleTextStyle: textTheme.titleSmall,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+        minVerticalPadding: 12,
+        horizontalTitleGap: 14,
+        titleTextStyle: textTheme.titleSmall?.copyWith(
+          color: const Color(0xFF0F172A),
+        ),
         subtitleTextStyle:
-            textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+            textTheme.bodySmall?.copyWith(color: colors.textMuted),
+        leadingAndTrailingTextStyle:
+            textTheme.labelMedium?.copyWith(color: colors.textMuted),
+        selectedColor: colors.primary,
+        selectedTileColor: colors.primaryTonal,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
       ),
       dataTableTheme: DataTableThemeData(
-        headingRowColor: WidgetStateProperty.all(colors.canvas),
-        headingTextStyle:
-            textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-        dataRowMinHeight: 44,
-        dataRowMaxHeight: 44,
+        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF8FAFC)),
+        headingTextStyle: textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+          color: const Color(0xFF475569),
+        ),
+        dataTextStyle: textTheme.bodyMedium,
+        dataRowMinHeight: 52,
+        dataRowMaxHeight: 60,
         dividerThickness: 1,
+        horizontalMargin: 20,
+        columnSpacing: 28,
       ),
     );
   }
