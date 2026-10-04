@@ -23,6 +23,7 @@ import '../../features/staff/presentation/staff_list_screen.dart';
 import '../../features/staff/presentation/staff_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollment_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollments_list_screen.dart';
+import '../../features/enrollments/presentation/bulk_chapter_video_access_screen.dart';
 import '../../features/fees/presentation/fee_account_detail_screen.dart';
 import '../../features/fees/presentation/fee_accounts_list_screen.dart';
 import '../../features/live_classes/presentation/live_classes_list_screen.dart';
@@ -330,6 +331,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) =>
                 const EnrollmentsListScreen(),
             routes: [
+              GoRoute(
+                path: 'video-access',
+                builder: (context, state) =>
+                    const BulkChapterVideoAccessScreen(),
+              ),
               GoRoute(
                 path: ':enrollmentUuid',
                 builder: (context, state) =>

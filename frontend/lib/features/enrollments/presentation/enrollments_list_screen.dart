@@ -117,6 +117,19 @@ class _EnrollmentsListScreenState
           ],
           actions: [
             AdminOutlineButton(
+              label: 'Chapter video access',
+              icon: Icons.video_library_outlined,
+              onPressed: () async {
+                final granted = await context.push<bool>(
+                  '/enrollments/video-access',
+                );
+
+                if (granted == true && mounted) {
+                  refresh();
+                }
+              },
+            ),
+            AdminOutlineButton(
               label: 'Bulk assign',
               icon: Icons.group_add_outlined,
               onPressed: _openBulk,
