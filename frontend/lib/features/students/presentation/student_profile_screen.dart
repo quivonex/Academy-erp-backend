@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../data/student.dart';
 import '../data/student_repository.dart';
+import 'student_edit_screen.dart';
 
 class StudentProfileScreen extends ConsumerStatefulWidget {
   const StudentProfileScreen({super.key, required this.studentUuid});
@@ -103,6 +104,39 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       setState(reload);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Student login enabled successfully.')),
+      );
+    } finally {
+      if (mounted) setState(() => changing = false);
+    }
+  }
+
+  Future<void> editStudent(Student student) async {
+    if (changing) return;
+
+    final uuid = student.uuid;
+    setState(() => changing = true);
+
+    try {
+      final updated = await showDialog<Student>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => StudentEditScreen(student: student),
+      );
+
+      if (!mounted ||
+          updated == null ||
+          widget.studentUuid != uuid) {
+        return;
+      }
+
+      setState(() {
+        result = Future<Student>.value(updated);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student updated successfully.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => changing = false);
@@ -244,6 +278,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
+                AdminOutlineButton(
+                  label: 'Edit student',
+                  icon: Icons.edit_outlined,
+                  onPressed: changing ? null : () => editStudent(student),
+                ),
                 GradientButton(
                   label: 'Enable student login',
                   icon: Icons.lock_open_rounded,

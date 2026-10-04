@@ -1301,7 +1301,7 @@ class _PublicCourseDetailScreenState
             if (double.tryParse(course.price) != null &&
                 double.parse(course.price) > 0)
               FilledButton.icon(
-                onPressed: () async {
+                onPressed: () {
                   final uri = Uri(
                     path: '/student/course-payment/${course.uuid}',
                     queryParameters: {
@@ -1310,20 +1310,10 @@ class _PublicCourseDetailScreenState
                     },
                   );
 
-                  final submitted = await context.push(uri.toString());
-
-                  if (submitted == true && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Payment is waiting for academy verification.',
-                        ),
-                      ),
-                    );
-                  }
+                  context.push(uri.toString());
                 },
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Submit Payment'),
+                icon: const Icon(Icons.info_outline_rounded),
+                label: const Text('Fees & Enrollment'),
               )
             else
               OutlinedButton(

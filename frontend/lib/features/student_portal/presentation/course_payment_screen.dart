@@ -1,13 +1,11 @@
-import 'dart:typed_data';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../data/student_portal_repository.dart';
+import '../../../core/session/session_controller.dart';
+import '../../../core/session/user_role.dart';
 
-class CoursePaymentScreen extends ConsumerStatefulWidget {
+class CoursePaymentScreen extends ConsumerWidget {
   const CoursePaymentScreen({
     super.key,
     required this.courseUuid,
@@ -19,313 +17,250 @@ class CoursePaymentScreen extends ConsumerStatefulWidget {
   final String courseName;
   final String amount;
 
+  String get _displayAmount {
+    final value = num.tryParse(amount);
+
+    if (value == null || !value.isFinite || value < 0) {
+      return 'Confirm with academy';
+    }
+
+    return '₹${value.toStringAsFixed(2)}';
+  }
+
   @override
-  ConsumerState<CoursePaymentScreen> createState() =>
-      _CoursePaymentScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionControllerProvider);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (session.isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (!session.isAuthenticated ||
+        session.role != UserRole.student) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Sign in with your student account '
+            'to view course fee information.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Back to course',
+              onPressed: () {
+                context.go('/explore/$courseUuid');
+              },
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Course fees & enrollment',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: colors.primaryContainer,
+                  child: Icon(
+                    Icons.school_outlined,
+                    size: 28,
+                    color: colors.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  courseName,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Listed course fee: $_displayAmount',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Your final payable amount and any discount '
+                  'are confirmed by the academy.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          color: colors.primaryContainer,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: colors.onPrimaryContainer,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Payments are managed by your academy',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colors.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Contact ${session.firmName ?? 'your academy'} '
+                  'for enrollment and payment instructions. '
+                  'The academy records verified payments '
+                  'against your enrollment.',
+                  style: TextStyle(
+                    color: colors.onPrimaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How to continue',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const _FlowStep(
+                  number: '1',
+                  title: 'Contact the academy',
+                  description:
+                      'Confirm enrollment, fees and '
+                      'the accepted payment method.',
+                ),
+                const SizedBox(height: 16),
+                const _FlowStep(
+                  number: '2',
+                  title: 'Academy records your payment',
+                  description:
+                      'Share payment details directly with '
+                      'the academy for verification.',
+                ),
+                const SizedBox(height: 16),
+                const _FlowStep(
+                  number: '3',
+                  title: 'Check My Fees and My Courses',
+                  description:
+                      'View your fee account and recorded '
+                      'installments in My Fees. Course access '
+                      'is managed separately by the academy.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => context.go('/student/fees'),
+          icon: const Icon(Icons.receipt_long_outlined),
+          label: const Text('Open My Fees'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => context.go('/student/courses'),
+          icon: const Icon(Icons.menu_book_outlined),
+          label: const Text('Open My Courses'),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'If this course is missing from My Fees, '
+          'ask the academy to create its enrollment fee account.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
 }
 
-class _CoursePaymentScreenState extends ConsumerState<CoursePaymentScreen> {
-  final utrController = TextEditingController();
+class _FlowStep extends StatelessWidget {
+  const _FlowStep({
+    required this.number,
+    required this.title,
+    required this.description,
+  });
 
-  final noteController = TextEditingController();
-
-  String paymentMethod = 'UPI';
-
-  Uint8List? proofBytes;
-  String? proofName;
-
-  bool saving = false;
-
-  String? error;
-
-  bool get requiresProof =>
-      paymentMethod == 'UPI' || paymentMethod == 'BANK_TRANSFER';
+  final String number;
+  final String title;
+  final String description;
 
   @override
-  void dispose() {
-    utrController.dispose();
-    noteController.dispose();
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    super.dispose();
-  }
-
-  Future<void> selectProof() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: [
-        'jpg',
-        'jpeg',
-        'png',
-        'pdf',
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: colors.primaryContainer,
+          child: Text(
+            number,
+            style: TextStyle(
+              color: colors.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(description),
+            ],
+          ),
+        ),
       ],
-      withData: true,
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    final file = result.files.single;
-
-    if (file.bytes == null) {
-      setState(() {
-        error = 'Could not read selected file.';
-      });
-
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setState(() {
-        error = 'Payment proof must be 10 MB or smaller.';
-      });
-
-      return;
-    }
-
-    setState(() {
-      proofBytes = file.bytes;
-
-      proofName = file.name;
-
-      error = null;
-    });
-  }
-
-  Future<void> submit() async {
-    if (requiresProof && utrController.text.trim().isEmpty) {
-      setState(() {
-        error = 'UTR or transaction reference number is required.';
-      });
-
-      return;
-    }
-
-    if (requiresProof && proofBytes == null) {
-      setState(() {
-        error = 'Payment proof is required.';
-      });
-
-      return;
-    }
-
-    setState(() {
-      saving = true;
-      error = null;
-    });
-
-    try {
-      await ref
-          .read(
-            studentPortalRepositoryProvider,
-          )
-          .submitCoursePayment(
-            courseUuid: widget.courseUuid,
-            paymentMethod: paymentMethod,
-            utrNumber: utrController.text,
-            studentNote: noteController.text,
-            paymentProofBytes: proofBytes,
-            paymentProofName: proofName,
-          );
-
-      if (!mounted) {
-        return;
-      }
-
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            icon: const Icon(
-              Icons.check_circle_outline,
-              size: 48,
-            ),
-            title: const Text(
-              'Payment Submitted',
-            ),
-            content: const Text(
-              'Your payment request has been submitted for academy verification.',
-              textAlign: TextAlign.center,
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                ),
-                child: const Text(
-                  'OK',
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (mounted) {
-        context.pop(
-          true,
-        );
-      }
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        error = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Course Payment',
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(
-          20,
-        ),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(
-                18,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.courseName,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(
-                    height: 8,
-                  ),
-                  Text(
-                    'Course Fee: ₹${widget.amount}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(
-            height: 20,
-          ),
-          DropdownButtonFormField<String>(
-            value: paymentMethod,
-            decoration: const InputDecoration(
-              labelText: 'Payment Method',
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: 'UPI',
-                child: Text('UPI'),
-              ),
-              DropdownMenuItem(
-                value: 'BANK_TRANSFER',
-                child: Text(
-                  'Bank Transfer',
-                ),
-              ),
-              DropdownMenuItem(
-                value: 'CASH',
-                child: Text('Cash'),
-              ),
-            ],
-            onChanged: (value) {
-              setState(() {
-                paymentMethod = value ?? 'UPI';
-
-                if (!requiresProof) {
-                  proofBytes = null;
-
-                  proofName = null;
-
-                  utrController.clear();
-                }
-
-                error = null;
-              });
-            },
-          ),
-          if (requiresProof) ...[
-            const SizedBox(
-              height: 16,
-            ),
-            TextField(
-              controller: utrController,
-              decoration: const InputDecoration(
-                labelText: 'UTR / Transaction Reference *',
-              ),
-            ),
-            const SizedBox(
-              height: 16,
-            ),
-            OutlinedButton.icon(
-              onPressed: selectProof,
-              icon: const Icon(
-                Icons.upload_file_outlined,
-              ),
-              label: Text(
-                proofName ?? 'Upload Payment Proof',
-              ),
-            ),
-            const SizedBox(
-              height: 6,
-            ),
-            const Text(
-              'Allowed: PDF, JPG, JPEG, PNG • Maximum 10 MB',
-            ),
-          ],
-          const SizedBox(
-            height: 16,
-          ),
-          TextField(
-            controller: noteController,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Note (Optional)',
-              hintText: 'Any payment information for the academy',
-            ),
-          ),
-          if (error != null) ...[
-            const SizedBox(
-              height: 16,
-            ),
-            Text(
-              error!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ],
-          const SizedBox(
-            height: 24,
-          ),
-          FilledButton.icon(
-            onPressed: saving ? null : submit,
-            icon: const Icon(
-              Icons.payments_outlined,
-            ),
-            label: Text(
-              saving ? 'Submitting...' : 'Submit Payment',
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

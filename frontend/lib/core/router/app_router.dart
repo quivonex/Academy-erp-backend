@@ -52,6 +52,8 @@ import '../../features/student_portal/presentation/student_profile_screen.dart'
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/notifications/presentation/notification_send_screen.dart';
 import '../../features/notifications/presentation/device_notification_screen.dart';
+import '../../features/student_portal/presentation/student_fee_ledger_screen.dart';
+import '../../features/student_portal/presentation/student_notifications_screen.dart';
 import '../../features/student_portal/presentation/all_live_classes_screen.dart';
 import '../session/session_controller.dart';
 import '../session/user_role.dart';
@@ -205,6 +207,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/student/profile',
             builder: (context, state) =>
                 const portal.StudentProfileScreen(),
+          ),
+          GoRoute(
+            path: '/student/fees',
+            builder: (context, state) => const StudentFeeLedgerScreen(),
+          ),
+          GoRoute(
+            path: '/student/notifications',
+            builder: (context, state) =>
+                const StudentNotificationsScreen(),
           ),
           GoRoute(
             path:

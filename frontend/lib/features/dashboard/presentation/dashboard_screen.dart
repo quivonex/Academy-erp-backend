@@ -2,26 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/admin_ui.dart';
-import '../../../core/widgets/status_pill.dart';
-import '../../firms/data/firm_admin_model.dart';
-import '../../firms/data/firm_admin_repository.dart';
-import '../../firms/data/firm_model.dart';
-import '../../firms/data/firm_repository.dart';
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 import '../../enrollments/data/enrollment.dart';
 import '../../enrollments/data/enrollment_repository.dart';
+import '../../firms/data/firm_repository.dart';
+import '../../firms/data/firm_admin_repository.dart';
 import '../../live_classes/data/live_class.dart';
 import '../../live_classes/data/live_class_repository.dart';
-import '../../students/data/student.dart';
-import '../../students/data/student_repository.dart';
-import '../../teachers/data/teacher.dart';
-import '../../teachers/data/teacher_repository.dart';
+import '../data/dashboard_repository.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -30,13 +24,36 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider);
 
-    if (session.role != UserRole.superAdmin) {
-      return _AcademyDashboard(
-        firmName: session.firmName ?? 'Your academy',
-        roleLabel: session.role?.apiValue ?? '',
+    if (session.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (session.role == UserRole.superAdmin) {
+      return const _SuperDashboard();
+    }
+
+    if ((session.role != UserRole.academyAdmin &&
+        session.role != UserRole.firmStaff) ||
+        (session.firmUuid ?? '').isEmpty) {
+      return const AdminStateMessage(
+        icon: Icons.lock_outline,
+        title: 'Academy dashboard unavailable',
+        message: 'Sign in with an academy admin account linked to a firm.',
       );
     }
 
+    return _AcademyDashboard(
+      key: ValueKey('${session.userUuid}_${session.firmUuid}'),
+      firmName: session.firmName ?? 'Your academy',
+    );
+  }
+}
+
+class _SuperDashboard extends ConsumerWidget {
+  const _SuperDashboard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final firms = ref.watch(firmsListProvider);
     final admins = ref.watch(allFirmAdminsProvider);
 
@@ -48,1199 +65,903 @@ class DashboardScreen extends ConsumerWidget {
     final firmList = firms.valueOrNull;
     final adminList = admins.valueOrNull;
 
-    final totalFirms = firmList?.length;
-    final activeFirms = firmList?.where((firm) => firm.isActive).length;
-    final totalAdmins = adminList?.length;
-    final activeAdmins = adminList?.where((admin) => admin.isActive).length;
+    String value(int? number, bool failed) =>
+        number?.toString() ?? (failed ? '—' : '…');
 
-    String metric(AsyncValue<Object?> state, int? value) {
-      if (value != null) return '$value';
-      if (state.hasError) return '—';
-      return '…';
-    }
+    Widget failure() => AdminStateMessage(
+      icon: Icons.cloud_off,
+      title: 'Could not load directory',
+      message: 'Please retry.',
+      actionLabel: 'Retry',
+      onAction: refresh,
+      isError: true,
+    );
 
-    final operationalPct = (totalFirms == null || totalFirms == 0)
-        ? null
-        : ((activeFirms ?? 0) * 100 / totalFirms).round();
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AdminPageHeader(
-            eyebrow: const SoftBadge(
-              label: 'Executive dashboard',
-              dot: true,
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        AdminPageHeader(
+          title: 'Academy overview',
+          subtitle: 'Manage academies and firm administrators.',
+          actions: [
+            AdminOutlineButton(
+              label: 'Refresh',
+              icon: Icons.refresh,
+              onPressed: refresh,
             ),
-            title: 'Academy overview',
-            subtitle: "Welcome back — here's what's happening across your "
-                'academies.',
-            actions: [
-              AdminOutlineButton(
-                label: 'Refresh',
-                icon: Icons.refresh_rounded,
-                onPressed: refresh,
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          // KPI cards
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900
-                  ? 3
-                  : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
-              const gap = 20.0;
-              final cardWidth =
-                  (constraints.maxWidth - gap * (columns - 1)) / columns;
-
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: _KpiCard(
-                      title: 'Academies',
-                      value: metric(firms, totalFirms),
-                      icon: Icons.apartment_rounded,
-                      badge: totalFirms == null
-                          ? null
-                          : SoftBadge(
-                              label: totalFirms == 1
-                                  ? '1 registered'
-                                  : '$totalFirms registered',
-                              background: const Color(0xFFECFDF5),
-                              foreground: const Color(0xFF059669),
-                            ),
-                      footLabel: 'Configured branches',
-                      footValue: 'Multi-tenant',
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _KpiCard(
-                      title: 'Active academies',
-                      value: metric(firms, activeFirms),
-                      icon: Icons.verified_outlined,
-                      iconBg: const Color(0xFFECFDF5),
-                      iconFg: const Color(0xFF059669),
-                      badge: operationalPct == null
-                          ? null
-                          : SoftBadge(
-                              label: '$operationalPct% operational',
-                              background: const Color(0xFFECFDF5),
-                              foreground: const Color(0xFF059669),
-                            ),
-                      footLabel: 'Inactive / suspended',
-                      footValue: totalFirms == null
-                          ? '—'
-                          : '${totalFirms - (activeFirms ?? 0)}',
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _KpiCard(
-                      title: 'Firm admins',
-                      value: metric(admins, totalAdmins),
-                      icon: Icons.admin_panel_settings_outlined,
-                      iconBg: const Color(0xFFF5F3FF),
-                      iconFg: const Color(0xFF7C3AED),
-                      badge: activeAdmins == null
-                          ? null
-                          : SoftBadge(
-                              label: '$activeAdmins active',
-                              background: const Color(0xFFF5F3FF),
-                              foreground: const Color(0xFF7C3AED),
-                            ),
-                      footLabel: 'Access role',
-                      footValue: 'FIRM_ADMIN',
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          if (firms.hasError || admins.hasError) ...[
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Color(0xFFD97706), size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Some dashboard data could not be loaded.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF92400E),
-                          ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: refresh,
-                    child: const Text('Try again'),
-                  ),
-                ],
-              ),
+            GradientButton(
+              label: 'Firms',
+              onPressed: () => context.go('/firms'),
+            ),
+            AdminOutlineButton(
+              label: 'Firm admins',
+              onPressed: () => context.go('/firm-admins'),
             ),
           ],
-          const SizedBox(height: 24),
-
-          // Quick actions
-          AdminCard(
-            padding: const EdgeInsets.all(20),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final textTheme = Theme.of(context).textTheme;
-                final info = Row(
-                  children: [
-                    const AdminIconTile(icon: Icons.bolt_rounded, size: 44),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Direct actions & directory management',
-                            style: jakarta(textTheme.titleMedium),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Jump to the firm directory or the admin roster.',
-                            style: textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-                final buttons = Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    GradientButton(
-                      label: 'View firms',
-                      icon: Icons.apartment_rounded,
-                      onPressed: () => context.go('/firms'),
-                    ),
-                    AdminOutlineButton(
-                      label: 'View firm admins',
-                      icon: Icons.group_outlined,
-                      onPressed: () => context.go('/firm-admins'),
-                    ),
-                  ],
-                );
-
-                if (constraints.maxWidth < 720) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [info, const SizedBox(height: 16), buttons],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: info),
-                    const SizedBox(width: 16),
-                    buttons,
-                  ],
-                );
-              },
+        ),
+        const SizedBox(height: 24),
+        AdminKpiGrid(
+          children: [
+            AdminKpiCard(
+              label: 'Academies',
+              value: value(firmList?.length, firms.hasError),
+              icon: Icons.apartment,
             ),
+            AdminKpiCard(
+              label: 'Active academies',
+              value: value(
+                firmList?.where((f) => f.isActive).length,
+                firms.hasError,
+              ),
+              icon: Icons.verified,
+            ),
+            AdminKpiCard(
+              label: 'Firm admins',
+              value: value(adminList?.length, admins.hasError),
+              icon: Icons.admin_panel_settings,
+            ),
+            AdminKpiCard(
+              label: 'Active admins',
+              value: value(
+                adminList?.where((a) => a.isActive).length,
+                admins.hasError,
+              ),
+              icon: Icons.people,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Institutions',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        firms.when(
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
           ),
-          const SizedBox(height: 24),
-
-          // Institutions + recent admins
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final institutions = _InstitutionsCard(
-                firms: firms,
-                onRetry: refresh,
-              );
-              final recent = _RecentAdminsCard(admins: admins);
-
-              if (constraints.maxWidth < 980) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [institutions, const SizedBox(height: 24), recent],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 2, child: institutions),
-                  const SizedBox(width: 24),
-                  Expanded(child: recent),
-                ],
-              );
-            },
+          error: (_, __) => failure(),
+          data: (items) => items.isEmpty
+              ? const Text('No academies registered.')
+              : Column(
+            children: [
+              for (final firm in items.take(6))
+                AdminListRow(
+                  title: firm.name,
+                  subtitle: '${firm.code} • ${firm.email ?? ''}',
+                  icon: Icons.apartment,
+                  titleBadge: ActiveBadge(active: firm.isActive),
+                  onTap: () => context.push('/firms/${firm.uuid}'),
+                ),
+            ],
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Recent admins',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        admins.when(
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (_, __) => failure(),
+          data: (items) {
+            final sorted = [...items]
+              ..sort((a, b) => b.dateJoined.compareTo(a.dateJoined));
+
+            if (sorted.isEmpty) {
+              return const Text('No firm admins registered.');
+            }
+
+            return Column(
+              children: [
+                for (final admin in sorted.take(6))
+                  AdminListRow(
+                    title: admin.fullName,
+                    subtitle: '${admin.email} • ${admin.firmName}',
+                    icon: Icons.person_outline,
+                    titleBadge: ActiveBadge(active: admin.isActive),
+                    onTap: () => context.go('/firm-admins'),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
 
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.footLabel,
-    required this.footValue,
-    this.badge,
-    this.iconBg,
-    this.iconFg,
+class _ReportQuery {
+  const _ReportQuery({
+    this.type = DashboardReport.collection,
+    this.courseUuid,
+    this.courseName,
+    this.status,
+    this.from,
+    this.to,
   });
 
-  final String title;
-  final String value;
-  final IconData icon;
-  final Widget? badge;
-  final String footLabel;
-  final String footValue;
-  final Color? iconBg;
-  final Color? iconFg;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final textTheme = Theme.of(context).textTheme;
-
-    return AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF334155),
-                  ),
-                ),
-              ),
-              AdminIconTile(
-                icon: icon,
-                size: 40,
-                background: iconBg,
-                foreground: iconFg,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                value,
-                style: jakarta(
-                  textTheme.displayLarge?.copyWith(
-                    fontSize: 40,
-                    height: 1.1,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -1,
-                    color: const Color(0xFF0F172A),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              if (badge != null) badge!,
-            ],
-          ),
-          const SizedBox(height: 18),
-          const Divider(height: 1, color: Color(0xFFEEF0F5)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  footLabel,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.textMuted,
-                  ),
-                ),
-              ),
-              Text(
-                footValue,
-                style: textTheme.labelMedium?.copyWith(
-                  color: const Color(0xFF334155),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InstitutionsCard extends StatelessWidget {
-  const _InstitutionsCard({required this.firms, required this.onRetry});
-
-  final AsyncValue<List<Firm>> firms;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final textTheme = Theme.of(context).textTheme;
-    final list = firms.valueOrNull;
-
-    Widget body;
-    if (list == null && firms.hasError) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          children: [
-            Text(
-              'Could not load institutions.',
-              style: textTheme.bodyMedium?.copyWith(color: colors.textMuted),
-            ),
-            TextButton(onPressed: onRetry, child: const Text('Try again')),
-          ],
-        ),
-      );
-    } else if (list == null) {
-      body = const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    } else if (list.isEmpty) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: Text(
-            'No institutions registered yet.',
-            style: textTheme.bodyMedium?.copyWith(color: colors.textMuted),
-          ),
-        ),
-      );
-    } else {
-      body = Column(
-        children: [
-          for (final firm in list.take(6))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _FirmRow(firm: firm),
-            ),
-        ],
-      );
-    }
-
-    return AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Enrolled institutions',
-                      style: jakarta(textTheme.titleLarge),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Registered institutions under your supervision',
-                      style: textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              if (list != null)
-                SoftBadge(
-                  label: 'Total: ${list.length}',
-                  background: const Color(0xFFF1F5F9),
-                  foreground: const Color(0xFF334155),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: Color(0xFFEEF0F5)),
-          const SizedBox(height: 16),
-          body,
-          if (list != null && list.length > 6)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => context.go('/firms'),
-                child: Text('View all ${list.length} firms'),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FirmRow extends StatelessWidget {
-  const _FirmRow({required this.firm});
-
-  final Firm firm;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final textTheme = Theme.of(context).textTheme;
-
-    final meta = [
-      'Code: ${firm.code}',
-      if (firm.email?.trim().isNotEmpty == true) firm.email!.trim(),
-      if (firm.address?.trim().isNotEmpty == true) firm.address!.trim(),
-    ].join('  •  ');
-
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        hoverColor: const Color(0xFFF8FAFC),
-        onTap: () => context.push('/firms/${firm.uuid}'),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: colors.primaryTonal,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  adminInitials(firm.name),
-                  style: jakarta(
-                    textTheme.labelLarge?.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      firm.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleSmall?.copyWith(
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              StatusPill(
-                label: firm.status.toUpperCase(),
-                tone: toneForStatus(firm.status),
-                compact: true,
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, color: colors.textSubtle),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentAdminsCard extends StatelessWidget {
-  const _RecentAdminsCard({required this.admins});
-
-  final AsyncValue<List<FirmAdmin>> admins;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final textTheme = Theme.of(context).textTheme;
-    final list = admins.valueOrNull;
-
-    final recent = list == null
-        ? <FirmAdmin>[]
-        : ([...list]..sort((a, b) => b.dateJoined.compareTo(a.dateJoined)))
-            .take(5)
-            .toList();
-
-    return AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Recently added admins',
-                  style: jakarta(textTheme.titleLarge),
-                ),
-              ),
-              TextButton(
-                onPressed: () => context.go('/firm-admins'),
-                child: const Text('View all'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: Color(0xFFEEF0F5)),
-          const SizedBox(height: 16),
-          if (list == null && admins.hasError)
-            Text(
-              'Could not load admins.',
-              style: textTheme.bodyMedium?.copyWith(color: colors.textMuted),
-            )
-          else if (list == null)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (recent.isEmpty)
-            Text(
-              'No firm admins yet.',
-              style: textTheme.bodyMedium?.copyWith(color: colors.textMuted),
-            )
-          else
-            for (final admin in recent)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: admin.isActive
-                            ? colors.primary
-                            : const Color(0xFFCBD5E1),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            admin.fullName.trim().isEmpty
-                                ? admin.email
-                                : admin.fullName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleSmall?.copyWith(
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          Text(
-                            admin.firmName.isEmpty
-                                ? admin.email
-                                : admin.firmName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF475569),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Joined ${formatDate(admin.dateJoined)}',
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colors.textSubtle,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-        ],
-      ),
-    );
-  }
+  final DashboardReport type;
+  final String? courseUuid;
+  final String? courseName;
+  final String? status;
+  final DateTime? from;
+  final DateTime? to;
 }
 
 class _AcademyDashboard extends ConsumerStatefulWidget {
-  const _AcademyDashboard({required this.firmName, required this.roleLabel});
+  const _AcademyDashboard({
+    super.key,
+    required this.firmName,
+  });
 
   final String firmName;
-  final String roleLabel;
 
   @override
-  ConsumerState<_AcademyDashboard> createState() => _AcademyDashboardState();
+  ConsumerState<_AcademyDashboard> createState() =>
+      _AcademyDashboardState();
 }
 
-class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
-  late Future<StudentPage> _students;
-  late Future<TeacherPage> _teachers;
-  late Future<CoursePage> _courses;
-  late Future<EnrollmentPage> _enrollments;
-  late Future<LiveClassPage> _live;
-  late Future<LiveClassPage> _scheduled;
+class _AcademyDashboardState
+    extends ConsumerState<_AcademyDashboard> {
+  late Future<DashboardSummary> summaryFuture;
+  late Future<DashboardReportPage> reportFuture;
+  late Future<List<LiveClassPage>> classesFuture;
+  late Future<EnrollmentPage> enrollmentsFuture;
+
+  List<Course> courses = [];
+  DashboardReport draftType = DashboardReport.collection;
+  String? draftCourse;
+  String? draftStatus;
+  DateTime? draftFrom;
+  DateTime? draftTo;
+
+  _ReportQuery query = const _ReportQuery();
+  int page = 1;
+
+  bool loadingCourses = false;
+  bool refreshing = false;
+  bool picking = false;
+
+  String? courseError;
+  String? filterError;
+
+  bool get locked => refreshing || picking;
+
+  DashboardRepository get repo =>
+      ref.read(dashboardRepositoryProvider);
 
   @override
   void initState() {
     super.initState();
-    _load();
+    loadAll();
+    loadCourses();
   }
 
-  void _load() {
-    _students = ref.read(studentRepositoryProvider).list();
-    _teachers = ref.read(teacherRepositoryProvider).list();
-    _courses = ref.read(courseRepositoryProvider).list();
-    _enrollments = ref.read(enrollmentManagementRepositoryProvider).list();
-    _live = ref.read(liveClassRepositoryProvider).list(status: 'LIVE');
-    _scheduled =
-        ref.read(liveClassRepositoryProvider).list(status: 'SCHEDULED');
+  void loadAll() {
+    summaryFuture = repo.summary();
+    loadReport();
+    loadOperations();
   }
 
-  Widget _count<T>(Future<T> future, int Function(T) pick, Widget Function(String) builder) {
-    return FutureBuilder<T>(
-      future: future,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return builder('—');
-        if (!snapshot.hasData) return builder('…');
-        return builder('${pick(snapshot.data as T)}');
-      },
+  void loadReport() {
+    reportFuture = repo.report(
+      type: query.type,
+      page: page,
+      courseUuid: query.courseUuid,
+      status: query.status,
+      dateFrom: query.from,
+      dateTo: query.to,
     );
   }
 
-  String _when(DateTime? value) {
-    if (value == null) return 'Time not set';
-    final d = value.toLocal();
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final m = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${months[d.month - 1]}, $h:$m ${d.hour < 12 ? 'AM' : 'PM'}';
+  void loadOperations() {
+    final classes = ref.read(liveClassRepositoryProvider);
+
+    classesFuture = Future.wait([
+      classes.list(status: 'LIVE'),
+      classes.list(status: 'SCHEDULED'),
+    ]);
+
+    enrollmentsFuture =
+        ref.read(enrollmentManagementRepositoryProvider).list();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final width = MediaQuery.sizeOf(context).width;
+  Future<void> refresh() async {
+    if (locked) return;
 
-    final hero = Container(
-      padding: EdgeInsets.all(width < 700 ? 22 : 32),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF3525CD), Color(0xFF4F46E5), Color(0xFF6366F1)],
+    setState(() {
+      refreshing = true;
+      page = 1;
+      loadAll();
+    });
+
+    try {
+      await Future.wait<Object?>([
+        summaryFuture,
+        reportFuture,
+        classesFuture,
+        enrollmentsFuture,
+      ]);
+    } catch (_) {
+      // Each section displays its own error and Retry action.
+    } finally {
+      if (mounted) {
+        setState(() => refreshing = false);
+      }
+    }
+  }
+
+  Future<void> loadCourses() async {
+    if (loadingCourses || locked) return;
+
+    setState(() {
+      loadingCourses = true;
+      courseError = null;
+    });
+
+    try {
+      final all = <String, Course>{};
+
+      for (var p = 1; ; p++) {
+        final data = await ref
+            .read(courseRepositoryProvider)
+            .list(page: p);
+
+        if (!mounted) return;
+
+        for (final course in data.results) {
+          all[course.uuid] = course;
+        }
+
+        if (p * 20 >= data.count) break;
+      }
+
+      if (mounted) {
+        setState(() {
+          courses = all.values.toList();
+
+          if (draftCourse != null &&
+              !all.containsKey(draftCourse)) {
+            draftCourse = null;
+          }
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => courseError = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          courseError =
+          'Could not load courses. Retry to use the course filter.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loadingCourses = false);
+      }
+    }
+  }
+
+  void applyFilters() {
+    if (locked) return;
+
+    if (draftType.usesDates &&
+        draftFrom != null &&
+        draftTo != null &&
+        draftTo!.isBefore(draftFrom!)) {
+      setState(() {
+        filterError = 'Date to must be on or after date from.';
+      });
+      return;
+    }
+
+    String? courseName;
+
+    for (final course in courses) {
+      if (course.uuid == draftCourse) {
+        courseName = '${course.name} (${course.code})';
+      }
+    }
+
+    setState(() {
+      filterError = null;
+      page = 1;
+
+      query = _ReportQuery(
+        type: draftType,
+        courseUuid: draftCourse,
+        courseName: courseName,
+        status: draftType == DashboardReport.enrollments
+            ? draftStatus
+            : null,
+        from: draftType.usesDates ? draftFrom : null,
+        to: draftType.usesDates ? draftTo : null,
+      );
+
+      loadReport();
+    });
+  }
+
+  void changePage(int next) {
+    if (locked || next < 1) return;
+
+    setState(() {
+      page = next;
+      loadReport();
+    });
+  }
+
+  Future<void> pickDate(bool from) async {
+    if (locked) return;
+    setState(() => picking = true);
+
+    try {
+      final initial =
+          (from ? draftFrom : draftTo) ?? DateTime.now();
+      final day = DateTime(
+        initial.year,
+        initial.month,
+        initial.day,
+      );
+
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: day,
+        firstDate: day.isBefore(DateTime(2000))
+            ? day
+            : DateTime(2000),
+        lastDate: day.isAfter(DateTime(2100, 12, 31))
+            ? day
+            : DateTime(2100, 12, 31),
+      );
+
+      if (mounted && picked != null) {
+        setState(() {
+          if (from) {
+            draftFrom = picked;
+          } else {
+            draftTo = picked;
+          }
+          filterError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          filterError =
+          'Could not open the date picker. Please retry.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => picking = false);
+      }
+    }
+  }
+
+  Future<void> navigate(String route) async {
+    if (locked) return;
+    await context.push(route);
+    if (mounted) await refresh();
+  }
+
+  Widget metrics(List<DashboardMetric> values) =>
+      AdminKpiGrid(
+        children: [
+          for (final metric in values)
+            AdminKpiCard(
+              label: metric.label,
+              value: metric.text,
+              caption: metric.caption,
+              icon: metric.money
+                  ? Icons.payments_outlined
+                  : Icons.analytics_outlined,
+            ),
+        ],
+      );
+
+  Widget dateControl(
+      String label,
+      DateTime? date,
+      bool from,
+      ) =>
+      FieldLabel(
+        label: label,
+        child: InputDecorator(
+          decoration: adminFieldDecoration(context),
+          child: Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(date == null ? 'No limit' : formatDate(date)),
+              IconButton(
+                tooltip: 'Choose $label',
+                onPressed: locked ? null : () => pickDate(from),
+                icon: const Icon(Icons.event),
+              ),
+              if (date != null)
+                IconButton(
+                  tooltip: 'Clear $label',
+                  onPressed: locked
+                      ? null
+                      : () => setState(() {
+                    if (from) {
+                      draftFrom = null;
+                    } else {
+                      draftTo = null;
+                    }
+                    filterError = null;
+                  }),
+                  icon: const Icon(Icons.close),
+                ),
+            ],
+          ),
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x404F46E5),
-            blurRadius: 24,
-            offset: Offset(0, 10),
+      );
+
+  Widget filters() => AdminCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FormRow(
+          left: FieldLabel(
+            label: 'Report',
+            child: DropdownButtonFormField<DashboardReport>(
+              value: draftType,
+              isExpanded: true,
+              decoration: adminFieldDecoration(context),
+              items: [
+                for (final type in DashboardReport.values)
+                  DropdownMenuItem(
+                    value: type,
+                    child: Text(type.title),
+                  ),
+              ],
+              onChanged: locked
+                  ? null
+                  : (v) => setState(() {
+                draftType =
+                    v ?? DashboardReport.collection;
+                filterError = null;
+              }),
+            ),
+          ),
+          right: FieldLabel(
+            label: 'Course',
+            child: DropdownButtonFormField<String>(
+              key: ValueKey(
+                '${draftCourse}_${courses.length}',
+              ),
+              value: draftCourse,
+              isExpanded: true,
+              decoration: adminFieldDecoration(context),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('All courses'),
+                ),
+                for (final course in courses)
+                  DropdownMenuItem(
+                    value: course.uuid,
+                    child: Text(
+                      '${course.name} (${course.code})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: locked ||
+                  loadingCourses ||
+                  courseError != null
+                  ? null
+                  : (v) => setState(() => draftCourse = v),
+            ),
+          ),
+        ),
+        if (loadingCourses) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ],
+        if (courseError != null) ...[
+          const SizedBox(height: 12),
+          AdminErrorBanner(message: courseError!),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: locked ? null : loadCourses,
+              child: const Text('Retry courses'),
+            ),
           ),
         ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final info = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  SoftBadge(
-                    label: 'Academy workspace',
-                    dot: true,
-                    background: Colors.white.withValues(alpha: 0.16),
-                    foreground: Colors.white,
+        if (draftType == DashboardReport.enrollments) ...[
+          const SizedBox(height: 16),
+          FieldLabel(
+            label: 'Enrollment status',
+            child: DropdownButtonFormField<String>(
+              value: draftStatus,
+              decoration: adminFieldDecoration(context),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('All statuses'),
+                ),
+                for (final status in [
+                  'PENDING',
+                  'ACTIVE',
+                  'COMPLETED',
+                  'CANCELLED',
+                ])
+                  DropdownMenuItem(
+                    value: status,
+                    child: Text(status),
                   ),
-                  if (widget.roleLabel.isNotEmpty)
-                    SoftBadge(
-                      label: widget.roleLabel,
-                      background: const Color(0xFF6CF8BB),
-                      foreground: const Color(0xFF00422B),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
+              ],
+              onChanged: locked
+                  ? null
+                  : (v) => setState(() => draftStatus = v),
+            ),
+          ),
+        ],
+        if (draftType.usesDates) ...[
+          const SizedBox(height: 16),
+          Text(
+            draftType == DashboardReport.collection
+                ? 'Filter by payment date'
+                : 'Filter by due date',
+          ),
+          const SizedBox(height: 8),
+          FormRow(
+            left: dateControl(
+              'Date from',
+              draftFrom,
+              true,
+            ),
+            right: dateControl(
+              'Date to',
+              draftTo,
+              false,
+            ),
+          ),
+          if (draftType == DashboardReport.dues)
+            const Text(
+              'A date filter excludes accounts without a due date.',
+            ),
+        ],
+        if (filterError != null) ...[
+          const SizedBox(height: 12),
+          AdminErrorBanner(message: filterError!),
+        ],
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            GradientButton(
+              label: 'Apply filters',
+              icon: Icons.filter_alt_outlined,
+              onPressed: locked ? null : applyFilters,
+            ),
+            AdminOutlineButton(
+              label: 'Reset filters',
+              onPressed: locked
+                  ? null
+                  : () {
+                setState(() {
+                  draftCourse = draftStatus = null;
+                  draftFrom = draftTo = null;
+                  filterError = null;
+                });
+                applyFilters();
+              },
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget reportResults() =>
+      FutureBuilder<DashboardReportPage>(
+        future: reportFuture,
+        builder: (context, snapshot) {
+          final state = adminFutureState(
+            snapshot,
+            noun: query.type.title,
+            onRetry: () {
+              if (!locked) setState(loadReport);
+            },
+          );
+
+          if (state != null) return state;
+
+          final data = snapshot.data;
+          if (data == null) {
+            return const Text('Report unavailable.');
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Text(
-                'Welcome to Academy ERP — ${widget.firmName}',
-                style: jakarta(
-                  textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
+                query.type.title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                'Applied: ${query.courseName ?? 'All courses'}'
+                    '${query.status == null ? '' : ' • ${query.status}'}'
+                    '${query.type.usesDates ? ' • ${query.from == null ? 'Any start date' : formatDate(query.from!)} to ${query.to == null ? 'Any end date' : formatDate(query.to!)}' : ''}',
+              ),
+              const SizedBox(height: 16),
+              metrics(data.metrics),
+              const SizedBox(height: 16),
+              if (data.rows.isEmpty)
+                AdminStateMessage(
+                  icon: Icons.search_off,
+                  title: data.count == 0
+                      ? 'No matching records'
+                      : 'No records on this page',
+                  message:
+                  'Adjust filters, refresh or use a previous page.',
+                ),
+              for (final row in data.rows) ...[
+                AdminCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        row.title,
+                        style:
+                        Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(row.subtitle),
+                      if ((row.status ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        SoftBadge(label: row.status!),
+                      ],
+                      const SizedBox(height: 8),
+                      for (final detail in row.details)
+                        Text(detail),
+                      if (row.route != null)
+                        TextButton.icon(
+                          onPressed: locked
+                              ? null
+                              : () => navigate(row.route!),
+                          icon: const Icon(Icons.open_in_new),
+                          label: Text(
+                            query.type == DashboardReport.grading
+                                ? 'Open submissions'
+                                : 'Open details',
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Students, teachers, courses, live classes and enrollments '
-                'for your academy at a glance.',
-                style: textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFDAD7FF),
+                const SizedBox(height: 12),
+              ],
+              IgnorePointer(
+                ignoring: locked,
+                child: AdminPager(
+                  page: page,
+                  pageSize: DashboardRepository.pageSize,
+                  total: data.count,
+                  noun: 'records',
+                  onPage: changePage,
                 ),
               ),
             ],
           );
+        },
+      );
 
-          Widget heroButton(String label, IconData icon, String route,
-              {bool strong = false}) {
-            return SizedBox(
-              height: 44,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: strong
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.16),
-                  foregroundColor:
-                      strong ? const Color(0xFF3525CD) : Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+  Widget operations() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        'Live and scheduled class preview',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      FutureBuilder<List<LiveClassPage>>(
+        future: classesFuture,
+        builder: (context, snapshot) {
+          final state = adminFutureState(
+            snapshot,
+            noun: 'classes',
+            onRetry: () {
+              if (!locked) setState(loadOperations);
+            },
+          );
+
+          if (state != null) return state;
+
+          final items = (snapshot.data ?? [])
+              .expand((p) => p.results)
+              .where((c) => c.isActive)
+              .take(5)
+              .toList();
+
+          if (items.isEmpty) {
+            return const Text(
+              'No classes in the current preview.',
+            );
+          }
+
+          return Column(
+            children: [
+              for (final c in items)
+                AdminListRow(
+                  title: c.title,
+                  subtitle: '${c.courseName} • ${c.teacherName}',
+                  icon: Icons.sensors,
+                  titleBadge: SoftBadge(label: c.status),
+                  meta: [
+                    if (c.scheduledStartAt != null)
+                      Text(
+                        formatDate(
+                          c.scheduledStartAt!.toLocal(),
+                        ),
+                      ),
+                  ],
+                  onTap: locked
+                      ? null
+                      : () => navigate(
+                    '/live-classes/${c.uuid}',
                   ),
                 ),
-                onPressed: () => context.go(route),
-                icon: Icon(icon, size: 18),
-                label: Text(label),
-              ),
-            );
-          }
-
-          final buttons = [
-            heroButton('Add student', Icons.person_add_alt_1_rounded,
-                '/students', strong: true),
-            heroButton('New course', Icons.add_circle_outline_rounded,
-                '/courses'),
-            heroButton('Schedule live class', Icons.sensors_rounded,
-                '/live-classes'),
-          ];
-
-          final actions = constraints.maxWidth >= 900
-              ? IntrinsicWidth(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < buttons.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 10),
-                        buttons[i],
-                      ],
-                    ],
-                  ),
-                )
-              : Wrap(spacing: 10, runSpacing: 10, children: buttons);
-
-          if (constraints.maxWidth < 900) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [info, const SizedBox(height: 20), actions],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: info),
-              const SizedBox(width: 24),
-              actions,
             ],
           );
         },
       ),
-    );
-
-    final kpis = AdminKpiGrid(
-      children: [
-        _count<StudentPage>(
-          _students,
-          (p) => p.count,
-          (v) => AdminKpiCard(
-            label: 'Total students',
-            value: v,
-            icon: Icons.school_outlined,
-          ),
-        ),
-        _count<TeacherPage>(
-          _teachers,
-          (p) => p.count,
-          (v) => AdminKpiCard(
-            label: 'Teachers',
-            value: v,
-            icon: Icons.co_present_outlined,
-            iconBackground: const Color(0xFFF5F3FF),
-            iconForeground: const Color(0xFF7C3AED),
-          ),
-        ),
-        _count<CoursePage>(
-          _courses,
-          (p) => p.count,
-          (v) => AdminKpiCard(
-            label: 'Courses',
-            value: v,
-            icon: Icons.auto_stories_outlined,
-            iconBackground: const Color(0xFFECFDF5),
-            iconForeground: const Color(0xFF059669),
-          ),
-        ),
-        _count<EnrollmentPage>(
-          _enrollments,
-          (p) => p.count,
-          (v) => AdminKpiCard(
-            label: 'Enrollments',
-            value: v,
-            icon: Icons.how_to_reg_outlined,
-            iconBackground: const Color(0xFFF0F9FF),
-            iconForeground: const Color(0xFF0284C7),
-          ),
-        ),
-      ],
-    );
-
-    Widget sectionTitle(String title, String subtitle, IconData icon,
-        {String? route}) {
-      return Row(
-        children: [
-          AdminIconTile(icon: icon, size: 42),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: jakarta(textTheme.titleMedium)),
-                Text(subtitle, style: textTheme.bodySmall),
-              ],
-            ),
-          ),
-          if (route != null)
-            TextButton.icon(
-              onPressed: () => context.go(route),
-              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-              label: const Text('View all'),
-            ),
-        ],
-      );
-    }
-
-    final classes = AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          sectionTitle(
-            'Live & upcoming classes',
-            'Classes streaming now and next on the schedule',
-            Icons.sensors_rounded,
-            route: '/live-classes',
-          ),
-          const SizedBox(height: 16),
-          FutureBuilder<List<LiveClassPage>>(
-            future: Future.wait([_live, _scheduled]),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text('Could not load classes.',
-                    style: textTheme.bodySmall);
-              }
-              if (!snapshot.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final items = [
-                ...snapshot.data![0].results,
-                ...snapshot.data![1].results,
-              ].take(5).toList();
-              if (items.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'No live or scheduled classes right now.',
-                    style: textTheme.bodyMedium,
-                  ),
-                );
-              }
-              return Column(
-                children: [
-                  for (final c in items)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: c.status.toUpperCase() == 'LIVE'
-                            ? const Color(0xFFF4F3FF)
-                            : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: InkWell(
-                        onTap: () => context.push('/live-classes/${c.uuid}'),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    c.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 4,
-                                    children: [
-                                      MetaChip(
-                                        icon: Icons.person_outline_rounded,
-                                        label: c.teacherName.isEmpty
-                                            ? 'Teacher not set'
-                                            : c.teacherName,
-                                      ),
-                                      MetaChip(
-                                        icon: Icons.schedule_rounded,
-                                        label: _when(c.scheduledStartAt),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            StatusPill(
-                              label: c.status.toUpperCase(),
-                              tone: c.status.toUpperCase() == 'LIVE'
-                                  ? PillTone.danger
-                                  : PillTone.info,
-                              compact: true,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              );
+      const SizedBox(height: 24),
+      Text(
+        'Recent enrollments',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      FutureBuilder<EnrollmentPage>(
+        future: enrollmentsFuture,
+        builder: (context, snapshot) {
+          final state = adminFutureState(
+            snapshot,
+            noun: 'enrollments',
+            onRetry: () {
+              if (!locked) setState(loadOperations);
             },
-          ),
-        ],
-      ),
-    );
+          );
 
-    final enrollments = AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          sectionTitle(
-            'Recent enrollments',
-            'Latest admissions into your courses',
-            Icons.how_to_reg_outlined,
-            route: '/enrollments',
-          ),
-          const SizedBox(height: 16),
-          FutureBuilder<EnrollmentPage>(
-            future: _enrollments,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text('Could not load enrollments.',
-                    style: textTheme.bodySmall);
-              }
-              if (!snapshot.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final items = snapshot.data!.results.take(6).toList();
-              if (items.isEmpty) {
-                return Text('No enrollments yet.',
-                    style: textTheme.bodyMedium);
-              }
-              return Column(
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    InkWell(
-                      onTap: () =>
-                          context.push('/enrollments/${items[i].uuid}'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          border: i == 0
-                              ? null
-                              : const Border(
-                                  top: BorderSide(color: Color(0xFFEEF0F5)),
-                                ),
-                        ),
-                        child: Row(
-                          children: [
-                            InitialsBadge(
-                              label: adminInitials(items[i].studentName),
-                              size: 36,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    items[i].studentName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: textTheme.titleSmall,
-                                  ),
-                                  Text(
-                                    items[i].courseName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            StatusPill(
-                              label: items[i].status.toUpperCase(),
-                              tone: toneForStatus(items[i].status),
-                              compact: true,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
+          if (state != null) return state;
 
-    Widget quick(String title, String subtitle, IconData icon, String route) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Material(
-          color: const Color(0xFFF4F3FF),
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => context.go(route),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  AdminIconTile(icon: icon, size: 38),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: textTheme.titleSmall),
-                        Text(subtitle, style: textTheme.bodySmall),
-                      ],
-                    ),
+          final items =
+              snapshot.data?.results ?? <Enrollment>[];
+
+          if (items.isEmpty) {
+            return const Text('No enrollments yet.');
+          }
+
+          return Column(
+            children: [
+              for (final e in items.take(6))
+                AdminListRow(
+                  title: e.studentName,
+                  subtitle: e.courseName,
+                  icon: Icons.how_to_reg,
+                  titleBadge: SoftBadge(label: e.status),
+                  onTap: locked
+                      ? null
+                      : () => navigate(
+                    '/enrollments/${e.uuid}',
                   ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Color(0xFF94A3B8)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    final quickActions = AdminCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Quick actions', style: jakarta(textTheme.titleMedium)),
-          const SizedBox(height: 14),
-          quick('Enroll a student', 'Assign course access',
-              Icons.how_to_reg_outlined, '/enrollments'),
-          quick('Upload material', 'Videos, PDFs & links',
-              Icons.upload_file_rounded, '/materials'),
-          quick('Create assignment', 'Or import from a PDF',
-              Icons.assignment_add, '/assignments'),
-          quick('Manage banners', 'Student app home screen',
-              Icons.view_carousel_outlined, '/banners'),
-        ],
+                ),
+            ],
+          );
+        },
       ),
-    );
+    ],
+  );
 
-    return RefreshIndicator(
-      onRefresh: () async => setState(_load),
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !locked,
+    child: RefreshIndicator(
+      onRefresh: refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          hero,
+          AdminPageHeader(
+            title: widget.firmName,
+            subtitle: 'Academy overview and reports',
+            actions: [
+              AdminOutlineButton(
+                label: refreshing ? 'Refreshing...' : 'Refresh',
+                icon: Icons.refresh,
+                onPressed: locked ? null : refresh,
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
-          kpis,
-          const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 1000) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    classes,
-                    const SizedBox(height: 20),
-                    enrollments,
-                    const SizedBox(height: 20),
-                    quickActions,
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        classes,
-                        const SizedBox(height: 20),
-                        enrollments,
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(child: quickActions),
-                ],
+          FutureBuilder<DashboardSummary>(
+            future: summaryFuture,
+            builder: (context, snapshot) {
+              final state = adminFutureState(
+                snapshot,
+                noun: 'dashboard summary',
+                onRetry: () {
+                  if (!locked) {
+                    setState(() {
+                      summaryFuture = repo.summary();
+                    });
+                  }
+                },
               );
+
+              if (state != null) return state;
+
+              return snapshot.data == null
+                  ? const Text('Summary unavailable.')
+                  : metrics(snapshot.data!.metrics);
             },
           ),
+          const SizedBox(height: 24),
+          AdminCard(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final entry in {
+                  'Students': '/students',
+                  'Teachers': '/teachers',
+                  'Staff': '/staff',
+                  'Courses': '/courses',
+                  'Enrollments': '/enrollments',
+                  'Fees': '/fees',
+                  'Live classes': '/live-classes',
+                  'Materials': '/materials',
+                  'Assignments': '/assignments',
+                  'Banners': '/banners',
+                }.entries)
+                  AdminOutlineButton(
+                    label: entry.key,
+                    onPressed: locked
+                        ? null
+                        : () => navigate(entry.value),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          filters(),
+          const SizedBox(height: 24),
+          reportResults(),
+          const SizedBox(height: 28),
+          operations(),
         ],
       ),
-    );
-  }
+    ),
+  );
 }

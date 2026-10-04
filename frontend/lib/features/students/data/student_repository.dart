@@ -36,6 +36,55 @@ class StudentRepository {
     return Student.fromJson(Map<String, dynamic>.from(response.data!['data'] as Map));
   });
 
+  Future<Student> update({
+    required String uuid,
+    required String admissionNumber,
+    required String firstName,
+    String lastName = '',
+    String email = '',
+    String phone = '',
+    String gender = '',
+    String address = '',
+    String? dateOfBirth,
+    String? joinedDate,
+  }) => _request(() async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      ApiUrls.studentDetail(uuid),
+      data: {
+        'admission_number': admissionNumber.trim(),
+        'first_name': firstName.trim(),
+        'last_name': lastName.trim(),
+        'email': email.trim(),
+        'phone': phone.trim(),
+        'gender': gender,
+        'address': address.trim(),
+        'date_of_birth': dateOfBirth,
+        'joined_date': joinedDate,
+      },
+    );
+
+    final body = response.data;
+    if (body == null ||
+        body['success'] != true ||
+        body['data'] is! Map) {
+      throw const ApiException(
+        'Could not confirm the student update. Refresh the profile.',
+      );
+    }
+
+    final student = Student.fromJson(
+      Map<String, dynamic>.from(body['data'] as Map),
+    );
+
+    if (student.uuid != uuid) {
+      throw const ApiException(
+        'Unexpected student response. Refresh the profile.',
+      );
+    }
+
+    return student;
+  });
+
   Future<Student> setActive(String uuid, bool active) => _request(() async {
     final response = await _dio.patch<Map<String, dynamic>>(
       ApiUrls.studentStatus(uuid, active));
