@@ -510,3 +510,57 @@ def create_installment_payment_voided_notification(
     
     
     
+def create_live_class_started_notifications(live_class):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    recipient_user_ids = (
+        Enrollment.objects.filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .values_list("student__user_id", flat=True)
+        .distinct()
+    )
+
+    notifications = [
+        Notification(
+            firm=live_class.firm,
+            recipient_id=user_id,
+            notification_type=Notification.NotificationType.LIVE_CLASS,
+            title="Live class started",
+            body=(
+                f"'{live_class.title}' is live now. "
+                "Join the class from your course."
+            ),
+            data={
+                "live_class_uuid": str(live_class.uuid),
+                "course_uuid": str(live_class.course.uuid),
+                "meeting_url": live_class.meeting_url,
+            },
+        )
+        for user_id in recipient_user_ids
+    ]
+
+    if not notifications:
+        return 0
+
+    Notification.objects.bulk_create(
+        notifications,
+        batch_size=500,
+    )
+
+    return len(notifications)
+
