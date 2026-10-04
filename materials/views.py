@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-
+from django.db import transaction
 from common.pagination import StandardResultsSetPagination
 from common.permissions import IsFirmAdminOrStaff
 from common.responses import (
@@ -109,6 +109,16 @@ class LearningMaterialListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from notifications.services import (
+            create_material_available_notifications,
+        )
+
+        transaction.on_commit(
+            lambda: create_material_available_notifications(
+                material
+            )
+        )
+        
         return success_response(
             message="Material created successfully",
             data=LearningMaterialSerializer(

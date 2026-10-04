@@ -445,6 +445,12 @@ class AssignmentSubmissionGradeView(APIView):
                 submission.feedback,
             )
         )
+        
+        was_already_graded = (
+            submission.status
+            == AssignmentSubmission.Status.GRADED
+                )
+    
 
         submission.status = (
             AssignmentSubmission.Status.GRADED
@@ -480,7 +486,18 @@ class AssignmentSubmissionGradeView(APIView):
                 pk=submission.pk
             )
         )
+        from notifications.services import (
+            create_assignment_result_notification,
+        )
 
+        transaction.on_commit(
+            lambda: create_assignment_result_notification(
+                submission,
+                is_regrade=was_already_graded,
+            )
+        )
+        
+        
         return success_response(
             message="Assignment graded successfully",
             data=AssignmentSubmissionReviewSerializer(

@@ -115,6 +115,16 @@ class LiveClassListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from notifications.services import (
+            create_live_class_scheduled_notifications,
+        )
+
+        transaction.on_commit(
+            lambda: create_live_class_scheduled_notifications(
+                live_class
+            )
+        )
+        
         return success_response(
             message="Live class created successfully",
             data=LiveClassSerializer(
@@ -231,7 +241,16 @@ class LiveClassCancelView(LiveClassActionBaseView):
                         status.HTTP_400_BAD_REQUEST
                     ),
                 )
+        from notifications.services import (
+            create_live_class_cancelled_notifications,
+        )
 
+        transaction.on_commit(
+            lambda: create_live_class_cancelled_notifications(
+                live_class
+            )
+        )
+        
         return success_response(
             message="Live class cancelled successfully",
             data=LiveClassSerializer(live_class).data,

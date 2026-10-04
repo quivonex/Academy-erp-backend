@@ -3,7 +3,8 @@ import hashlib
 from django.utils import timezone
 
 from .models import DeviceToken, Notification
-
+from django.db.models import Q
+from django.utils import timezone
 
 def get_token_hash(token):
     return hashlib.sha256(
@@ -101,3 +102,342 @@ def create_course_access_notification(enrollment):
     
     
     
+def create_assignment_result_notification(
+    submission,
+    *,
+    is_regrade=False,
+):
+    student = submission.student
+    assignment = submission.assignment
+
+    if not student.user or not student.user.is_active:
+        return None
+
+    marks_obtained = (
+        submission.total_marks_obtained
+        if submission.total_marks_obtained is not None
+        else 0
+    )
+
+    title = (
+        "Assignment result updated"
+        if is_regrade
+        else "Assignment graded"
+    )
+
+    return create_notification(
+        firm=submission.firm,
+        recipient=student.user,
+        notification_type=Notification.NotificationType.RESULT,
+        title=title,
+        body=(
+            f"Your result for '{assignment.title}' is available. "
+            f"Score: {marks_obtained} out of {assignment.max_marks}."
+        ),
+        data={
+            "assignment_uuid": str(assignment.uuid),
+            "submission_uuid": str(submission.uuid),
+            "marks_obtained": str(marks_obtained),
+            "max_marks": str(assignment.max_marks),
+        },
+    )
+    
+    
+    
+    
+def create_assignment_published_notifications(assignment):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            firm=assignment.firm,
+            course=assignment.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .select_related("student__user")
+    )
+
+    body = (
+        f"'{assignment.title}' has been published for "
+        f"{assignment.course.name}."
+    )
+
+    if assignment.due_at:
+        body += (
+            f" Submit it before "
+            f"{assignment.due_at.strftime('%d %b %Y, %I:%M %p')}."
+        )
+
+    notifications = [
+        Notification(
+            firm=assignment.firm,
+            recipient=enrollment.student.user,
+            notification_type=Notification.NotificationType.ASSIGNMENT,
+            title="New assignment available",
+            body=body,
+            data={
+                "assignment_uuid": str(assignment.uuid),
+                "course_uuid": str(assignment.course.uuid),
+                "due_at": (
+                    assignment.due_at.isoformat()
+                    if assignment.due_at
+                    else None
+                ),
+            },
+        )
+        for enrollment in enrollments
+    ]
+
+    if notifications:
+        Notification.objects.bulk_create(
+            notifications,
+            batch_size=500,
+        )
+
+    return len(notifications)
+
+
+
+def create_live_class_scheduled_notifications(live_class):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .select_related("student__user")
+    )
+
+    scheduled_start_at = timezone.localtime(
+        live_class.scheduled_start_at
+    )
+
+    body = (
+        f"'{live_class.title}' is scheduled on "
+        f"{scheduled_start_at.strftime('%d %b %Y, %I:%M %p')}."
+    )
+
+    notifications = [
+        Notification(
+            firm=live_class.firm,
+            recipient=enrollment.student.user,
+            notification_type=Notification.NotificationType.LIVE_CLASS,
+            title="Live class scheduled",
+            body=body,
+            data={
+                "live_class_uuid": str(live_class.uuid),
+                "course_uuid": str(live_class.course.uuid),
+                "scheduled_start_at": (
+                    live_class.scheduled_start_at.isoformat()
+                ),
+                "scheduled_end_at": (
+                    live_class.scheduled_end_at.isoformat()
+                ),
+            },
+        )
+        for enrollment in enrollments
+    ]
+
+    if notifications:
+        Notification.objects.bulk_create(
+            notifications,
+            batch_size=500,
+        )
+
+    return len(notifications)
+
+
+
+def create_live_class_cancelled_notifications(live_class):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .select_related("student__user")
+    )
+
+    scheduled_start_at = timezone.localtime(
+        live_class.scheduled_start_at
+    )
+
+    body = (
+        f"'{live_class.title}', scheduled for "
+        f"{scheduled_start_at.strftime('%d %b %Y, %I:%M %p')}, "
+        f"has been cancelled."
+    )
+
+    notifications = [
+        Notification(
+            firm=live_class.firm,
+            recipient=enrollment.student.user,
+            notification_type=Notification.NotificationType.LIVE_CLASS,
+            title="Live class cancelled",
+            body=body,
+            data={
+                "live_class_uuid": str(live_class.uuid),
+                "course_uuid": str(live_class.course.uuid),
+                "scheduled_start_at": (
+                    live_class.scheduled_start_at.isoformat()
+                ),
+            },
+        )
+        for enrollment in enrollments
+    ]
+
+    if notifications:
+        Notification.objects.bulk_create(
+            notifications,
+            batch_size=500,
+        )
+
+    return len(notifications)
+
+
+def create_material_available_notifications(material):
+    from courses.models import (
+        Enrollment,
+        StudentChapterVideoAccess,
+    )
+
+    now = timezone.now()
+
+    if (
+        not material.is_active
+        or (
+            material.available_from
+            and material.available_from > now
+        )
+        or (
+            material.available_until
+            and material.available_until < now
+        )
+    ):
+        return 0
+
+    recipient_user_ids = set(
+        Enrollment.objects
+        .filter(
+            firm=material.firm,
+            course=material.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .values_list("student__user_id", flat=True)
+    )
+
+    if (
+        material.material_type == "VIDEO"
+        and material.chapter_id
+    ):
+        recipient_user_ids.update(
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=material.firm,
+                course=material.course,
+                chapter=material.chapter,
+                is_active=True,
+                student__is_active=True,
+                student__user__is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .values_list("student__user_id", flat=True)
+        )
+
+    if not recipient_user_ids:
+        return 0
+
+    title = (
+        "New class recording available"
+        if material.source == "LIVE_CLASS_RECORDING"
+        else "New study material available"
+    )
+
+    notifications = [
+        Notification(
+            firm=material.firm,
+            recipient_id=user_id,
+            notification_type=Notification.NotificationType.MATERIAL,
+            title=title,
+            body=(
+                f"'{material.title}' is now available in "
+                f"{material.course.name}."
+            ),
+            data={
+                "material_uuid": str(material.uuid),
+                "course_uuid": str(material.course.uuid),
+                "material_type": material.material_type,
+            },
+        )
+        for user_id in recipient_user_ids
+    ]
+
+    Notification.objects.bulk_create(
+        notifications,
+        batch_size=500,
+    )
+
+    return len(notifications)
+
+
+

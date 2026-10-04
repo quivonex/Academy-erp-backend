@@ -1156,6 +1156,17 @@ class StudentAssignmentSubmitView(APIView):
         # ---------------------------------------------
         # AUTO-GRADED MCQ RESPONSE
         # ---------------------------------------------
+        if mcq_only:
+            from notifications.services import (
+                create_assignment_result_notification,
+            )
+
+            transaction.on_commit(
+                lambda: create_assignment_result_notification(
+                    submission
+                )
+            )
+
 
         if mcq_only:
             max_marks = (
@@ -1542,7 +1553,7 @@ class AssignmentPublishView(APIView):
         IsAuthenticated,
         IsFirmAdminOrStaff,
     ]
-
+    @transaction.atomic
     def patch(
         self,
         request,
@@ -1622,6 +1633,17 @@ class AssignmentPublishView(APIView):
                 "updated_at",
             ]
         )
+        from notifications.services import (
+            create_assignment_published_notifications,
+        )
+
+        transaction.on_commit(
+            lambda: create_assignment_published_notifications(
+                assignment
+            )
+        )
+        
+        
 
         return success_response(
             message="Assignment published successfully",
