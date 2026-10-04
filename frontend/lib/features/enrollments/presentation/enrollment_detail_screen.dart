@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/admin_ui.dart';
+import '../../../core/widgets/status_pill.dart';
 import '../data/enrollment.dart';
 import '../data/enrollment_repository.dart';
 
@@ -22,13 +24,23 @@ class EnrollmentDetailScreen extends ConsumerStatefulWidget {
 class _EnrollmentDetailScreenState
     extends ConsumerState<EnrollmentDetailScreen> {
   late Future<Enrollment> result;
-
-  bool saving = false;
+  bool busy = false;
+  int revision = 0;
 
   @override
   void initState() {
     super.initState();
     reload();
+  }
+
+  @override
+  void didUpdateWidget(covariant EnrollmentDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.enrollmentUuid != widget.enrollmentUuid) {
+      revision++;
+      reload();
+    }
   }
 
   void reload() {
@@ -37,373 +49,324 @@ class _EnrollmentDetailScreenState
         .detail(widget.enrollmentUuid);
   }
 
-  Future<void> editEnrollment(
-    Enrollment enrollment,
-  ) async {
-    final updated = await showDialog<bool>(
-      context: context,
-      builder: (_) => _EditEnrollmentDialog(
-        enrollment: enrollment,
-      ),
-    );
+  void refresh() {
+    if (!busy) setState(reload);
+  }
 
-    if (updated == true && mounted) {
-      setState(reload);
+  Future<void> editEnrollment(Enrollment enrollment) async {
+    if (busy) return;
+
+    final currentRevision = revision;
+    setState(() => busy = true);
+
+    try {
+      final updated = await showDialog<Enrollment>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EditEnrollmentDialog(
+          enrollment: enrollment,
+        ),
+      );
+
+      if (!mounted ||
+          currentRevision != revision ||
+          updated == null) {
+        return;
+      }
+
+      setState(() => result = Future.value(updated));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enrollment updated successfully.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> openFees(Enrollment enrollment) async {
+    if (busy) return;
+
+    final currentRevision = revision;
+    setState(() => busy = true);
+
+    try {
+      await context.push('/fees/${enrollment.uuid}');
+
+      if (mounted && currentRevision == revision) {
+        setState(reload);
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Enrollment>(
-      future: result,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot.connectionState !=
-            ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.only(bottom: 24),
+    children: [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: busy
+              ? null
+              : () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/enrollments');
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+          label: const Text('Enrollments'),
+        ),
+      ),
+      FutureBuilder<Enrollment>(
+        future: result,
+        builder: (context, snapshot) {
+          final state = adminFutureState(
+            snapshot,
+            noun: 'enrollment',
+            onRetry: refresh,
           );
-        }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Could not load enrollment:\n${snapshot.error}',
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    setState(reload);
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
+          if (state != null) return state;
 
-        final enrollment = snapshot.data!;
+          final enrollment = snapshot.data!;
+          final status = enrollment.status.toUpperCase();
 
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextButton.icon(
-                onPressed: () => context.pop(),
-                icon: const Icon(
-                  Icons.arrow_back,
+              AdminPageHeader(
+                eyebrow: const AdminEyebrow(
+                  section: 'Admissions',
+                  detail: 'Enrollment details',
                 ),
-                label:
-                    const Text('Enrollments'),
-              ),
-
-              const SizedBox(height: 8),
-
-              Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 28,
-                    child: Icon(
-                      Icons.how_to_reg,
-                    ),
+                title: enrollment.studentName,
+                subtitle: enrollment.admissionNumber,
+                titleTrailing: [
+                  StatusPill(
+                    label: status,
+                    compact: true,
+                    tone: switch (status) {
+                      'ACTIVE' => PillTone.success,
+                      'PENDING' => PillTone.info,
+                      'CANCELLED' => PillTone.danger,
+                      _ => PillTone.neutral,
+                    },
                   ),
-
-                  const SizedBox(width: 16),
-
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          enrollment.studentName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          enrollment
-                              .admissionNumber,
-                        ),
-                      ],
-                    ),
+                ],
+                actions: [
+                  AdminOutlineButton(
+                    label: 'Refresh',
+                    icon: Icons.refresh_rounded,
+                    onPressed: busy ? null : refresh,
                   ),
-
-                  _StatusChip(
-                    status:
-                        enrollment.status,
+                  AdminOutlineButton(
+                    label: 'Fees & payments',
+                    icon: Icons.account_balance_wallet_outlined,
+                    onPressed:
+                    busy ? null : () => openFees(enrollment),
+                  ),
+                  GradientButton(
+                    label: 'Manage enrollment',
+                    icon: Icons.edit_outlined,
+                    onPressed: busy
+                        ? null
+                        : () => editEnrollment(enrollment),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 24),
-
-              Card(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Enrollment Information',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge,
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      _InfoRow(
-                        label:
-                            'Student Name',
-                        value: enrollment
-                            .studentName,
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Admission Number',
-                        value: enrollment
-                            .admissionNumber,
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Course Name',
-                        value:
-                            enrollment.courseName,
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Course Code',
-                        value:
-                            enrollment.courseCode,
-                      ),
-
-                      _InfoRow(
-                        label: 'Status',
-                        value:
-                            enrollment.status,
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Enrolled At',
-                        value: _formatDateTime(
-                          enrollment.enrolledAt,
-                        ),
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Access Start',
-                        value: _formatDateTime(
-                          enrollment.accessStartAt,
-                        ),
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Access End',
-                        value: _formatDateTime(
-                          enrollment.accessEndAt,
-                        ),
-                      ),
-
-                      _InfoRow(
-                        label: 'Created',
-                        value: _formatDateTime(
-                          enrollment.createdAt,
-                        ),
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Last Updated',
-                        value: _formatDateTime(
-                          enrollment.updatedAt,
-                        ),
-                      ),
-
-                      _InfoRow(
-                        label:
-                            'Enrollment UUID',
-                        value:
-                            enrollment.uuid,
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: 16),
+              AdminCard(
+                child: Column(
+                  children: [
+                    _InfoRow(
+                      label: 'Student name',
+                      value: enrollment.studentName,
+                    ),
+                    _InfoRow(
+                      label: 'Admission number',
+                      value: enrollment.admissionNumber,
+                    ),
+                    _InfoRow(
+                      label: 'Course name',
+                      value: enrollment.courseName,
+                    ),
+                    _InfoRow(
+                      label: 'Course code',
+                      value: enrollment.courseCode,
+                    ),
+                    _InfoRow(
+                      label: 'Status',
+                      value: status,
+                    ),
+                    _InfoRow(
+                      label: 'Enrolled at',
+                      value: _date(enrollment.enrolledAt),
+                    ),
+                    _InfoRow(
+                      label: 'Access start',
+                      value: _date(enrollment.accessStartAt),
+                    ),
+                    _InfoRow(
+                      label: 'Access end',
+                      value: _date(enrollment.accessEndAt),
+                    ),
+                    _InfoRow(
+                      label: 'Created',
+                      value: _date(enrollment.createdAt),
+                    ),
+                    _InfoRow(
+                      label: 'Last updated',
+                      value: _date(enrollment.updatedAt),
+                    ),
+                    _InfoRow(
+                      label: 'Enrollment UUID',
+                      value: enrollment.uuid,
+                    ),
+                  ],
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () =>
-                        editEnrollment(
-                      enrollment,
-                    ),
-                    icon:
-                        const Icon(Icons.edit),
-                    label: const Text(
-                      'Manage Enrollment',
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => context.push(
-                      '/fees/${enrollment.uuid}',
-                    ),
-                    icon: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                    ),
-                    label: const Text('Fees & payments'),
-                  ),
-                ],
               ),
             ],
-          ),
-        );
-      },
-    );
-  }
+          );
+        },
+      ),
+    ],
+  );
 }
 
-class _EditEnrollmentDialog
-    extends ConsumerStatefulWidget {
-  const _EditEnrollmentDialog({
-    required this.enrollment,
-  });
+class _EditEnrollmentDialog extends ConsumerStatefulWidget {
+  const _EditEnrollmentDialog({required this.enrollment});
 
   final Enrollment enrollment;
 
   @override
-  ConsumerState<_EditEnrollmentDialog>
-      createState() =>
-          _EditEnrollmentDialogState();
+  ConsumerState<_EditEnrollmentDialog> createState() =>
+      _EditEnrollmentDialogState();
 }
 
 class _EditEnrollmentDialogState
-    extends ConsumerState<
-        _EditEnrollmentDialog> {
-  late String status;
+    extends ConsumerState<_EditEnrollmentDialog> {
+  static const statuses = [
+    'PENDING',
+    'ACTIVE',
+    'COMPLETED',
+    'CANCELLED',
+  ];
 
+  final formKey = GlobalKey<FormState>();
+
+  late String status;
   DateTime? accessStart;
   DateTime? accessEnd;
-
   bool saving = false;
-
+  bool picking = false;
   String? error;
+
+  bool get pending => status == 'PENDING';
 
   @override
   void initState() {
     super.initState();
 
-    status = widget.enrollment.status;
-
-    accessStart =
-        widget.enrollment.accessStartAt;
-
-    accessEnd =
-        widget.enrollment.accessEndAt;
+    status = widget.enrollment.status.toUpperCase();
+    accessStart = widget.enrollment.accessStartAt?.toLocal();
+    accessEnd = widget.enrollment.accessEndAt?.toLocal();
   }
 
-  Future<void> chooseStartDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate:
-          accessStart ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
+  Future<void> pick(bool start) async {
+    if (saving || picking || pending) return;
 
-    if (date == null || !mounted) {
-      return;
-    }
+    setState(() => picking = true);
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        accessStart ?? DateTime.now(),
-      ),
-    );
+    try {
+      final initial =
+          (start ? accessStart : accessEnd ?? accessStart) ??
+              DateTime.now();
 
-    if (time == null) {
-      return;
-    }
-
-    setState(() {
-      accessStart = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
+      final day = DateTime(
+        initial.year,
+        initial.month,
+        initial.day,
       );
-    });
+
+      final first =
+      day.isBefore(DateTime(2000)) ? day : DateTime(2000);
+
+      final last = day.isAfter(DateTime(2100, 12, 31))
+          ? day
+          : DateTime(2100, 12, 31);
+
+      final date = await showDatePicker(
+        context: context,
+        initialDate: day,
+        firstDate: first,
+        lastDate: last,
+      );
+
+      if (!mounted || date == null) return;
+
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(initial),
+      );
+
+      if (!mounted || time == null) return;
+
+      setState(() {
+        final value = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+
+        if (start) {
+          accessStart = value;
+        } else {
+          accessEnd = value;
+        }
+
+        error = null;
+      });
+    } finally {
+      if (mounted) setState(() => picking = false);
+    }
   }
 
-  Future<void> chooseEndDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate:
-          accessEnd ??
-          accessStart ??
-          DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-
-    if (date == null || !mounted) {
-      return;
-    }
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        accessEnd ??
-            accessStart ??
-            DateTime.now(),
-      ),
-    );
-
-    if (time == null) {
-      return;
-    }
+  void clearDate(bool start) {
+    if (saving || picking || pending) return;
 
     setState(() {
-      accessEnd = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
+      if (start) {
+        accessStart = null;
+      } else {
+        accessEnd = null;
+      }
+
+      error = null;
     });
   }
 
   Future<void> save() async {
-    if (accessStart != null &&
+    if (saving ||
+        picking ||
+        !formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (!pending &&
+        accessStart != null &&
         accessEnd != null &&
         !accessEnd!.isAfter(accessStart!)) {
       setState(() {
-        error =
-            'Access end time must be after access start time.';
+        error = 'Access end must be after access start.';
       });
-
       return;
     }
 
@@ -413,271 +376,186 @@ class _EditEnrollmentDialogState
     });
 
     try {
-      await ref
-          .read(
-            enrollmentManagementRepositoryProvider,
-          )
+      final updated = await ref
+          .read(enrollmentManagementRepositoryProvider)
           .update(
-            uuid:
-                widget.enrollment.uuid,
-            status: status,
-            accessStartAt:
-                accessStart,
-            accessEndAt:
-                accessEnd,
-          );
+        uuid: widget.enrollment.uuid,
+        status: status,
+        accessStartAt: pending ? null : accessStart,
+        accessEndAt: pending ? null : accessEnd,
+      );
 
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (mounted) Navigator.of(context).pop(updated);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          error = e.message;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = e.toString();
+          error =
+          'Could not update enrollment. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title:
-          const Text('Manage Enrollment'),
-      content: SizedBox(
-        width: 450,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.enrollment.studentName,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium,
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving && !picking,
+    child: AdminFormDialog(
+      icon: Icons.how_to_reg_outlined,
+      title: 'Manage enrollment',
+      subtitle:
+      '${widget.enrollment.studentName} • ${widget.enrollment.courseName}',
+      onClose: saving || picking
+          ? null
+          : () => Navigator.of(context).pop(),
+      body: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<String>(
+              value: status,
+              isExpanded: true,
+              decoration: adminFieldDecoration(context).copyWith(
+                labelText: 'Enrollment status',
               ),
-
-              Text(
-                '${widget.enrollment.courseName} '
-                '(${widget.enrollment.courseCode})',
-              ),
-
-              const SizedBox(height: 20),
-
-              DropdownButtonFormField<
-                  String>(
-                value: status,
-                decoration:
-                    const InputDecoration(
-                  labelText:
-                      'Enrollment Status',
-                ),
-                items: const [
+              items: [
+                for (final value in statuses)
                   DropdownMenuItem(
-                    value: 'PENDING',
-                    child: Text(
-                      'Pending',
-                    ),
+                    value: value,
+                    child: Text(value),
                   ),
+                if (!statuses.contains(status))
                   DropdownMenuItem(
-                    value: 'ACTIVE',
-                    child: Text(
-                      'Active',
-                    ),
+                    value: status,
+                    child: Text(status),
                   ),
-                  DropdownMenuItem(
-                    value: 'COMPLETED',
-                    child: Text(
-                      'Completed',
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'CANCELLED',
-                    child: Text(
-                      'Cancelled',
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
+              ],
+              validator: (value) => statuses.contains(value)
+                  ? null
+                  : 'Select a valid status.',
+              onChanged: saving || picking
+                  ? null
+                  : (value) {
+                if (value == null) return;
 
-                  setState(() {
-                    status = value;
-                  });
-                },
-              ),
-
-              const SizedBox(height: 18),
-
-              _DateField(
-                label:
-                    'Access Start',
-                value:
-                    _formatDateTime(
-                  accessStart,
-                ),
-                onTap:
-                    chooseStartDate,
-                onClear:
-                    accessStart == null
-                        ? null
-                        : () {
-                            setState(() {
-                              accessStart =
-                                  null;
-                            });
-                          },
-              ),
-
-              const SizedBox(height: 12),
-
-              _DateField(
-                label:
-                    'Access End',
-                value:
-                    _formatDateTime(
-                  accessEnd,
-                ),
-                onTap:
-                    chooseEndDate,
-                onClear:
-                    accessEnd == null
-                        ? null
-                        : () {
-                            setState(() {
-                              accessEnd =
-                                  null;
-                            });
-                          },
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                'Use Access End to control how long the student can access course content and recorded videos.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall,
-              ),
-
-              if (error != null)
+                setState(() {
+                  status = value;
+                  error = null;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            if (pending)
+              const Text(
+                'Pending enrollment has no content access. '
+                    'Saving clears its access dates.',
+              )
+            else ...[
+              for (final start in [true, false])
                 Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    top: 14,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .error,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _DateField(
+                    label: start
+                        ? 'Access start (local time)'
+                        : 'Access end (local time)',
+                    value: _date(
+                      start ? accessStart : accessEnd,
                     ),
+                    onTap: saving || picking
+                        ? null
+                        : () => pick(start),
+                    onClear: saving ||
+                        picking ||
+                        (start ? accessStart : accessEnd) == null
+                        ? null
+                        : () => clearDate(start),
                   ),
                 ),
+              Text(
+                status == 'ACTIVE'
+                    ? 'A blank start date begins access now. '
+                    'A blank end date may be set automatically '
+                    'using the course access duration.'
+                    : 'Set access dates where needed. '
+                    'You can clear a date.',
+              ),
             ],
-          ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                error!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: saving
+        AdminOutlineButton(
+          label: 'Cancel',
+          onPressed: saving || picking
               ? null
-              : () =>
-                  Navigator.pop(context),
-          child:
-              const Text('Cancel'),
+              : () => Navigator.of(context).pop(),
         ),
-
-        FilledButton(
-          onPressed:
-              saving ? null : save,
-          child: Text(
-            saving
-                ? 'Saving...'
-                : 'Save Changes',
-          ),
+        GradientButton(
+          label: 'Save changes',
+          loading: saving,
+          onPressed: saving || picking ? null : save,
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _DateField extends StatelessWidget {
   const _DateField({
     required this.label,
     required this.value,
-    required this.onTap,
+    this.onTap,
     this.onClear,
   });
 
   final String label;
   final String value;
-
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final VoidCallback? onClear;
 
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius:
-          BorderRadius.circular(8),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: Row(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              if (onClear != null)
-                IconButton(
-                  tooltip: 'Clear',
-                  onPressed: onClear,
-                  icon: const Icon(
-                    Icons.close,
-                  ),
-                ),
-              const Padding(
-                padding:
-                    EdgeInsets.only(
-                  right: 12,
-                ),
-                child: Icon(
-                  Icons.calendar_month,
-                ),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: InputDecorator(
+      decoration: adminFieldDecoration(context).copyWith(
+        labelText: label,
+        enabled: onTap != null,
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onClear != null)
+              IconButton(
+                tooltip: 'Clear date',
+                onPressed: onClear,
+                icon: const Icon(Icons.close_rounded),
               ),
-            ],
-          ),
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Icon(Icons.calendar_month_outlined),
+            ),
+          ],
         ),
-        child: Text(value),
       ),
-    );
-  }
+      child: Text(value),
+    ),
+  );
 }
 
-class _InfoRow
-    extends StatelessWidget {
+class _InfoRow extends StatelessWidget {
   const _InfoRow({
     required this.label,
     required this.value,
@@ -687,69 +565,48 @@ class _InfoRow
   final String value;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
-      child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 170,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight:
-                    FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child:
-                SelectableText(value),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final heading = Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        );
+
+        final text = value.trim().isEmpty ? '—' : value;
+
+        if (constraints.maxWidth < 480) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              const SizedBox(height: 4),
+              SelectableText(text),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 170, child: heading),
+            Expanded(child: SelectableText(text)),
+          ],
+        );
+      },
+    ),
+  );
 }
 
-class _StatusChip
-    extends StatelessWidget {
-  const _StatusChip({
-    required this.status,
-  });
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(
-        status.toUpperCase(),
-      ),
-    );
-  }
-}
-
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return '—';
-  }
+String _date(DateTime? value) {
+  if (value == null) return '—';
 
   final local = value.toLocal();
 
-  String twoDigits(int number) =>
+  String two(int number) =>
       number.toString().padLeft(2, '0');
 
-  return '${twoDigits(local.day)}/'
-      '${twoDigits(local.month)}/'
-      '${local.year} '
-      '${twoDigits(local.hour)}:'
-      '${twoDigits(local.minute)}';
+  return '${two(local.day)}/${two(local.month)}/${local.year} '
+      '${two(local.hour)}:${two(local.minute)}';
 }

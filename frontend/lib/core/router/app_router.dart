@@ -23,6 +23,7 @@ import '../../features/staff/presentation/staff_list_screen.dart';
 import '../../features/staff/presentation/staff_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollment_detail_screen.dart';
 import '../../features/enrollments/presentation/enrollments_list_screen.dart';
+import '../../features/enrollments/presentation/bulk_chapter_video_access_screen.dart';
 import '../../features/fees/presentation/fee_account_detail_screen.dart';
 import '../../features/fees/presentation/fee_accounts_list_screen.dart';
 import '../../features/live_classes/presentation/live_classes_list_screen.dart';
@@ -32,6 +33,7 @@ import '../../features/materials/presentation/material_detail_screen.dart';
 import '../../features/assignments/presentation/assignments_list_screen.dart';
 import '../../features/assignments/presentation/assignment_detail_screen.dart';
 import '../../features/assignments/presentation/assignment_submissions_screen.dart';
+import '../../features/assignments/presentation/assignment_submission_detail_screen.dart';
 import '../../features/assignments/presentation/assignment_pdf_import_screen.dart';
 import '../../features/subjects/presentation/subjects_list_screen.dart';
 import '../../features/banners/presentation/banners_list_screen.dart';
@@ -330,6 +332,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const EnrollmentsListScreen(),
             routes: [
               GoRoute(
+                path: 'video-access',
+                builder: (context, state) =>
+                    const BulkChapterVideoAccessScreen(),
+              ),
+              GoRoute(
                 path: ':enrollmentUuid',
                 builder: (context, state) =>
                     EnrollmentDetailScreen(
@@ -409,12 +416,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'submissions',
-                    builder: (context, state) =>
-                        AssignmentSubmissionsScreen(
-                      assignmentUuid:
-                          state.pathParameters[
-                              'assignmentUuid']!,
+                    builder: (context, state) => AssignmentSubmissionsScreen(
+                      assignmentUuid: state.pathParameters['assignmentUuid']!,
                     ),
+                    routes: [
+                      GoRoute(
+                        path: ':submissionUuid',
+                        builder: (context, state) => AssignmentSubmissionDetailScreen(
+                          submissionUuid: state.pathParameters['submissionUuid']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

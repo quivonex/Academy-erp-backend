@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
-
+import '../../../core/widgets/admin_ui.dart';
 import '../data/assignment.dart';
 import '../data/assignment_question.dart';
 import '../data/assignment_repository.dart';
@@ -21,13 +21,26 @@ class AssignmentDetailScreen extends ConsumerStatefulWidget {
       _AssignmentDetailScreenState();
 }
 
+class _Detail {
+  const _Detail(this.assignment, this.questions);
+
+  final Assignment assignment;
+  final List<AssignmentQuestion> questions;
+
+  int get totalCents => questions.fold(
+    0,
+        (sum, q) => sum + (q.marks * 100).round(),
+  );
+
+  bool get marksMatch =>
+      totalCents == (assignment.maxMarks * 100).round();
+}
+
 class _AssignmentDetailScreenState
     extends ConsumerState<AssignmentDetailScreen> {
-  late Future<Assignment> assignmentFuture;
-
-  late Future<List<AssignmentQuestion>> questionsFuture;
-
-  bool processing = false;
+  late Future<_Detail> result;
+  bool busy = false;
+  int revision = 0;
 
   @override
   void initState() {
@@ -35,550 +48,555 @@ class _AssignmentDetailScreenState
     reload();
   }
 
-  void reload() {
-    assignmentFuture = ref
-        .read(assignmentRepositoryProvider)
-        .detail(widget.assignmentUuid);
+  @override
+  void didUpdateWidget(covariant AssignmentDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    questionsFuture = ref
-        .read(assignmentRepositoryProvider)
-        .questions(widget.assignmentUuid);
+    if (oldWidget.assignmentUuid != widget.assignmentUuid) {
+      revision++;
+      busy = false;
+      reload();
+    }
   }
+
+  Future<_Detail> fetch(String uuid) async {
+    final repository = ref.read(assignmentRepositoryProvider);
+
+    final values = await Future.wait<dynamic>([
+      repository.detail(uuid),
+      repository.questions(uuid),
+    ]);
+
+    return _Detail(
+      values[0] as Assignment,
+      values[1] as List<AssignmentQuestion>,
+    );
+  }
+
+  void reload() => result = fetch(widget.assignmentUuid);
 
   void refresh() {
-    setState(reload);
+    if (!busy) setState(reload);
   }
 
-  Future<void> togglePublish(
-    Assignment assignment,
-  ) async {
-    setState(() {
-      processing = true;
-    });
+  void back() {
+    if (busy) return;
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/assignments');
+    }
+  }
+
+  void notify(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> run(
+      Future<bool> Function() action,
+      String message, {
+        bool reloadAfter = true,
+      }) async {
+    if (busy) return;
+
+    final ticket = revision;
+    setState(() => busy = true);
 
     try {
-      if (assignment.isPublished) {
-        await ref
-            .read(
-              assignmentRepositoryProvider,
-            )
-            .unpublish(
-              assignment.uuid,
-            );
-      } else {
-        await ref
-            .read(
-              assignmentRepositoryProvider,
-            )
-            .publish(
-              assignment.uuid,
-            );
-      }
+      final changed = await action();
 
-      if (mounted) {
-        refresh();
+      if (!mounted || ticket != revision) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              assignment.isPublished
-                  ? 'Assignment unpublished successfully.'
-                  : 'Assignment published successfully.',
-            ),
-          ),
-        );
+      if (changed) {
+        if (reloadAfter) setState(reload);
+        if (message.isNotEmpty) notify(message);
       }
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.message,
-            ),
-          ),
-        );
+      if (mounted && ticket == revision) {
+        notify(e.message);
+        setState(reload);
+      }
+    } catch (_) {
+      if (mounted && ticket == revision) {
+        notify('Could not complete this action. Please retry.');
+        setState(reload);
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          processing = false;
-        });
+      if (mounted && ticket == revision) {
+        setState(() => busy = false);
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Assignment>(
-      future: assignmentFuture,
-      builder: (
-        context,
-        assignmentSnapshot,
-      ) {
-        if (assignmentSnapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+  Future<void> questionDialog(
+      _Detail data, [
+        AssignmentQuestion? question,
+      ]) async {
+    if (busy || data.assignment.isPublished) return;
 
-        if (assignmentSnapshot.hasError) {
-          return Center(
-            child: Text(
-              'Could not load assignment:\n'
-              '${assignmentSnapshot.error}',
+    final lastSequence = data.questions.fold<int>(
+      0,
+          (value, q) => q.sequence > value ? q.sequence : value,
+    );
+
+    await run(
+          () async {
+        return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _QuestionDialog(
+            assignmentUuid: data.assignment.uuid,
+            question: question,
+            initialSequence: lastSequence < 2147483647
+                ? lastSequence + 1
+                : lastSequence,
+          ),
+        ) ==
+            true;
+      },
+      question == null
+          ? 'Question added successfully.'
+          : 'Question updated successfully.',
+    );
+  }
+
+  Future<void> deleteQuestion(
+      _Detail data,
+      AssignmentQuestion question,
+      ) async {
+    if (busy || data.assignment.isPublished) return;
+
+    final ticket = revision;
+
+    await run(
+          () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete question?'),
+            content: const Text(
+              'This permanently removes the question. '
+                  'This cannot be undone.',
             ),
-          );
-        }
-
-        final assignment = assignmentSnapshot.data!;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextButton.icon(
-              onPressed: () => context.pop(),
-              icon: const Icon(
-                Icons.arrow_back,
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
               ),
-              label: const Text('Assignments'),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+
+        if (!mounted ||
+            ticket != revision ||
+            confirmed != true) {
+          return false;
+        }
+
+        await ref.read(assignmentRepositoryProvider).deleteQuestion(
+          assignmentUuid: data.assignment.uuid,
+          questionUuid: question.uuid,
+        );
+
+        return true;
+      },
+      'Question deleted successfully.',
+    );
+  }
+
+  Future<void> togglePublish(_Detail data) async {
+    if (busy) return;
+
+    final a = data.assignment;
+
+    if (!a.isPublished &&
+        (!a.isActive ||
+            data.questions.isEmpty ||
+            !data.marksMatch)) {
+      return;
+    }
+
+    final ticket = revision;
+
+    await run(
+          () async {
+        if (a.isPublished) {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Unpublish assignment?'),
+              content: const Text(
+                'The assignment will return to draft. '
+                    'Assignments with student submissions '
+                    'cannot be unpublished.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(true),
+                  child: const Text('Unpublish'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Row(
+          );
+
+          if (!mounted ||
+              ticket != revision ||
+              confirmed != true) {
+            return false;
+          }
+        }
+
+        final repository = ref.read(assignmentRepositoryProvider);
+
+        final updated = a.isPublished
+            ? await repository.unpublish(a.uuid)
+            : await repository.publish(a.uuid);
+
+        if (mounted && ticket == revision) {
+          setState(() {
+            result = Future.value(
+              _Detail(updated, data.questions),
+            );
+          });
+        }
+
+        return true;
+      },
+      a.isPublished
+          ? 'Assignment unpublished successfully.'
+          : 'Assignment published successfully.',
+      reloadAfter: false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !busy,
+    child: ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: busy ? null : back,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Assignments'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FutureBuilder<_Detail>(
+          future: result,
+          builder: (context, snapshot) {
+            final state = adminFutureState(
+              snapshot,
+              noun: 'assignment',
+              onRetry: refresh,
+            );
+
+            if (state != null) return state;
+
+            final data = snapshot.data!;
+            final a = data.assignment;
+
+            final canPublish = a.isPublished ||
+                (a.isActive &&
+                    data.questions.isNotEmpty &&
+                    data.marksMatch);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
+                AdminPageHeader(
+                  title: a.title,
+                  subtitle: a.courseName,
+                  titleTrailing: [
+                    ActiveBadge(
+                      active: a.isPublished,
+                      activeLabel: 'Published',
+                      inactiveLabel: 'Draft',
+                    ),
+                    ActiveBadge(active: a.isActive),
+                    IconButton(
+                      onPressed: busy ? null : refresh,
+                      tooltip: 'Refresh',
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                  actions: [
+                    if (!a.isPublished)
+                      GradientButton(
+                        label: 'Add Question',
+                        icon: Icons.add,
+                        onPressed: busy
+                            ? null
+                            : () => questionDialog(data),
+                      ),
+                    AdminOutlineButton(
+                      label: a.isPublished
+                          ? 'Unpublish'
+                          : 'Publish',
+                      icon: a.isPublished
+                          ? Icons.visibility_off_outlined
+                          : Icons.publish_outlined,
+                      onPressed: busy || !canPublish
+                          ? null
+                          : () => togglePublish(data),
+                    ),
+                    AdminOutlineButton(
+                      label: 'View Submissions',
+                      icon: Icons.fact_check_outlined,
+                      onPressed: busy
+                          ? null
+                          : () => run(
+                            () async {
+                          await context.push(
+                            '/assignments/${a.uuid}/submissions',
+                          );
+                          return true;
+                        },
+                        '',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                AdminCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        assignment.title,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        'Assignment information',
+                        style:
+                        Theme.of(context).textTheme.titleLarge,
                       ),
-                      const SizedBox(
-                        height: 4,
+                      const SizedBox(height: 16),
+                      _InfoRow(
+                        label: 'Course',
+                        value: a.courseName,
                       ),
-                      Text(
-                        assignment.courseName,
+                      _InfoRow(
+                        label: 'Subject',
+                        value: a.subjectName,
+                      ),
+                      _InfoRow(
+                        label: 'Chapter',
+                        value: a.chapterTitle,
+                      ),
+                      _InfoRow(
+                        label: 'Lesson',
+                        value: a.lessonTitle,
+                      ),
+                      _InfoRow(
+                        label: 'Maximum marks',
+                        value: _marks(a.maxMarks),
+                      ),
+                      _InfoRow(
+                        label: 'Question marks',
+                        value: _marks(data.totalCents / 100),
+                      ),
+                      _InfoRow(
+                        label: 'Due date',
+                        value: _date(a.dueAt),
+                      ),
+                      _InfoRow(
+                        label: 'Late submissions',
+                        value: a.allowLateSubmission
+                            ? 'Allowed'
+                            : 'Not allowed',
+                      ),
+                      _InfoRow(
+                        label: 'Created by',
+                        value: a.createdByName,
+                      ),
+                      _InfoRow(
+                        label: 'Description',
+                        value: a.description,
+                      ),
+                      _InfoRow(
+                        label: 'Instructions',
+                        value: a.instructions,
                       ),
                     ],
                   ),
                 ),
-                Chip(
-                  label: Text(
-                    assignment.isPublished ? 'Published' : 'Draft',
+                const SizedBox(height: 16),
+                if (!a.isPublished && !a.isActive)
+                  const AdminErrorBanner(
+                    message:
+                    'Inactive assignments cannot be published.',
                   ),
+                if (!a.isPublished && data.questions.isEmpty)
+                  const AdminErrorBanner(
+                    message:
+                    'Add at least one question before publishing.',
+                  ),
+                if (!data.marksMatch)
+                  AdminErrorBanner(
+                    message:
+                    'Question marks total ${_marks(data.totalCents / 100)}; '
+                        'assignment maximum is ${_marks(a.maxMarks)}. '
+                        'These must match before publishing.',
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Questions can be changed while the assignment '
+                      'is a draft. The server blocks changes after '
+                      'any student submission.',
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _InfoRow(
-                      label: 'Course',
-                      value: assignment.courseName,
-                    ),
-                    _InfoRow(
-                      label: 'Subject',
-                      value: assignment.subjectName ?? '—',
-                    ),
-                    _InfoRow(
-                      label: 'Chapter',
-                      value: assignment.chapterTitle ?? '—',
-                    ),
-                    _InfoRow(
-                      label: 'Lesson',
-                      value: assignment.lessonTitle ?? '—',
-                    ),
-                    _InfoRow(
-                      label: 'Max Marks',
-                      value: assignment.maxMarks.toString(),
-                    ),
-                    _InfoRow(
-                      label: 'Due At',
-                      value: _formatDateTime(
-                        assignment.dueAt,
-                      ),
-                    ),
-                    _InfoRow(
-                      label: 'Late Submission',
-                      value: assignment.allowLateSubmission
-                          ? 'Allowed'
-                          : 'Not Allowed',
-                    ),
-                    _InfoRow(
-                      label: 'Instructions',
-                      value: assignment.instructions.isEmpty
-                          ? '—'
-                          : assignment.instructions,
-                    ),
-                  ],
+                const SizedBox(height: 24),
+                Text(
+                  'Questions (${data.questions.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              children: [
-                if (!assignment.isPublished)
-                  FilledButton.icon(
-                    onPressed: () async {
-                      final created = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => _QuestionDialog(
-                          assignmentUuid: assignment.uuid,
+                const SizedBox(height: 12),
+                if (data.questions.isEmpty)
+                  AdminStateMessage(
+                    icon: Icons.quiz_outlined,
+                    title: 'No questions yet',
+                    message:
+                    'Add text, file or MCQ questions to this assignment.',
+                    actionLabel: !a.isPublished && !busy
+                        ? 'Add Question'
+                        : null,
+                    onAction: !a.isPublished && !busy
+                        ? () => questionDialog(data)
+                        : null,
+                  ),
+                for (final q in data.questions) ...[
+                  AdminCard(
+                    child: Column(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                      children: [
+                        SelectableText(
+                          '${q.sequence}. ${q.questionText}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium,
                         ),
-                      );
-
-                      if (created == true && mounted) {
-                        refresh();
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.add,
-                    ),
-                    label: const Text(
-                      'Add Question',
-                    ),
-                  ),
-                OutlinedButton.icon(
-                  onPressed: processing
-                      ? null
-                      : () => togglePublish(
-                            assignment,
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            SoftBadge(label: q.answerType),
+                            SoftBadge(
+                              label: '${_marks(q.marks)} marks',
+                            ),
+                            SoftBadge(
+                              label: q.isRequired
+                                  ? 'Required'
+                                  : 'Optional',
+                            ),
+                          ],
+                        ),
+                        if (q.answerType == 'MCQ') ...[
+                          const SizedBox(height: 12),
+                          SelectableText(
+                            'A. ${q.optionA}\n'
+                                'B. ${q.optionB}\n'
+                                'C. ${q.optionC}\n'
+                                'D. ${q.optionD}',
                           ),
-                  icon: Icon(
-                    assignment.isPublished
-                        ? Icons.visibility_off_outlined
-                        : Icons.publish_outlined,
-                  ),
-                  label: Text(
-                    processing
-                        ? 'Processing...'
-                        : assignment.isPublished
-                            ? 'Unpublish'
-                            : 'Publish',
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    context.push(
-                      '/assignments/${assignment.uuid}/submissions',
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.fact_check_outlined,
-                  ),
-                  label: const Text(
-                    'View Submissions',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Questions',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: FutureBuilder<List<AssignmentQuestion>>(
-                future: questionsFuture,
-                builder: (
-                  context,
-                  snapshot,
-                ) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        'Could not load questions:\n'
-                        '${snapshot.error}',
-                      ),
-                    );
-                  }
-
-                  final questions = snapshot.data!;
-
-                  if (questions.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No questions added.',
-                      ),
-                    );
-                  }
-
-                  final totalMarks = questions.fold<double>(
-                    0,
-                    (
-                      total,
-                      question,
-                    ) =>
-                        total + question.marks,
-                  );
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Question Marks: $totalMarks / ${assignment.maxMarks}',
-                      ),
-                      const SizedBox(
-                        height: 10,
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: questions.length,
-                          itemBuilder: (
-                            context,
-                            index,
-                          ) {
-                            final question = questions[index];
-
-                            return Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            '${question.sequence}. ${question.questionText}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                        Chip(
-                                          label: Text(
-                                            question.answerType,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(
-                                      height: 8,
-                                    ),
-                                    Text(
-                                      'Marks: ${question.marks}',
-                                    ),
-                                    if (question.answerType == 'MCQ') ...[
-                                      const SizedBox(
-                                        height: 8,
-                                      ),
-                                      Text(
-                                        'A. ${question.optionA}',
-                                      ),
-                                      Text(
-                                        'B. ${question.optionB}',
-                                      ),
-                                      Text(
-                                        'C. ${question.optionC}',
-                                      ),
-                                      Text(
-                                        'D. ${question.optionD}',
-                                      ),
-                                      const SizedBox(
-                                        height: 6,
-                                      ),
-                                      Text(
-                                        'Correct: ${question.correctOption}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                    if (question.answerType == 'TEXT' &&
-                                        question.answerText.isNotEmpty) ...[
-                                      const SizedBox(
-                                        height: 8,
-                                      ),
-                                      Text(
-                                        'Answer: ${question.answerText}',
-                                      ),
-                                    ],
-                                    if (!assignment.isPublished)
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: Wrap(
-                                          spacing: 8,
-                                          children: [
-                                            TextButton.icon(
-                                              onPressed: () async {
-                                                final updated =
-                                                    await showDialog<bool>(
-                                                  context: context,
-                                                  builder: (_) =>
-                                                      _QuestionDialog(
-                                                    assignmentUuid:
-                                                        assignment.uuid,
-                                                    question: question,
-                                                  ),
-                                                );
-
-                                                if (updated == true &&
-                                                    mounted) {
-                                                  refresh();
-                                                }
-                                              },
-                                              icon: const Icon(
-                                                Icons.edit,
-                                              ),
-                                              label: const Text(
-                                                'Edit',
-                                              ),
-                                            ),
-                                            TextButton.icon(
-                                              onPressed: () => _deleteQuestion(
-                                                assignment,
-                                                question,
-                                              ),
-                                              icon: const Icon(
-                                                Icons.delete_outline,
-                                              ),
-                                              label: const Text(
-                                                'Delete',
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Correct option: ${q.correctOption}',
+                          ),
+                        ],
+                        if (q.answerType == 'TEXT' &&
+                            q.answerText.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          SelectableText(
+                            'Expected answer: ${q.answerText}',
+                          ),
+                        ],
+                        if (!a.isPublished) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            children: [
+                              AdminOutlineButton(
+                                label: 'Edit',
+                                icon: Icons.edit_outlined,
+                                onPressed: busy
+                                    ? null
+                                    : () => questionDialog(data, q),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _deleteQuestion(
-    Assignment assignment,
-    AssignmentQuestion question,
-  ) async {
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text(
-              'Delete Question',
-            ),
-            content: const Text(
-              'Are you sure you want to delete this question?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  false,
-                ),
-                child: const Text(
-                  'Cancel',
-                ),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  true,
-                ),
-                child: const Text(
-                  'Delete',
-                ),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await ref
-          .read(
-            assignmentRepositoryProvider,
-          )
-          .deleteQuestion(
-            assignmentUuid: assignment.uuid,
-            questionUuid: question.uuid,
-          );
-
-      if (mounted) {
-        refresh();
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.message,
-            ),
-          ),
-        );
-      }
-    }
-  }
+                              AdminOutlineButton(
+                                label: 'Delete',
+                                icon: Icons.delete_outline,
+                                danger: true,
+                                onPressed: busy
+                                    ? null
+                                    : () => deleteQuestion(data, q),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 }
 
 class _QuestionDialog extends ConsumerStatefulWidget {
   const _QuestionDialog({
     required this.assignmentUuid,
     this.question,
+    this.initialSequence = 1,
   });
 
   final String assignmentUuid;
-
   final AssignmentQuestion? question;
+  final int initialSequence;
 
   @override
-  ConsumerState<_QuestionDialog> createState() => _QuestionDialogState();
+  ConsumerState<_QuestionDialog> createState() =>
+      _QuestionDialogState();
 }
 
 class _QuestionDialogState extends ConsumerState<_QuestionDialog> {
+  final form = GlobalKey<FormState>();
+
   late final TextEditingController questionText;
-
   late final TextEditingController marks;
-
   late final TextEditingController sequence;
-
   late final TextEditingController answerText;
+  late final List<TextEditingController> options;
 
-  late final TextEditingController optionA;
-
-  late final TextEditingController optionB;
-
-  late final TextEditingController optionC;
-
-  late final TextEditingController optionD;
-
-  String answerType = 'TEXT';
-
-  String correctOption = 'A';
-
-  bool isRequired = true;
+  late String answerType;
+  String? correctOption;
+  late bool isRequired;
 
   bool saving = false;
-
   String? error;
+
+  static const types = ['TEXT', 'FILE', 'MCQ'];
+  static const keys = ['A', 'B', 'C', 'D'];
 
   @override
   void initState() {
@@ -591,76 +609,80 @@ class _QuestionDialogState extends ConsumerState<_QuestionDialog> {
     );
 
     marks = TextEditingController(
-      text: q?.marks.toString() ?? '1',
+      text: q == null ? '1.00' : q.marks.toStringAsFixed(2),
     );
 
     sequence = TextEditingController(
-      text: q?.sequence.toString() ?? '1',
+      text: '${q?.sequence ?? widget.initialSequence}',
     );
 
     answerText = TextEditingController(
       text: q?.answerText ?? '',
     );
 
-    optionA = TextEditingController(
-      text: q?.optionA ?? '',
-    );
+    options = [
+      q?.optionA,
+      q?.optionB,
+      q?.optionC,
+      q?.optionD,
+    ]
+        .map((text) => TextEditingController(text: text ?? ''))
+        .toList();
 
-    optionB = TextEditingController(
-      text: q?.optionB ?? '',
-    );
+    answerType = q?.answerType.toUpperCase() ?? 'TEXT';
 
-    optionC = TextEditingController(
-      text: q?.optionC ?? '',
-    );
-
-    optionD = TextEditingController(
-      text: q?.optionD ?? '',
-    );
-
-    answerType = q?.answerType ?? 'TEXT';
-
-    correctOption =
-        q?.correctOption.isNotEmpty == true ? q!.correctOption : 'A';
+    final correct = q?.correctOption.trim().toUpperCase() ?? '';
+    correctOption = correct.isEmpty ? null : correct;
 
     isRequired = q?.isRequired ?? true;
   }
 
   @override
   void dispose() {
-    questionText.dispose();
-    marks.dispose();
-    sequence.dispose();
-    answerText.dispose();
-    optionA.dispose();
-    optionB.dispose();
-    optionC.dispose();
-    optionD.dispose();
+    for (final c in [
+      questionText,
+      marks,
+      sequence,
+      answerText,
+      ...options,
+    ]) {
+      c.dispose();
+    }
 
     super.dispose();
   }
 
+  String? marksError(String? value) {
+    final text = value?.trim() ?? '';
+    final number = double.tryParse(text);
+
+    if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
+        number == null ||
+        !number.isFinite ||
+        number < 0 ||
+        number > 999999.99) {
+      return 'Use 0–999999.99 with at most 2 decimal places.';
+    }
+
+    return null;
+  }
+
+  String? sequenceError(String? value) {
+    final text = value?.trim() ?? '';
+    final number = int.tryParse(text);
+
+    if (!RegExp(r'^\d+$').hasMatch(text) ||
+        number == null ||
+        number < 0 ||
+        number > 2147483647) {
+      return 'Enter a whole number from 0 to 2147483647.';
+    }
+
+    return null;
+  }
+
   Future<void> save() async {
-    if (questionText.text.trim().isEmpty) {
-      setState(() {
-        error = 'Question is required.';
-      });
-
-      return;
-    }
-
-    if (answerType == 'MCQ') {
-      if (optionA.text.trim().isEmpty ||
-          optionB.text.trim().isEmpty ||
-          optionC.text.trim().isEmpty ||
-          optionD.text.trim().isEmpty) {
-        setState(() {
-          error = 'All four MCQ options are required.';
-        });
-
-        return;
-      }
-    }
+    if (saving || !form.currentState!.validate()) return;
 
     setState(() {
       saving = true;
@@ -668,340 +690,294 @@ class _QuestionDialogState extends ConsumerState<_QuestionDialog> {
     });
 
     try {
-      final repository = ref.read(
-        assignmentRepositoryProvider,
-      );
-
+      final repo = ref.read(assignmentRepositoryProvider);
       final q = widget.question;
+      final mcq = answerType == 'MCQ';
 
       if (q == null) {
-        await repository.createQuestion(
+        await repo.createQuestion(
           assignmentUuid: widget.assignmentUuid,
-          questionText: questionText.text,
+          questionText: questionText.text.trim(),
           answerType: answerType,
-          marks: double.tryParse(
-                marks.text,
-              ) ??
-              0,
-          sequence: int.tryParse(
-                sequence.text,
-              ) ??
-              1,
+          marks: double.parse(marks.text.trim()),
+          sequence: int.parse(sequence.text.trim()),
           isRequired: isRequired,
-          answerText: answerText.text,
-          optionA: optionA.text,
-          optionB: optionB.text,
-          optionC: optionC.text,
-          optionD: optionD.text,
-          correctOption: correctOption,
+          answerText: answerType == 'TEXT'
+              ? answerText.text.trim()
+              : '',
+          optionA: mcq ? options[0].text.trim() : '',
+          optionB: mcq ? options[1].text.trim() : '',
+          optionC: mcq ? options[2].text.trim() : '',
+          optionD: mcq ? options[3].text.trim() : '',
+          correctOption: mcq ? correctOption! : '',
         );
       } else {
-        await repository.updateQuestion(
+        await repo.updateQuestion(
           assignmentUuid: widget.assignmentUuid,
           questionUuid: q.uuid,
-          questionText: questionText.text,
+          questionText: questionText.text.trim(),
           answerType: answerType,
-          marks: double.tryParse(
-                marks.text,
-              ) ??
-              0,
-          sequence: int.tryParse(
-                sequence.text,
-              ) ??
-              1,
+          marks: double.parse(marks.text.trim()),
+          sequence: int.parse(sequence.text.trim()),
           isRequired: isRequired,
-          answerText: answerText.text,
-          optionA: optionA.text,
-          optionB: optionB.text,
-          optionC: optionC.text,
-          optionD: optionD.text,
-          correctOption: correctOption,
+          answerText: answerType == 'TEXT'
+              ? answerText.text.trim()
+              : '',
+          optionA: mcq ? options[0].text.trim() : '',
+          optionB: mcq ? options[1].text.trim() : '',
+          optionC: mcq ? options[2].text.trim() : '',
+          optionD: mcq ? options[3].text.trim() : '',
+          correctOption: mcq ? correctOption! : '',
         );
       }
 
-      if (mounted) {
-        Navigator.pop(
-          context,
-          true,
-        );
-      }
+      if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          error = e.message;
+          error = 'Could not save question. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          saving = false;
-        });
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
+  Widget textField(
+      String label,
+      TextEditingController controller, {
+        bool required = false,
+        int lines = 1,
+      }) =>
+      FieldLabel(
+        label: label,
+        required: required,
+        child: TextFormField(
+          controller: controller,
+          enabled: !saving,
+          minLines: lines,
+          maxLines: lines + 2,
+          decoration: adminFieldDecoration(context),
+          validator: (v) =>
+          required && (v == null || v.trim().isEmpty)
+              ? '$label is required.'
+              : null,
+        ),
+      );
+
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        widget.question == null ? 'Add Question' : 'Edit Question',
-      ),
-      content: SizedBox(
-        width: 550,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: questionText,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Question',
-                ),
-              ),
-              const SizedBox(
-                height: 12,
-              ),
-              DropdownButtonFormField<String>(
+  Widget build(BuildContext context) => PopScope(
+    canPop: !saving,
+    child: AdminFormDialog(
+      icon: Icons.quiz_outlined,
+      title: widget.question == null
+          ? 'Add question'
+          : 'Edit question',
+      subtitle: 'Choose the answer type, marks and sequence.',
+      onClose: saving
+          ? null
+          : () => Navigator.of(context).pop(),
+      body: Form(
+        key: form,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            textField(
+              'Question',
+              questionText,
+              required: true,
+              lines: 3,
+            ),
+            const SizedBox(height: 16),
+            FieldLabel(
+              label: 'Answer type',
+              required: true,
+              child: DropdownButtonFormField<String>(
                 value: answerType,
-                decoration: const InputDecoration(
-                  labelText: 'Answer Type',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'TEXT',
-                    child: Text('Text'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'FILE',
-                    child: Text('File'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'MCQ',
-                    child: Text('MCQ'),
-                  ),
+                decoration: adminFieldDecoration(context),
+                items: [
+                  for (final type in types)
+                    DropdownMenuItem(
+                      value: type,
+                      child: Text(type),
+                    ),
+                  if (!types.contains(answerType))
+                    DropdownMenuItem(
+                      value: answerType,
+                      child: Text(answerType),
+                    ),
                 ],
-                onChanged: (value) {
-                  setState(() {
-                    answerType = value ?? 'TEXT';
-                  });
+                validator: (v) => types.contains(v)
+                    ? null
+                    : 'Choose TEXT, FILE or MCQ.',
+                onChanged: saving
+                    ? null
+                    : (v) {
+                  if (v != null) {
+                    setState(() {
+                      answerType = v;
+                      error = null;
+                    });
+                  }
                 },
               ),
-              const SizedBox(
-                height: 12,
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: marks,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Marks',
-                      ),
-                    ),
+            ),
+            const SizedBox(height: 16),
+            FormRow(
+              left: FieldLabel(
+                label: 'Marks',
+                required: true,
+                child: TextFormField(
+                  controller: marks,
+                  enabled: !saving,
+                  validator: marksError,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                  const SizedBox(
-                    width: 12,
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: '1.00',
                   ),
-                  Expanded(
-                    child: TextField(
-                      controller: sequence,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Sequence',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (answerType == 'TEXT') ...[
-                const SizedBox(
-                  height: 12,
                 ),
-                TextField(
-                  controller: answerText,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Expected Answer',
+              ),
+              right: FieldLabel(
+                label: 'Sequence',
+                required: true,
+                child: TextFormField(
+                  controller: sequence,
+                  enabled: !saving,
+                  validator: sequenceError,
+                  keyboardType: TextInputType.number,
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: '1',
                   ),
+                ),
+              ),
+            ),
+            if (answerType == 'TEXT') ...[
+              const SizedBox(height: 16),
+              textField(
+                'Expected answer',
+                answerText,
+                lines: 3,
+              ),
+            ],
+            if (answerType == 'FILE') ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Students will upload a file as their answer.',
+              ),
+            ],
+            if (answerType == 'MCQ') ...[
+              for (var i = 0; i < options.length; i++) ...[
+                const SizedBox(height: 16),
+                textField(
+                  'Option ${keys[i]}',
+                  options[i],
+                  required: true,
                 ),
               ],
-              if (answerType == 'MCQ') ...[
-                const SizedBox(
-                  height: 12,
-                ),
-                TextField(
-                  controller: optionA,
-                  decoration: const InputDecoration(
-                    labelText: 'Option A',
-                  ),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                TextField(
-                  controller: optionB,
-                  decoration: const InputDecoration(
-                    labelText: 'Option B',
-                  ),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                TextField(
-                  controller: optionC,
-                  decoration: const InputDecoration(
-                    labelText: 'Option C',
-                  ),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                TextField(
-                  controller: optionD,
-                  decoration: const InputDecoration(
-                    labelText: 'Option D',
-                  ),
-                ),
-                const SizedBox(
-                  height: 12,
-                ),
-                DropdownButtonFormField<String>(
+              const SizedBox(height: 16),
+              FieldLabel(
+                label: 'Correct option',
+                required: true,
+                child: DropdownButtonFormField<String>(
                   value: correctOption,
-                  decoration: const InputDecoration(
-                    labelText: 'Correct Option',
+                  decoration: adminFieldDecoration(
+                    context,
+                    hint: 'Choose A, B, C or D',
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'A',
-                      child: Text('A'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'B',
-                      child: Text('B'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'C',
-                      child: Text('C'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'D',
-                      child: Text('D'),
-                    ),
+                  items: [
+                    for (final key in keys)
+                      DropdownMenuItem(
+                        value: key,
+                        child: Text(key),
+                      ),
+                    if (correctOption != null &&
+                        !keys.contains(correctOption))
+                      DropdownMenuItem(
+                        value: correctOption,
+                        child: Text(correctOption!),
+                      ),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      correctOption = value ?? 'A';
-                    });
+                  validator: (v) => keys.contains(v)
+                      ? null
+                      : 'Choose A, B, C or D.',
+                  onChanged: saving
+                      ? null
+                      : (v) {
+                    setState(() => correctOption = v);
                   },
                 ),
-              ],
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Required Question',
-                ),
-                value: isRequired,
-                onChanged: (value) {
-                  setState(() {
-                    isRequired = value;
-                  });
-                },
               ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 10,
-                  ),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
             ],
-          ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Required question'),
+              value: isRequired,
+              onChanged: saving
+                  ? null
+                  : (v) => setState(() => isRequired = v),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
         ),
       ),
       actions: [
-        TextButton(
+        AdminOutlineButton(
+          label: 'Cancel',
           onPressed: saving
               ? null
-              : () => Navigator.pop(
-                    context,
-                  ),
-          child: const Text('Cancel'),
+              : () => Navigator.of(context).pop(),
         ),
-        FilledButton(
+        GradientButton(
+          label: 'Save Question',
+          icon: Icons.check,
+          loading: saving,
           onPressed: saving ? null : save,
-          child: Text(
-            saving ? 'Saving...' : 'Save Question',
-          ),
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, this.value});
 
   final String label;
-  final String value;
+  final String? value;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 6,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: FormRow(
+      left: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(
-              value,
-            ),
-          ),
-        ],
+      right: SelectableText(
+        value?.trim().isNotEmpty == true ? value! : '—',
       ),
-    );
-  }
+    ),
+  );
 }
 
-String _formatDateTime(
-  DateTime? value,
-) {
-  if (value == null) {
-    return '—';
-  }
+String _marks(double value) => value.toStringAsFixed(2);
 
-  final local = value.toLocal();
+String _date(DateTime? value) {
+  if (value == null) return 'No deadline';
 
-  String two(int value) => value.toString().padLeft(
-        2,
-        '0',
-      );
+  final d = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
 
-  return '${two(local.day)}/'
-      '${two(local.month)}/'
-      '${local.year} '
-      '${two(local.hour)}:'
-      '${two(local.minute)}';
+  return '${two(d.day)}/${two(d.month)}/${d.year} '
+      '${two(d.hour)}:${two(d.minute)}';
 }
