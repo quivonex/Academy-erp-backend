@@ -1,6 +1,6 @@
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-
+from django.db import transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -558,9 +558,17 @@ class TenantDetailView(APIView):
         except ValidationError as exc:
             return validation_error_response(exc)
 
+        previous_status = getattr(obj, "status", None)
+
         obj = update_instance(
             obj,
             data,
+        )
+
+        self.after_update(
+            request,
+            obj,
+            previous_status,
         )
 
         return success_response(
@@ -573,6 +581,14 @@ class TenantDetailView(APIView):
         request,
         obj,
         data,
+    ):
+        pass
+    
+    def after_update(
+        self,
+        request,
+        obj,
+        previous_status,
     ):
         pass
 
@@ -698,6 +714,25 @@ class EnrollmentDetailView(TenantDetailView):
         # after enrollment creation.
         data.pop("student_uuid", None)
         data.pop("course_uuid", None)
+        
+        
+    def after_update(
+        self,
+        request,
+        obj,
+        previous_status,
+    ):
+        if (
+            previous_status != Enrollment.Status.ACTIVE
+            and obj.status == Enrollment.Status.ACTIVE
+        ):
+            from notifications.services import (
+                create_course_access_notification,
+            )
+
+            transaction.on_commit(
+                lambda: create_course_access_notification(obj)
+            )
         
         
         
