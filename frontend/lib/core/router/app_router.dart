@@ -49,6 +49,9 @@ import '../../features/student_portal/presentation/student_assignment_screen.dar
 import '../../features/student_portal/presentation/course_payment_screen.dart';
 import '../../features/student_portal/presentation/student_profile_screen.dart'
     as portal;
+import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/notifications/presentation/notification_send_screen.dart';
+import '../../features/notifications/presentation/device_notification_screen.dart';
 import '../../features/student_portal/presentation/all_live_classes_screen.dart';
 import '../session/session_controller.dart';
 import '../session/user_role.dart';
@@ -254,6 +257,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/dashboard',
             builder: (context, state) =>
             const DashboardScreen(),
+          ),
+          GoRoute(
+            path: '/notifications',
+            builder: (context, state) => const NotificationsScreen(),
+            routes: [
+              GoRoute(
+                path: 'send',
+                builder: (context, state) =>
+                    const NotificationSendScreen(),
+              ),
+              GoRoute(
+                path: 'devices',
+                builder: (context, state) =>
+                    const DeviceNotificationScreen(),
+              ),
+            ],
           ),
           GoRoute(
             path: '/super-admin/profile',

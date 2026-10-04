@@ -382,12 +382,15 @@ class _TopBar extends ConsumerWidget {
             const SizedBox(width: 4),
           ],
           const Spacer(),
-          IconButton(
-            tooltip: 'Notifications',
-            icon: Icon(Icons.notifications_none_rounded,
-                color: colors.textMuted),
-            onPressed: () {},
-          ),
+          if ((session.firmUuid ?? '').isNotEmpty)
+            IconButton(
+              tooltip: 'Notifications',
+              icon: Icon(
+                Icons.notifications_none_rounded,
+                color: colors.textMuted,
+              ),
+              onPressed: () => context.push('/notifications'),
+            ),
           if (wide)
             Container(
               width: 1,
