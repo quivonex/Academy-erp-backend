@@ -441,3 +441,72 @@ def create_material_available_notifications(material):
 
 
 
+def create_installment_payment_recorded_notification(
+    installment,
+    fee_account,
+):
+    enrollment = fee_account.enrollment
+    student = enrollment.student
+    user = student.user
+
+    if not student.is_active or not user.is_active:
+        return None
+
+    return create_notification(
+        firm=fee_account.firm,
+        recipient=user,
+        notification_type=Notification.NotificationType.PAYMENT,
+        title="Payment recorded successfully",
+        body=(
+            f"Your payment of ₹{installment.amount} for "
+            f"{enrollment.course.name} has been recorded. "
+            f"Remaining balance: ₹{fee_account.balance_amount}."
+        ),
+        data={
+            "installment_uuid": str(installment.uuid),
+            "fee_account_uuid": str(fee_account.uuid),
+            "enrollment_uuid": str(enrollment.uuid),
+            "course_uuid": str(enrollment.course.uuid),
+            "amount": str(installment.amount),
+            "balance_amount": str(fee_account.balance_amount),
+            "payment_method": installment.payment_method,
+            "payment_date": installment.payment_date.isoformat(),
+        },
+    )
+
+
+def create_installment_payment_voided_notification(
+    installment,
+    fee_account,
+):
+    enrollment = fee_account.enrollment
+    student = enrollment.student
+    user = student.user
+
+    if not student.is_active or not user.is_active:
+        return None
+
+    return create_notification(
+        firm=fee_account.firm,
+        recipient=user,
+        notification_type=Notification.NotificationType.PAYMENT,
+        title="Payment entry voided",
+        body=(
+            f"A payment entry of ₹{installment.amount} for "
+            f"{enrollment.course.name} was voided. "
+            f"Please contact the academy if you need assistance."
+        ),
+        data={
+            "installment_uuid": str(installment.uuid),
+            "fee_account_uuid": str(fee_account.uuid),
+            "enrollment_uuid": str(enrollment.uuid),
+            "course_uuid": str(enrollment.course.uuid),
+            "amount": str(installment.amount),
+            "balance_amount": str(fee_account.balance_amount),
+            "void_reason": installment.void_reason,
+        },
+    )
+    
+    
+    
+    

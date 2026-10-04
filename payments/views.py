@@ -31,7 +31,7 @@ from .services import (
     review_course_payment,
     void_installment_payment,
 )
-
+from django.db import transaction
 
 class StudentCoursePaymentListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsStudent]
@@ -319,6 +319,18 @@ class InstallmentPaymentListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from notifications.services import (
+            create_installment_payment_recorded_notification,
+        )
+
+        transaction.on_commit(
+            lambda: create_installment_payment_recorded_notification(
+                installment,
+                fee_account,
+            )
+        )
+        
+        
         return success_response(
             message="Installment payment recorded successfully",
             data={
@@ -367,6 +379,18 @@ class InstallmentPaymentVoidView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from notifications.services import (
+            create_installment_payment_voided_notification,
+        )
+
+        transaction.on_commit(
+            lambda: create_installment_payment_voided_notification(
+                installment,
+                fee_account,
+            )
+        )
+        
+        
         return success_response(
             message="Installment payment voided successfully",
             data={
