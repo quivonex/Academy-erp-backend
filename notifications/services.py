@@ -564,3 +564,80 @@ def create_live_class_started_notifications(live_class):
 
     return len(notifications)
 
+
+def create_live_class_updated_notifications(
+    live_class,
+    *,
+    schedule_changed,
+):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    recipient_user_ids = (
+        Enrollment.objects.filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .values_list("student__user_id", flat=True)
+        .distinct()
+    )
+
+    if not recipient_user_ids:
+        return 0
+
+    if schedule_changed:
+        start_at = timezone.localtime(
+            live_class.scheduled_start_at
+        )
+
+        title = "Live class rescheduled"
+        body = (
+            f"'{live_class.title}' is now scheduled for "
+            f"{start_at.strftime('%d %b %Y, %I:%M %p')}."
+        )
+    else:
+        title = "Live class details updated"
+        body = (
+            f"The meeting details for '{live_class.title}' "
+            "have been updated. Please check your course."
+        )
+
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                firm=live_class.firm,
+                recipient_id=user_id,
+                notification_type=Notification.NotificationType.LIVE_CLASS,
+                title=title,
+                body=body,
+                data={
+                    "live_class_uuid": str(live_class.uuid),
+                    "course_uuid": str(live_class.course.uuid),
+                    "scheduled_start_at": (
+                        live_class.scheduled_start_at.isoformat()
+                    ),
+                    "scheduled_end_at": (
+                        live_class.scheduled_end_at.isoformat()
+                    ),
+                },
+            )
+            for user_id in recipient_user_ids
+        ],
+        batch_size=500,
+    )
+
+    return len(recipient_user_ids)
+
+

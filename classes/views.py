@@ -335,6 +335,16 @@ class LiveClassDetailView(APIView):
                 firm=request.user.firm,
             )
 
+            notification_fields = {
+                "scheduled_start_at",
+                "scheduled_end_at",
+                "meeting_url",
+                "meeting_id",
+                "meeting_password",
+            }
+
+            changed_notification_fields = set()
+            
             if live_class.status == LiveClass.Status.SCHEDULED:
                 allowed_fields = scheduled_editable_fields
 
@@ -403,8 +413,15 @@ class LiveClassDetailView(APIView):
                 changed_fields.append("teacher")
 
             for field, value in validated_data.items():
+                if (
+                    field in notification_fields
+                    and getattr(live_class, field) != value
+                ):
+                    changed_notification_fields.add(field)
+
                 setattr(live_class, field, value)
                 changed_fields.append(field)
+                
 
             live_class.save(
                 update_fields=changed_fields + [
@@ -412,6 +429,27 @@ class LiveClassDetailView(APIView):
                 ]
             )
 
+            if changed_notification_fields:
+                from notifications.services import (
+                    create_live_class_updated_notifications,
+                )
+
+                schedule_changed = bool(
+                    changed_notification_fields
+                    & {
+                        "scheduled_start_at",
+                        "scheduled_end_at",
+                    }
+                )
+
+                transaction.on_commit(
+                    lambda: create_live_class_updated_notifications(
+                        live_class,
+                        schedule_changed=schedule_changed,
+                    )
+                )
+                
+                
         return success_response(
             message="Live class updated successfully",
             data=LiveClassSerializer(live_class).data,
