@@ -338,3 +338,106 @@ def create_live_class_cancelled_notifications(live_class):
     return len(notifications)
 
 
+def create_material_available_notifications(material):
+    from courses.models import (
+        Enrollment,
+        StudentChapterVideoAccess,
+    )
+
+    now = timezone.now()
+
+    if (
+        not material.is_active
+        or (
+            material.available_from
+            and material.available_from > now
+        )
+        or (
+            material.available_until
+            and material.available_until < now
+        )
+    ):
+        return 0
+
+    recipient_user_ids = set(
+        Enrollment.objects
+        .filter(
+            firm=material.firm,
+            course=material.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .values_list("student__user_id", flat=True)
+    )
+
+    if (
+        material.material_type == "VIDEO"
+        and material.chapter_id
+    ):
+        recipient_user_ids.update(
+            StudentChapterVideoAccess.objects
+            .filter(
+                firm=material.firm,
+                course=material.course,
+                chapter=material.chapter,
+                is_active=True,
+                student__is_active=True,
+                student__user__is_active=True,
+            )
+            .filter(
+                Q(access_start_at__isnull=True)
+                | Q(access_start_at__lte=now)
+            )
+            .filter(
+                Q(access_end_at__isnull=True)
+                | Q(access_end_at__gte=now)
+            )
+            .values_list("student__user_id", flat=True)
+        )
+
+    if not recipient_user_ids:
+        return 0
+
+    title = (
+        "New class recording available"
+        if material.source == "LIVE_CLASS_RECORDING"
+        else "New study material available"
+    )
+
+    notifications = [
+        Notification(
+            firm=material.firm,
+            recipient_id=user_id,
+            notification_type=Notification.NotificationType.MATERIAL,
+            title=title,
+            body=(
+                f"'{material.title}' is now available in "
+                f"{material.course.name}."
+            ),
+            data={
+                "material_uuid": str(material.uuid),
+                "course_uuid": str(material.course.uuid),
+                "material_type": material.material_type,
+            },
+        )
+        for user_id in recipient_user_ids
+    ]
+
+    Notification.objects.bulk_create(
+        notifications,
+        batch_size=500,
+    )
+
+    return len(notifications)
+
+
+
