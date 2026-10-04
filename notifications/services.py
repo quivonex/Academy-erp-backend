@@ -211,3 +211,130 @@ def create_assignment_published_notifications(assignment):
 
 
 
+def create_live_class_scheduled_notifications(live_class):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .select_related("student__user")
+    )
+
+    scheduled_start_at = timezone.localtime(
+        live_class.scheduled_start_at
+    )
+
+    body = (
+        f"'{live_class.title}' is scheduled on "
+        f"{scheduled_start_at.strftime('%d %b %Y, %I:%M %p')}."
+    )
+
+    notifications = [
+        Notification(
+            firm=live_class.firm,
+            recipient=enrollment.student.user,
+            notification_type=Notification.NotificationType.LIVE_CLASS,
+            title="Live class scheduled",
+            body=body,
+            data={
+                "live_class_uuid": str(live_class.uuid),
+                "course_uuid": str(live_class.course.uuid),
+                "scheduled_start_at": (
+                    live_class.scheduled_start_at.isoformat()
+                ),
+                "scheduled_end_at": (
+                    live_class.scheduled_end_at.isoformat()
+                ),
+            },
+        )
+        for enrollment in enrollments
+    ]
+
+    if notifications:
+        Notification.objects.bulk_create(
+            notifications,
+            batch_size=500,
+        )
+
+    return len(notifications)
+
+
+
+def create_live_class_cancelled_notifications(live_class):
+    from courses.models import Enrollment
+
+    now = timezone.now()
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            firm=live_class.firm,
+            course=live_class.course,
+            status=Enrollment.Status.ACTIVE,
+            student__is_active=True,
+            student__user__is_active=True,
+        )
+        .filter(
+            Q(access_start_at__isnull=True)
+            | Q(access_start_at__lte=now)
+        )
+        .filter(
+            Q(access_end_at__isnull=True)
+            | Q(access_end_at__gte=now)
+        )
+        .select_related("student__user")
+    )
+
+    scheduled_start_at = timezone.localtime(
+        live_class.scheduled_start_at
+    )
+
+    body = (
+        f"'{live_class.title}', scheduled for "
+        f"{scheduled_start_at.strftime('%d %b %Y, %I:%M %p')}, "
+        f"has been cancelled."
+    )
+
+    notifications = [
+        Notification(
+            firm=live_class.firm,
+            recipient=enrollment.student.user,
+            notification_type=Notification.NotificationType.LIVE_CLASS,
+            title="Live class cancelled",
+            body=body,
+            data={
+                "live_class_uuid": str(live_class.uuid),
+                "course_uuid": str(live_class.course.uuid),
+                "scheduled_start_at": (
+                    live_class.scheduled_start_at.isoformat()
+                ),
+            },
+        )
+        for enrollment in enrollments
+    ]
+
+    if notifications:
+        Notification.objects.bulk_create(
+            notifications,
+            batch_size=500,
+        )
+
+    return len(notifications)
+
+
