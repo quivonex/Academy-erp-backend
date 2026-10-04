@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "833065126862",
+    "project_id": "edusphere-admin-flutter",
+    "storage_bucket": "edusphere-admin-flutter.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:833065126862:android:e26cca801a61a748bef99f",
+        "android_client_info": {
+          "package_name": "com.example.edusphere_admin_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjwsCxoaOjzObarl1Mo2-4ZchAk_lFQj4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
