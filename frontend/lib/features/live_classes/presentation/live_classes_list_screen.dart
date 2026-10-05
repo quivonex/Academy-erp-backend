@@ -166,8 +166,9 @@ class _LiveClassesListScreenState extends ConsumerState<LiveClassesListScreen> {
                       subtitle: liveClass.description,
                       meta: [
                         MetaChip(icon: Icons.auto_stories_outlined, label: liveClass.courseName),
-                        MetaChip(icon: Icons.person_outline_rounded, label: liveClass.teacherName),
-                        MetaChip(icon: Icons.schedule_rounded, label: _formatDateTime(liveClass.scheduledStartAt)),
+                        if ((liveClass.teacherName ?? '').isNotEmpty)
+                          MetaChip(icon: Icons.person_outline_rounded, label: liveClass.teacherName!),
+                        MetaChip(icon: Icons.schedule_rounded, label: _formatDateTime(liveClass.scheduledAt)),
                         if ((liveClass.subjectName ?? '').isNotEmpty)
                           MetaChip(icon: Icons.menu_book_outlined, label: liveClass.subjectName!),
                       ],

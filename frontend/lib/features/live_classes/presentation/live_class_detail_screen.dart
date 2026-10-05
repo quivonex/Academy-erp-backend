@@ -278,23 +278,11 @@ class _LiveClassDetailScreenState
                     ),
                     _InfoRow(
                       label: 'Teacher',
-                      value: liveClass.teacherName,
+                      value: _text(liveClass.teacherName),
                     ),
                     _InfoRow(
-                      label: 'Scheduled start',
-                      value: _date(liveClass.scheduledStartAt),
-                    ),
-                    _InfoRow(
-                      label: 'Scheduled end',
-                      value: _date(liveClass.scheduledEndAt),
-                    ),
-                    _InfoRow(
-                      label: 'Actual start',
-                      value: _date(liveClass.actualStartAt),
-                    ),
-                    _InfoRow(
-                      label: 'Actual end',
-                      value: _date(liveClass.actualEndAt),
+                      label: 'Scheduled time',
+                      value: _date(liveClass.scheduledAt),
                     ),
                     _InfoRow(
                       label: 'Meeting URL',
@@ -415,8 +403,7 @@ class _EditLiveClassDialogState
       text: widget.liveClass.meetingPassword ?? '',
     );
 
-    startAt = widget.liveClass.scheduledStartAt?.toLocal();
-    endAt = widget.liveClass.scheduledEndAt?.toLocal();
+    startAt = widget.liveClass.scheduledAt.toLocal();
   }
 
   @override

@@ -820,12 +820,11 @@ class _AcademyDashboardState
                   icon: Icons.sensors,
                   titleBadge: SoftBadge(label: c.status),
                   meta: [
-                    if (c.scheduledStartAt != null)
-                      Text(
-                        formatDate(
-                          c.scheduledStartAt!.toLocal(),
-                        ),
+                    Text(
+                      formatDate(
+                        c.scheduledAt.toLocal(),
                       ),
+                    ),
                   ],
                   onTap: locked
                       ? null

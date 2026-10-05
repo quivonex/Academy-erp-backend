@@ -61,14 +61,6 @@ const List<NavItem> kAllNavItems = [
     ],
   ),
   NavItem(
-    label: 'Course Categories',
-    icon: Icons.category_outlined,
-    route: '/course-categories',
-    roles: [
-      UserRole.academyAdmin,
-    ],
-  ),
-  NavItem(
     label: 'Enrollments',
     icon: Icons.how_to_reg_outlined,
     route: '/enrollments',
@@ -104,14 +96,6 @@ const List<NavItem> kAllNavItems = [
     label: 'Assignments',
     icon: Icons.assignment_outlined,
     route: '/assignments',
-    roles: [
-      UserRole.academyAdmin,
-    ],
-  ),
-  NavItem(
-    label: 'Subjects',
-    icon: Icons.menu_book_outlined,
-    route: '/subjects',
     roles: [
       UserRole.academyAdmin,
     ],

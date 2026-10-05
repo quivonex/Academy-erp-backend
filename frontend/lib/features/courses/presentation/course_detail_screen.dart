@@ -6,6 +6,12 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
+import '../../subjects/data/chapter.dart';
+import '../../subjects/data/chapter_repository.dart';
+import '../../subjects/data/lesson.dart';
+import '../../subjects/data/lesson_repository.dart';
+import '../../subjects/data/subject.dart';
+import '../../subjects/data/subject_repository.dart';
 import '../data/course.dart';
 import '../data/course_repository.dart';
 
@@ -244,6 +250,8 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 24),
+            _CourseCurriculumSection(course: course),
             if (busy) ...[
               const SizedBox(height: 14),
               const LinearProgressIndicator(),
@@ -294,6 +302,776 @@ class _InfoRow extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _CourseCurriculumSection extends ConsumerStatefulWidget {
+  const _CourseCurriculumSection({required this.course});
+  final Course course;
+
+  @override
+  ConsumerState<_CourseCurriculumSection> createState() =>
+      _CourseCurriculumSectionState();
+}
+
+class _CourseCurriculumSectionState
+    extends ConsumerState<_CourseCurriculumSection> {
+  late Future<SubjectPage> subjectsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubjects();
+  }
+
+  void _loadSubjects() {
+    subjectsFuture = ref
+        .read(subjectRepositoryProvider)
+        .list(courseUuid: widget.course.uuid);
+  }
+
+  Future<void> _addSubject() async {
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddSubjectDialog(courseUuid: widget.course.uuid),
+    );
+    if (added == true && mounted) {
+      setState(_loadSubjects);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AdminPageHeader(
+          eyebrow: const AdminEyebrow(
+            section: 'Curriculum',
+            detail: 'Subjects, Chapters & Lessons',
+          ),
+          title: 'Subjects & Curriculum',
+          actions: [
+            GradientButton(
+              label: 'Add Subject',
+              icon: Icons.add_rounded,
+              onPressed: _addSubject,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        FutureBuilder<SubjectPage>(
+          future: subjectsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const LinearProgressIndicator();
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return AdminStateMessage(
+                icon: Icons.error_outline_rounded,
+                title: 'Could not load subjects',
+                message: 'Please try again.',
+                actionLabel: 'Retry',
+                onAction: () => setState(_loadSubjects),
+                isError: true,
+              );
+            }
+
+            final subjects = snapshot.data!.results;
+            if (subjects.isEmpty) {
+              return AdminStateMessage(
+                icon: Icons.menu_book_outlined,
+                title: 'No subjects in this course yet',
+                message: 'Click "Add Subject" to create subjects for this course.',
+                actionLabel: 'Add Subject',
+                onAction: _addSubject,
+              );
+            }
+
+            return Column(
+              children: [
+                for (final subject in subjects)
+                  _SubjectCard(
+                    subject: subject,
+                    onReload: () => setState(_loadSubjects),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _SubjectCard extends ConsumerStatefulWidget {
+  const _SubjectCard({required this.subject, required this.onReload});
+  final Subject subject;
+  final VoidCallback onReload;
+
+  @override
+  ConsumerState<_SubjectCard> createState() => _SubjectCardState();
+}
+
+class _SubjectCardState extends ConsumerState<_SubjectCard> {
+  late Future<ChapterPage> chaptersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChapters();
+  }
+
+  void _loadChapters() {
+    chaptersFuture = ref
+        .read(chapterRepositoryProvider)
+        .list(subjectUuid: widget.subject.uuid);
+  }
+
+  Future<void> _addChapter() async {
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddChapterDialog(subjectUuid: widget.subject.uuid),
+    );
+    if (added == true && mounted) {
+      setState(_loadChapters);
+    }
+  }
+
+  Future<void> _editSubject() async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddSubjectDialog(
+        courseUuid: '',
+        subject: widget.subject,
+      ),
+    );
+    if (updated == true && mounted) {
+      widget.onReload();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: AdminCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.book_rounded, color: Theme.of(context).primaryColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.subject.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (widget.subject.code.isNotEmpty)
+                        Text(
+                          'Code: ${widget.subject.code}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      if ((widget.subject.teacherName ?? '').isNotEmpty)
+                        Text(
+                          'Teacher: ${widget.subject.teacherName}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _editSubject,
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit'),
+                ),
+                const SizedBox(width: 6),
+                FilledButton.icon(
+                  onPressed: _addChapter,
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: const Text('Add Chapter'),
+                ),
+              ],
+            ),
+            if (widget.subject.description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                widget.subject.description,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            FutureBuilder<ChapterPage>(
+              future: chaptersFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const LinearProgressIndicator();
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return const Text('Could not load chapters.');
+                }
+                final chapters = snapshot.data!.results;
+                if (chapters.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'No chapters yet in this subject.',
+                      style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final chapter in chapters)
+                      _ChapterTile(
+                        chapter: chapter,
+                        onReload: () => setState(_loadChapters),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChapterTile extends ConsumerStatefulWidget {
+  const _ChapterTile({required this.chapter, required this.onReload});
+  final Chapter chapter;
+  final VoidCallback onReload;
+
+  @override
+  ConsumerState<_ChapterTile> createState() => _ChapterTileState();
+}
+
+class _ChapterTileState extends ConsumerState<_ChapterTile> {
+  late Future<LessonPage> lessonsFuture;
+  bool expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLessons();
+  }
+
+  void _loadLessons() {
+    lessonsFuture = ref
+        .read(lessonRepositoryProvider)
+        .list(chapterUuid: widget.chapter.uuid);
+  }
+
+  Future<void> _addLesson() async {
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddLessonDialog(chapterUuid: widget.chapter.uuid),
+    );
+    if (added == true && mounted) {
+      setState(() {
+        expanded = true;
+        _loadLessons();
+      });
+    }
+  }
+
+  Future<void> _editChapter() async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddChapterDialog(
+        subjectUuid: '',
+        chapter: widget.chapter,
+      ),
+    );
+    if (updated == true && mounted) {
+      widget.onReload();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: expanded,
+        leading: CircleAvatar(
+          radius: 14,
+          backgroundColor: const Color(0xFFE2E8F0),
+          child: Text(
+            '${widget.chapter.sequence}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Text(
+          widget.chapter.title,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: widget.chapter.description.isNotEmpty
+            ? Text(
+                widget.chapter.description,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              onPressed: _editChapter,
+              tooltip: 'Edit Chapter',
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_rounded, size: 18),
+              onPressed: _addLesson,
+              tooltip: 'Add Lesson',
+            ),
+          ],
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: FutureBuilder<LessonPage>(
+              future: lessonsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const LinearProgressIndicator();
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return const Text('Could not load lessons.');
+                }
+                final lessons = snapshot.data!.results;
+                if (lessons.isEmpty) {
+                  return const Text(
+                    'No lessons yet in this chapter.',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final lesson in lessons)
+                      _LessonRow(
+                        lesson: lesson,
+                        onReload: () => setState(_loadLessons),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LessonRow extends ConsumerWidget {
+  const _LessonRow({required this.lesson, required this.onReload});
+  final Lesson lesson;
+  final VoidCallback onReload;
+
+  Future<void> _editLesson(BuildContext context, WidgetRef ref) async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddLessonDialog(
+        chapterUuid: '',
+        lesson: lesson,
+      ),
+    );
+    if (updated == true) {
+      onReload();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.play_circle_outline_rounded, size: 18),
+          const SizedBox(width: 8),
+          Text('${lesson.sequence}.',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(lesson.title),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            onPressed: () => _editLesson(context, ref),
+            tooltip: 'Edit Lesson',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── Dialogs for Curriculum ───────────────────────────
+
+class _AddSubjectDialog extends ConsumerStatefulWidget {
+  const _AddSubjectDialog({required this.courseUuid, this.subject});
+  final String courseUuid;
+  final Subject? subject;
+
+  @override
+  ConsumerState<_AddSubjectDialog> createState() => _AddSubjectDialogState();
+}
+
+class _AddSubjectDialogState extends ConsumerState<_AddSubjectDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final name = TextEditingController(text: widget.subject?.name ?? '');
+  late final code = TextEditingController(text: widget.subject?.code ?? '');
+  late final desc =
+      TextEditingController(text: widget.subject?.description ?? '');
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    name.dispose();
+    code.dispose();
+    desc.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving || !(formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final repo = ref.read(subjectRepositoryProvider);
+      if (widget.subject == null) {
+        await repo.create(
+          courseUuid: widget.courseUuid,
+          name: name.text,
+          code: code.text,
+          description: desc.text,
+        );
+      } else {
+        await repo.update(
+          uuid: widget.subject!.uuid,
+          name: name.text,
+          code: code.text,
+          description: desc.text,
+        );
+      }
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not save subject.');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.subject != null;
+    return AlertDialog(
+      title: Text(isEdit ? 'Edit Subject' : 'Add Subject'),
+      content: Form(
+        key: formKey,
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Subject Name *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: code,
+                decoration: const InputDecoration(labelText: 'Subject Code'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: desc,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                AdminErrorBanner(message: error!),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: saving ? null : _save,
+          child: saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(isEdit ? 'Save Changes' : 'Add Subject'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddChapterDialog extends ConsumerStatefulWidget {
+  const _AddChapterDialog({required this.subjectUuid, this.chapter});
+  final String subjectUuid;
+  final Chapter? chapter;
+
+  @override
+  ConsumerState<_AddChapterDialog> createState() => _AddChapterDialogState();
+}
+
+class _AddChapterDialogState extends ConsumerState<_AddChapterDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final title = TextEditingController(text: widget.chapter?.title ?? '');
+  late final desc =
+      TextEditingController(text: widget.chapter?.description ?? '');
+  late final sequence = TextEditingController(
+      text: widget.chapter?.sequence.toString() ?? '1');
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    title.dispose();
+    desc.dispose();
+    sequence.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving || !(formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final repo = ref.read(chapterRepositoryProvider);
+      final seq = int.tryParse(sequence.text.trim()) ?? 1;
+      if (widget.chapter == null) {
+        await repo.create(
+          subjectUuid: widget.subjectUuid,
+          title: title.text,
+          description: desc.text,
+          sequence: seq,
+        );
+      } else {
+        await repo.update(
+          uuid: widget.chapter!.uuid,
+          title: title.text,
+          description: desc.text,
+          sequence: seq,
+        );
+      }
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not save chapter.');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.chapter != null;
+    return AlertDialog(
+      title: Text(isEdit ? 'Edit Chapter' : 'Add Chapter'),
+      content: Form(
+        key: formKey,
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Chapter Title *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: sequence,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Sequence Number'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: desc,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                AdminErrorBanner(message: error!),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: saving ? null : _save,
+          child: saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(isEdit ? 'Save Changes' : 'Add Chapter'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddLessonDialog extends ConsumerStatefulWidget {
+  const _AddLessonDialog({required this.chapterUuid, this.lesson});
+  final String chapterUuid;
+  final Lesson? lesson;
+
+  @override
+  ConsumerState<_AddLessonDialog> createState() => _AddLessonDialogState();
+}
+
+class _AddLessonDialogState extends ConsumerState<_AddLessonDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final title = TextEditingController(text: widget.lesson?.title ?? '');
+  late final desc =
+      TextEditingController(text: widget.lesson?.description ?? '');
+  late final sequence = TextEditingController(
+      text: widget.lesson?.sequence.toString() ?? '1');
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    title.dispose();
+    desc.dispose();
+    sequence.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving || !(formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final repo = ref.read(lessonRepositoryProvider);
+      final seq = int.tryParse(sequence.text.trim()) ?? 1;
+      if (widget.lesson == null) {
+        await repo.create(
+          chapterUuid: widget.chapterUuid,
+          title: title.text,
+          description: desc.text,
+          sequence: seq,
+        );
+      } else {
+        await repo.update(
+          uuid: widget.lesson!.uuid,
+          title: title.text,
+          description: desc.text,
+          sequence: seq,
+        );
+      }
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not save lesson.');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.lesson != null;
+    return AlertDialog(
+      title: Text(isEdit ? 'Edit Lesson' : 'Add Lesson'),
+      content: Form(
+        key: formKey,
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Lesson Title *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: sequence,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Sequence Number'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: desc,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                AdminErrorBanner(message: error!),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: saving ? null : _save,
+          child: saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(isEdit ? 'Save Changes' : 'Add Lesson'),
+        ),
+      ],
     );
   }
 }
@@ -364,9 +1142,12 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
       setState(() {
         final unique = {for (final item in all) item.uuid: item};
         categories = unique.values.where((item) => item.isActive).toList();
-        if (!categories.any((c) => c.uuid == selectedCategory?.uuid)) {
-          selectedCategory = null;
-          categoryChanged = false;
+        if (selectedCategory == null && widget.course.categoryName != null) {
+          try {
+            selectedCategory = categories.firstWhere(
+              (c) => c.name == widget.course.categoryName,
+            );
+          } catch (_) {}
         }
       });
     } on ApiException catch (e) {
@@ -377,6 +1158,23 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
       }
     } finally {
       if (mounted) setState(() => loadingCategories = false);
+    }
+  }
+
+  Future<void> _addNewCategory() async {
+    final newCat = await showDialog<AdminCourseCategory>(
+      context: context,
+      builder: (_) => const _CreateCategoryQuickDialog(),
+    );
+    if (newCat != null && mounted) {
+      await loadCategories();
+      setState(() {
+        selectedCategory = categories.firstWhere(
+          (c) => c.uuid == newCat.uuid,
+          orElse: () => newCat,
+        );
+        categoryChanged = true;
+      });
     }
   }
 
@@ -429,7 +1227,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
         price: price.text.trim(),
         deliveryMode: mode,
         categoryUuid: selectedCategory?.uuid,
-        updateCategory: categoryChanged,
+        updateCategory: true,
         durationMonths: durationMonths.text.trim().isEmpty
             ? null
             : int.parse(durationMonths.text.trim()),
@@ -458,43 +1256,48 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
   }
 
   Widget categoryField() {
-    final categoryLabel = categoryChanged
-        ? selectedCategory?.name ?? 'No category'
-        : widget.course.categoryName ?? 'No category';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FieldLabel(label: 'Category', child: Text(categoryLabel)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            TextButton(
-              onPressed: saving || loadingCategories
-                  ? null : () => setState(() => choosingCategory = true),
-              child: const Text('Choose category'),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('cat_edit_${categories.length}_${selectedCategory?.uuid}'),
+                value: categories.any((c) => c.uuid == selectedCategory?.uuid)
+                    ? selectedCategory?.uuid
+                    : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Course Category',
+                ),
+                items: categories
+                    .map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category.uuid,
+                        child: Text(category.name, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: saving || loadingCategories
+                    ? null
+                    : (value) {
+                        setState(() {
+                          selectedCategory = value == null
+                              ? null
+                              : categories.firstWhere((c) => c.uuid == value);
+                          categoryChanged = true;
+                        });
+                      },
+              ),
             ),
-            if (categoryChanged
-                ? selectedCategory != null
-                : widget.course.categoryName != null)
-              TextButton(
-                onPressed: saving ? null : () => setState(() {
-                  categoryChanged = true;
-                  selectedCategory = null;
-                  choosingCategory = false;
-                }),
-                child: const Text('Remove category'),
-              ),
-            if (categoryChanged || choosingCategory)
-              TextButton(
-                onPressed: saving ? null : () => setState(() {
-                  categoryChanged = false;
-                  selectedCategory = null;
-                  choosingCategory = false;
-                }),
-                child: const Text('Keep original category'),
-              ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: saving || loadingCategories ? null : _addNewCategory,
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text('New'),
+            ),
           ],
         ),
         if (loadingCategories) const LinearProgressIndicator(),
@@ -510,25 +1313,18 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
             ),
           ),
         ],
-        if (choosingCategory && !loadingCategories && categoryError == null)
-          DropdownButtonFormField<String>(
-            key: ValueKey(selectedCategory?.uuid),
-            value: selectedCategory?.uuid,
-            isExpanded: true,
-            decoration: adminFieldDecoration(context,
-                hint: categories.isEmpty ? 'No active categories' : 'Select category'),
-            items: categories.map((category) => DropdownMenuItem<String>(
-              value: category.uuid,
-              child: Text(category.name, overflow: TextOverflow.ellipsis),
-            )).toList(),
-            onChanged: saving ? null : (value) {
-              if (value == null) return;
-              setState(() {
-                selectedCategory = categories.firstWhere((c) => c.uuid == value);
-                categoryChanged = true;
-                choosingCategory = false;
-              });
-            },
+        if (selectedCategory != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: saving || loadingCategories
+                  ? null
+                  : () => setState(() {
+                        selectedCategory = null;
+                        categoryChanged = true;
+                      }),
+              child: const Text('Clear category'),
+            ),
           ),
       ],
     );
@@ -697,6 +1493,97 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
       ],
     ),
   );
+}
+
+class _CreateCategoryQuickDialog extends ConsumerStatefulWidget {
+  const _CreateCategoryQuickDialog();
+
+  @override
+  ConsumerState<_CreateCategoryQuickDialog> createState() =>
+      __CreateCategoryQuickDialogState();
+}
+
+class __CreateCategoryQuickDialogState
+    extends ConsumerState<_CreateCategoryQuickDialog> {
+  final formKey = GlobalKey<FormState>();
+  final nameController = TextEditingController();
+  final descController = TextEditingController();
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving || !(formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final created = await ref.read(courseCategoryRepositoryProvider).create(
+            name: nameController.text,
+            description: descController.text,
+          );
+      if (mounted) Navigator.of(context).pop(created);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not create category.');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Course Category'),
+      content: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Category Name *'),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 2,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: saving ? null : _save,
+          child: saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save Category'),
+        ),
+      ],
+    );
+  }
 }
 
 String? requiredField(String? value) =>

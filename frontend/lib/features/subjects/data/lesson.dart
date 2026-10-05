@@ -44,14 +44,32 @@ class LessonPage {
   factory LessonPage.fromJson(
     Map<String, dynamic> json,
   ) {
-    final list = json['results'] as List<dynamic>? ?? [];
+    Map<String, dynamic> data = json;
+    if (json['data'] is Map<String, dynamic>) {
+      data = json['data'] as Map<String, dynamic>;
+    } else if (json['data'] is Map) {
+      data = Map<String, dynamic>.from(json['data'] as Map);
+    }
+
+    List<dynamic> list = [];
+    if (data['results'] is List) {
+      list = data['results'] as List<dynamic>;
+    } else if (json['results'] is List) {
+      list = json['results'] as List<dynamic>;
+    } else if (json['data'] is List) {
+      list = json['data'] as List<dynamic>;
+    }
+
+    final count = (data['count'] as num?)?.toInt() ??
+        (json['count'] as num?)?.toInt() ??
+        list.length;
 
     return LessonPage(
-      count: json['count'] as int? ?? list.length,
+      count: count,
       results: list
           .map(
             (item) => Lesson.fromJson(
-              Map<String, dynamic>.from(item),
+              Map<String, dynamic>.from(item as Map),
             ),
           )
           .toList(),

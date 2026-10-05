@@ -8,6 +8,10 @@ import '../../../core/widgets/admin_ui.dart';
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
 
+import '../../subjects/data/chapter_repository.dart';
+import '../../subjects/data/lesson_repository.dart';
+import '../../subjects/data/subject_repository.dart';
+
 import '../data/course.dart';
 import '../data/course_repository.dart';
 
@@ -95,11 +99,6 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
           ),
         ],
         actions: [
-          AdminOutlineButton(
-            label: 'Categories',
-            icon: Icons.category_outlined,
-            onPressed: () => context.go('/course-categories'),
-          ),
           GradientButton(
             label: 'Add course',
             icon: Icons.add_rounded,
@@ -264,6 +263,29 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
   }
 }
 
+class _DraftLesson {
+  _DraftLesson({required this.title, this.description = '', this.sequence = 1});
+  String title;
+  String description;
+  int sequence;
+}
+
+class _DraftChapter {
+  _DraftChapter({required this.title, this.description = '', this.sequence = 1});
+  String title;
+  String description;
+  int sequence;
+  final List<_DraftLesson> lessons = [];
+}
+
+class _DraftSubject {
+  _DraftSubject({required this.name, this.code = '', this.description = ''});
+  String name;
+  String code;
+  String description;
+  final List<_DraftChapter> chapters = [];
+}
+
 class _CreateCourseDialog extends ConsumerStatefulWidget {
   const _CreateCourseDialog();
 
@@ -286,6 +308,8 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
 
   List<AdminCourseCategory> categories = [];
   AdminCourseCategory? selectedCategory;
+
+  final List<_DraftSubject> draftSubjects = [];
 
   bool isActive = true;
   bool isPublished = false;
@@ -341,6 +365,216 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
     }
   }
 
+  Future<void> _addNewCategory() async {
+    final newCat = await showDialog<AdminCourseCategory>(
+      context: context,
+      builder: (_) => const _CreateCategoryQuickDialog(),
+    );
+    if (newCat != null && mounted) {
+      await loadCategories();
+      setState(() {
+        selectedCategory = categories.firstWhere(
+          (c) => c.uuid == newCat.uuid,
+          orElse: () => newCat,
+        );
+      });
+    }
+  }
+
+  Future<void> _promptAddSubject() async {
+    final nameCtrl = TextEditingController();
+    final codeCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Subject'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Subject Name *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: codeCtrl,
+                decoration: const InputDecoration(labelText: 'Subject Code'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: descCtrl,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (added == true && mounted) {
+      setState(() {
+        draftSubjects.add(
+          _DraftSubject(
+            name: nameCtrl.text.trim(),
+            code: codeCtrl.text.trim(),
+            description: descCtrl.text.trim(),
+          ),
+        );
+      });
+    }
+  }
+
+  Future<void> _promptAddChapter(_DraftSubject subject) async {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final seqCtrl = TextEditingController(text: '${subject.chapters.length + 1}');
+    final formKey = GlobalKey<FormState>();
+
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Add Chapter to ${subject.name}'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: 'Chapter Title *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: seqCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Sequence Number'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: descCtrl,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Add Chapter'),
+          ),
+        ],
+      ),
+    );
+
+    if (added == true && mounted) {
+      setState(() {
+        subject.chapters.add(
+          _DraftChapter(
+            title: titleCtrl.text.trim(),
+            description: descCtrl.text.trim(),
+            sequence: int.tryParse(seqCtrl.text.trim()) ?? (subject.chapters.length + 1),
+          ),
+        );
+      });
+    }
+  }
+
+  Future<void> _promptAddLesson(_DraftChapter chapter) async {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final seqCtrl = TextEditingController(text: '${chapter.lessons.length + 1}');
+    final formKey = GlobalKey<FormState>();
+
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Add Lesson to ${chapter.title}'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: 'Lesson Title *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: seqCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Sequence Number'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: descCtrl,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Add Lesson'),
+          ),
+        ],
+      ),
+    );
+
+    if (added == true && mounted) {
+      setState(() {
+        chapter.lessons.add(
+          _DraftLesson(
+            title: titleCtrl.text.trim(),
+            description: descCtrl.text.trim(),
+            sequence: int.tryParse(seqCtrl.text.trim()) ?? (chapter.lessons.length + 1),
+          ),
+        );
+      });
+    }
+  }
+
   String? validateInteger(String? value, {bool optional = false}) {
     final text = (value ?? '').trim();
     if (optional && text.isEmpty) return null;
@@ -382,7 +616,7 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
     });
 
     try {
-      await ref.read(courseRepositoryProvider).create(
+      final course = await ref.read(courseRepositoryProvider).create(
         name: name.text,
         code: code.text,
         description: description.text,
@@ -402,6 +636,38 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
         featuredOrder: isFeatured ? int.parse(featuredOrder.text.trim()) : 0,
       );
 
+      // Create draft curriculum (Subjects, Chapters & Lessons)
+      final subjectRepo = ref.read(subjectRepositoryProvider);
+      final chapterRepo = ref.read(chapterRepositoryProvider);
+      final lessonRepo = ref.read(lessonRepositoryProvider);
+
+      for (final draftSubject in draftSubjects) {
+        final createdSubject = await subjectRepo.create(
+          courseUuid: course.uuid,
+          name: draftSubject.name,
+          code: draftSubject.code,
+          description: draftSubject.description,
+        );
+
+        for (final draftChapter in draftSubject.chapters) {
+          final createdChapter = await chapterRepo.create(
+            subjectUuid: createdSubject.uuid,
+            title: draftChapter.title,
+            description: draftChapter.description,
+            sequence: draftChapter.sequence,
+          );
+
+          for (final draftLesson in draftChapter.lessons) {
+            await lessonRepo.create(
+              chapterUuid: createdChapter.uuid,
+              title: draftLesson.title,
+              description: draftLesson.description,
+              sequence: draftLesson.sequence,
+            );
+          }
+        }
+      }
+
       if (!mounted) return;
       setState(() => saving = false);
       Navigator.of(context).pop(true);
@@ -414,6 +680,112 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
     } finally {
       if (mounted && saving) setState(() => saving = false);
     }
+  }
+
+  Widget _buildDraftSubjectCard(_DraftSubject subject, int sIdx) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.book_rounded, size: 20, color: Color(0xFF3B82F6)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Subject: ${subject.name}${subject.code.isNotEmpty ? ' (${subject.code})' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: saving ? null : () => _promptAddChapter(subject),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Chapter'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                onPressed: saving ? null : () => setState(() => draftSubjects.removeAt(sIdx)),
+                tooltip: 'Remove Subject',
+              ),
+            ],
+          ),
+          if (subject.chapters.isNotEmpty) const SizedBox(height: 8),
+          for (var cIdx = 0; cIdx < subject.chapters.length; cIdx++) ...[
+            _buildDraftChapterCard(subject, subject.chapters[cIdx], cIdx),
+            const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraftChapterCard(_DraftSubject subject, _DraftChapter chapter, int cIdx) {
+    return Container(
+      margin: const EdgeInsets.only(left: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 11,
+                backgroundColor: const Color(0xFFE2E8F0),
+                child: Text('${chapter.sequence}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Chapter: ${chapter.title}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: saving ? null : () => _promptAddLesson(chapter),
+                icon: const Icon(Icons.add_rounded, size: 14),
+                label: const Text('Lesson', style: TextStyle(fontSize: 12)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16, color: Colors.red),
+                onPressed: saving ? null : () => setState(() => subject.chapters.removeAt(cIdx)),
+                tooltip: 'Remove Chapter',
+              ),
+            ],
+          ),
+          for (var lIdx = 0; lIdx < chapter.lessons.length; lIdx++) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.play_circle_outline_rounded, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text('${chapter.lessons[lIdx].sequence}. ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Expanded(
+                    child: Text(chapter.lessons[lIdx].title, style: const TextStyle(fontSize: 12)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 14, color: Colors.red),
+                    onPressed: saving ? null : () => setState(() => chapter.lessons.removeAt(lIdx)),
+                    tooltip: 'Remove Lesson',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -448,32 +820,45 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
                 validator: requiredField,
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                key: ValueKey('category_dd_${categories.length}_${selectedCategory?.uuid}'),
-                isExpanded: true,
-                value: categories.any((c) => c.uuid == selectedCategory?.uuid)
-                    ? selectedCategory?.uuid
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Course Category',
-                ),
-                items: categories
-                    .map(
-                      (category) => DropdownMenuItem<String>(
-                    value: category.uuid,
-                    child: Text(category.name, overflow: TextOverflow.ellipsis),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('category_dd_${categories.length}_${selectedCategory?.uuid}'),
+                      isExpanded: true,
+                      value: categories.any((c) => c.uuid == selectedCategory?.uuid)
+                          ? selectedCategory?.uuid
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Course Category',
+                      ),
+                      items: categories
+                          .map(
+                            (category) => DropdownMenuItem<String>(
+                          value: category.uuid,
+                          child: Text(category.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                          .toList(),
+                      onChanged: saving || loadingCategories ? null : (value) {
+                        setState(() {
+                          selectedCategory = value == null
+                              ? null
+                              : categories.firstWhere(
+                                (item) => item.uuid == value,
+                          );
+                        });
+                      },
+                    ),
                   ),
-                )
-                    .toList(),
-                onChanged: saving || loadingCategories ? null : (value) {
-                  setState(() {
-                    selectedCategory = value == null
-                        ? null
-                        : categories.firstWhere(
-                          (item) => item.uuid == value,
-                    );
-                  });
-                },
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: saving || loadingCategories ? null : _addNewCategory,
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: const Text('New'),
+                  ),
+                ],
               ),
               if (loadingCategories) const LinearProgressIndicator(),
               if (categoryError != null) ...[
@@ -600,6 +985,38 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Curriculum (Subjects, Chapters & Lessons)',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  TextButton.icon(
+                    onPressed: saving ? null : _promptAddSubject,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Add Subject'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (draftSubjects.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No subjects added yet. Click "Add Subject" to add subjects, chapters, and lessons now.',
+                    style: TextStyle(fontStyle: FontStyle.italic, fontSize: 13),
+                  ),
+                ),
+              for (var sIdx = 0; sIdx < draftSubjects.length; sIdx++) ...[
+                _buildDraftSubjectCard(draftSubjects[sIdx], sIdx),
+                const SizedBox(height: 10),
+              ],
               if (error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -628,6 +1045,97 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
       ],
     ),
   );
+}
+
+class _CreateCategoryQuickDialog extends ConsumerStatefulWidget {
+  const _CreateCategoryQuickDialog();
+
+  @override
+  ConsumerState<_CreateCategoryQuickDialog> createState() =>
+      __CreateCategoryQuickDialogState();
+}
+
+class __CreateCategoryQuickDialogState
+    extends ConsumerState<_CreateCategoryQuickDialog> {
+  final formKey = GlobalKey<FormState>();
+  final nameController = TextEditingController();
+  final descController = TextEditingController();
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving || !(formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final created = await ref.read(courseCategoryRepositoryProvider).create(
+            name: nameController.text,
+            description: descController.text,
+          );
+      if (mounted) Navigator.of(context).pop(created);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not create category.');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Course Category'),
+      content: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Category Name *'),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 2,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              AdminErrorBanner(message: error!),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: saving ? null : _save,
+          child: saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save Category'),
+        ),
+      ],
+    );
+  }
 }
 
 String? requiredField(String? value) =>
