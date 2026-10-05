@@ -367,6 +367,12 @@ class _StudentAssignmentScreenState
     return FutureBuilder<Map<String, dynamic>>(
       future: _assignment,
       builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
         if (snapshot.hasError) {
           return StudentPageFrame(
             child: ListView(
@@ -1018,18 +1024,42 @@ class _StudentAssignmentResultScreenState
   late Future<Map<String, dynamic>> _result;
 
   Timer? _pollTimer;
+
   bool _requestInFlight = false;
   bool _graded = false;
+
+  int _resultRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    _resetResult();
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant StudentAssignmentResultScreen oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.assignmentUuid != widget.assignmentUuid) {
+      _resetResult();
+    }
+  }
+
+  void _resetResult() {
+    _pollTimer?.cancel();
+
+    _resultRevision++;
+    _requestInFlight = false;
+    _graded = false;
+
     _result = _fetchResult();
 
     _pollTimer = Timer.periodic(
       const Duration(seconds: 20),
       (_) {
-        if (mounted && !_graded) {
+        if (mounted && !_graded && !_requestInFlight) {
           _reload(silent: true);
         }
       },
@@ -1037,28 +1067,50 @@ class _StudentAssignmentResultScreenState
   }
 
   Future<Map<String, dynamic>> _fetchResult() async {
+    final revision = _resultRevision;
+    final assignmentUuid = widget.assignmentUuid;
+
+    bool current() =>
+        mounted &&
+        revision == _resultRevision &&
+        assignmentUuid == widget.assignmentUuid;
+
     _requestInFlight = true;
 
     try {
       final data = await ref
           .read(studentPortalRepositoryProvider)
-          .assignmentResult(widget.assignmentUuid);
+          .assignmentResult(assignmentUuid);
 
-      _graded =
-          data['status']?.toString().toUpperCase() == 'GRADED';
+      if (current()) {
+        _graded =
+            data['status']?.toString().toUpperCase() == 'GRADED';
 
-      if (_graded) {
-        _pollTimer?.cancel();
+        if (_graded) {
+          _pollTimer?.cancel();
+        }
       }
 
       return data;
     } finally {
-      _requestInFlight = false;
+      if (current()) {
+        _requestInFlight = false;
+      }
     }
   }
 
-  Future<void> _reload({required bool silent}) async {
+  Future<void> _reload({
+    required bool silent,
+  }) async {
     if (!mounted || _requestInFlight) return;
+
+    final revision = _resultRevision;
+    final assignmentUuid = widget.assignmentUuid;
+
+    bool current() =>
+        mounted &&
+        revision == _resultRevision &&
+        assignmentUuid == widget.assignmentUuid;
 
     final next = _fetchResult();
 
@@ -1069,11 +1121,13 @@ class _StudentAssignmentResultScreenState
     try {
       final data = await next;
 
-      if (silent && mounted) {
-        setState(() => _result = Future.value(data));
+      if (silent && current()) {
+        setState(() {
+          _result = Future.value(data);
+        });
       }
     } catch (_) {
-      // Manual refresh displays errors through FutureBuilder.
+      // Manual refresh errors appear in FutureBuilder.
       // Background refresh keeps the current result visible.
     }
   }
@@ -1082,6 +1136,7 @@ class _StudentAssignmentResultScreenState
 
   @override
   void dispose() {
+    _resultRevision++;
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -1094,6 +1149,7 @@ class _StudentAssignmentResultScreenState
     return RefreshIndicator(
       onRefresh: _refresh,
       child: FutureBuilder<Map<String, dynamic>>(
+        key: ValueKey(widget.assignmentUuid),
         future: _result,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {

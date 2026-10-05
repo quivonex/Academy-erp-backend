@@ -7,6 +7,7 @@ import '../../../core/widgets/admin_ui.dart';
 import '../data/assignment.dart';
 import '../data/assignment_question.dart';
 import '../data/assignment_repository.dart';
+import 'assignment_edit_screen.dart';
 
 class AssignmentDetailScreen extends ConsumerStatefulWidget {
   const AssignmentDetailScreen({
@@ -93,6 +94,124 @@ class _AssignmentDetailScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  Future<void> editAssignment(_Detail data) async {
+    if (busy) return;
+
+    final ticket = revision;
+
+    await run(
+      () async {
+        final updated = await showDialog<Assignment>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AssignmentEditScreen(
+            assignment: data.assignment,
+          ),
+        );
+
+        return mounted &&
+            ticket == revision &&
+            updated != null;
+      },
+      'Assignment updated successfully.',
+    );
+  }
+
+  Future<void> deleteAssignment(_Detail data) async {
+    if (busy) return;
+
+    final ticket = revision;
+    final uuid = data.assignment.uuid;
+    final router = GoRouter.of(context);
+
+    bool current() =>
+        mounted &&
+        ticket == revision &&
+        widget.assignmentUuid == uuid;
+
+    setState(() => busy = true);
+
+    try {
+      var resolved = false;
+
+      void closeDialog(
+        BuildContext dialogContext,
+        bool value,
+      ) {
+        if (resolved) return;
+        resolved = true;
+        Navigator.of(dialogContext).pop(value);
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          icon: Icon(
+            Icons.delete_outline_rounded,
+            size: 40,
+            color: Theme.of(dialogContext).colorScheme.error,
+          ),
+          title: const Text('Delete assignment?'),
+          content: Text(
+            'Delete "${data.assignment.title}" '
+            'and all its questions?\n\n'
+            'This cannot be undone. Assignments with '
+            'student submissions cannot be deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                closeDialog(dialogContext, false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    Theme.of(dialogContext).colorScheme.error,
+                foregroundColor:
+                    Theme.of(dialogContext).colorScheme.onError,
+              ),
+              onPressed: () {
+                closeDialog(dialogContext, true);
+              },
+              child: const Text('Delete assignment'),
+            ),
+          ],
+        ),
+      );
+
+      if (!current() || confirmed != true) return;
+
+      await ref
+          .read(assignmentRepositoryProvider)
+          .deleteAssignment(uuid);
+
+      if (!current()) return;
+
+      setState(() => busy = false);
+
+      notify('Assignment deleted successfully.');
+      router.go('/assignments');
+    } on ApiException catch (error) {
+      if (current()) {
+        notify(error.message);
+      }
+    } catch (_) {
+      if (current()) {
+        notify(
+          'Could not confirm deletion. '
+          'Refresh the assignment list to check its status.',
+        );
+      }
+    } finally {
+      if (current()) {
+        setState(() => busy = false);
+      }
+    }
   }
 
   Future<void> run(
@@ -338,6 +457,21 @@ class _AssignmentDetailScreenState
                     ),
                   ],
                   actions: [
+                    AdminOutlineButton(
+                      label: 'Edit Assignment',
+                      icon: Icons.edit_outlined,
+                      onPressed: busy
+                          ? null
+                          : () => editAssignment(data),
+                    ),
+                    AdminOutlineButton(
+                      label: 'Delete Assignment',
+                      icon: Icons.delete_outline_rounded,
+                      danger: true,
+                      onPressed: busy
+                          ? null
+                          : () => deleteAssignment(data),
+                    ),
                     if (!a.isPublished)
                       GradientButton(
                         label: 'Add Question',

@@ -67,7 +67,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
   int _revision = 0;
 
   String _type = 'ALL';
-  bool _unreadOnly = false;
+  bool _unreadOnly = true;
 
   bool _loading = false;
   bool _working = false;
@@ -372,92 +372,189 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     );
   }
 
+  Future<void> _viewNotification(
+    InboxNotification item,
+  ) async {
+    if (_busy) return;
+
+    setState(() {
+      _working = true;
+      _actionError = null;
+    });
+
+    try {
+      var closed = false;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(item.title),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _types[item.type] ?? item.type,
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _date(item.createdAt),
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  SelectableText(item.body),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                if (closed) return;
+                closed = true;
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || item.isRead) return;
+
+      await _repository.markRead(item.uuid);
+
+      if (!mounted) return;
+
+      setState(() => _page = 1);
+
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _actionError = _errorMessage(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _working = false);
+      }
+    }
+  }
+
   Widget _notificationCard(InboxNotification item) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  backgroundColor: item.isRead
-                      ? colors.surfaceContainerHighest
-                      : colors.primaryContainer,
-                  child: Icon(
-                    _typeIcon(item.type),
-                    color: item.isRead
-                        ? colors.onSurfaceVariant
-                        : colors.onPrimaryContainer,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _busy
+            ? null
+            : () => _viewNotification(item),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: item.isRead
+                        ? colors.surfaceContainerHighest
+                        : colors.primaryContainer,
+                    child: Icon(
+                      _typeIcon(item.type),
+                      color: item.isRead
+                          ? colors.onSurfaceVariant
+                          : colors.onPrimaryContainer,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(
-                          fontWeight: item.isRead
-                              ? FontWeight.w500
-                              : FontWeight.w700,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(
+                            fontWeight: item.isRead
+                                ? FontWeight.w500
+                                : FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _types[item.type] ?? item.type,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          _types[item.type] ?? item.type,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  item.isRead ? 'Read' : 'Unread',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: item.isRead
-                        ? colors.onSurfaceVariant
-                        : colors.primary,
+                  const SizedBox(width: 8),
+                  Text(
+                    item.isRead ? 'Read' : 'Unread',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(
+                      color: item.isRead
+                          ? colors.onSurfaceVariant
+                          : colors.primary,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SelectableText(item.body),
-            const SizedBox(height: 12),
-            Text(
-              _date(item.createdAt),
-              style: theme.textTheme.bodySmall,
-            ),
-            if (item.isRead && item.readAt != null) ...[
-              const SizedBox(height: 4),
+                ],
+              ),
+              const SizedBox(height: 12),
               Text(
-                'Read at ${_date(item.readAt)}',
+                _date(item.createdAt),
                 style: theme.textTheme.bodySmall,
               ),
-            ],
-            if (!item.isRead) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed:
-                      _busy ? null : () => _markRead(item),
-                  icon: const Icon(Icons.done_rounded),
-                  label: const Text('Mark read'),
+              if (item.isRead && item.readAt != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Read at ${_date(item.readAt)}',
+                  style: theme.textTheme.bodySmall,
                 ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _viewNotification(item),
+                    icon: const Icon(
+                      Icons.visibility_outlined,
+                    ),
+                    label: const Text('View'),
+                  ),
+                  if (!item.isRead)
+                    TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _markRead(item),
+                      icon: const Icon(
+                        Icons.done_rounded,
+                      ),
+                      label: const Text('Mark read'),
+                    ),
+                ],
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

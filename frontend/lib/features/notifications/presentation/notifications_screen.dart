@@ -58,7 +58,7 @@ class _InboxState extends ConsumerState<_Inbox> {
 
   int page = 1;
   int revision = 0;
-  bool unreadOnly = false;
+  bool unreadOnly = true;
   String type = 'ALL';
 
   bool loading = false;
@@ -230,53 +230,158 @@ class _InboxState extends ConsumerState<_Inbox> {
     load();
   }
 
-  Widget card(InboxNotification item) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: AdminCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+  Future<void> viewNotification(
+    InboxNotification item,
+  ) async {
+    if (busy) return;
+
+    setState(() {
+      working = true;
+      actionError = null;
+    });
+
+    try {
+      var closed = false;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(item.title),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    item.isRead
-                        ? Icons.notifications_none
-                        : Icons.notifications_active_outlined,
+                  Text(
+                    types[item.type] ?? item.type,
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .labelLarge,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _notificationDate(item.createdAt),
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .bodySmall,
                   ),
-                  Text(item.isRead ? 'Read' : 'Unread'),
+                  const SizedBox(height: 16),
+                  SelectableText(item.body),
                 ],
               ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                if (closed) return;
+                closed = true;
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || item.isRead) return;
+
+      await repo.markRead(item.uuid);
+
+      if (!mounted) return;
+
+      setState(() => page = 1);
+
+      await load();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          actionError = message(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => working = false);
+      }
+    }
+  }
+
+  Widget card(InboxNotification item) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AdminCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  item.isRead
+                      ? Icons.notifications_none
+                      : Icons.notifications_active_outlined,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: item.isRead
+                          ? FontWeight.w500
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(item.isRead ? 'Read' : 'Unread'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${types[item.type] ?? item.type} • '
+              '${_notificationDate(item.createdAt)}',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (item.isRead && item.readAt != null) ...[
               const SizedBox(height: 8),
               Text(
-                '${types[item.type] ?? item.type} • '
-                '${_notificationDate(item.createdAt)}',
+                'Read at ${_notificationDate(item.readAt)}',
+                style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: 12),
-              SelectableText(item.body),
-              if (item.isRead && item.readAt != null) ...[
-                const SizedBox(height: 8),
-                Text('Read at ${_notificationDate(item.readAt)}'),
-              ],
-              if (!item.isRead)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: busy ? null : () => markRead(item),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => viewNotification(item),
+                  icon: const Icon(
+                    Icons.visibility_outlined,
+                  ),
+                  label: const Text('View'),
+                ),
+                if (!item.isRead)
+                  TextButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => markRead(item),
                     icon: const Icon(Icons.done),
                     label: const Text('Mark read'),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => PopScope(

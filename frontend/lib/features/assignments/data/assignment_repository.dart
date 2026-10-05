@@ -100,6 +100,62 @@ class AssignmentRepository {
         );
       });
 
+  Future<Assignment> update({
+    required String uuid,
+    required String title,
+    required String description,
+    required String instructions,
+    required DateTime? dueAt,
+    required bool allowLateSubmission,
+  }) =>
+      _request(() async {
+        final response = await _dio.patch<Map<String, dynamic>>(
+          ApiUrls.adminAssignmentDetail(uuid),
+          data: {
+            'title': title.trim(),
+            'description': description.trim(),
+            'instructions': instructions.trim(),
+            'due_at': dueAt?.toUtc().toIso8601String(),
+            'allow_late_submission': allowLateSubmission,
+          },
+        );
+
+        final body = response.data;
+
+        if (body == null ||
+            body['success'] != true ||
+            body['data'] is! Map) {
+          throw const FormatException(
+            'Invalid assignment update response.',
+          );
+        }
+
+        final data = Map<String, dynamic>.from(
+          body['data'] as Map,
+        );
+
+        if (data['uuid'] != uuid) {
+          throw const FormatException(
+            'Assignment identifier does not match.',
+          );
+        }
+
+        return Assignment.fromJson(data);
+      });
+
+  Future<void> deleteAssignment(String uuid) =>
+      _request(() async {
+        final response = await _dio.delete<Map<String, dynamic>>(
+          ApiUrls.adminAssignmentDetail(uuid),
+        );
+
+        if (response.data?['success'] != true) {
+          throw const FormatException(
+            'Invalid assignment deletion response.',
+          );
+        }
+      });
+
   Future<Assignment> publish(
     String uuid,
   ) =>

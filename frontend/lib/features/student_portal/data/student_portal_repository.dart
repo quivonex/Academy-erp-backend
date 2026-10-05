@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -486,39 +484,6 @@ class StudentPortalRepository {
 
         return Map<String, dynamic>.from(
           response.data['data'] as Map,
-        );
-      });
-
-  Future<CoursePayment> submitCoursePayment({
-    required String courseUuid,
-    required String paymentMethod,
-    String utrNumber = '',
-    String studentNote = '',
-    Uint8List? paymentProofBytes,
-    String? paymentProofName,
-  }) =>
-      _request(() async {
-        final formData = FormData.fromMap({
-          'course_uuid': courseUuid,
-          'payment_method': paymentMethod,
-          'utr_number': utrNumber.trim(),
-          'student_note': studentNote.trim(),
-          if (paymentProofBytes != null && paymentProofName != null)
-            'payment_screenshot': MultipartFile.fromBytes(
-              paymentProofBytes,
-              filename: paymentProofName,
-            ),
-        });
-
-        final response = await _dio.post(
-          ApiUrls.studentCoursePayments,
-          data: formData,
-        );
-
-        final data = response.data['data'] as Map;
-
-        return CoursePayment.fromJson(
-          Map<String, dynamic>.from(data),
         );
       });
 
