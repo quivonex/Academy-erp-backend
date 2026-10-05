@@ -48,8 +48,7 @@ urlpatterns = [
         name="notification-send",
     ),
 
-    path(
-        "<uuid:notification_uuid>/read/",
+    path("<uuid:notification_uuid>/read/",
         NotificationMarkReadView.as_view(),
         name="notification-mark-read",
     ),

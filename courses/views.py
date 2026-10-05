@@ -945,11 +945,33 @@ class BulkStudentChapterVideoAccessView(APIView):
             )
 
         try:
-            result = bulk_grant_chapter_video_access(
-                firm=request.user.firm,
-                granted_by=request.user,
-                validated_data=serializer.validated_data,
-            )
+            with transaction.atomic():
+                result = bulk_grant_chapter_video_access(
+                    firm=request.user.firm,
+                    granted_by=request.user,
+                    validated_data=serializer.validated_data,
+                )
+
+                from notifications.services import (
+                    create_chapter_video_access_notifications,
+                )
+
+                transaction.on_commit(
+                    lambda: (
+                        create_chapter_video_access_notifications(
+                            course=result["course"],
+                            students=result["students"],
+                            chapters=result["chapters"],
+                            access_start_at=(
+                                result["access_start_at"]
+                            ),
+                            access_end_at=(
+                                result["access_end_at"]
+                            ),
+                        )
+                    )
+                )
+
         except ValidationError as exc:
             return validation_error_response(exc)
 
