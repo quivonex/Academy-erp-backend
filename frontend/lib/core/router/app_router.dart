@@ -162,7 +162,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         builder: (context, state, child) => StudentShell(
-          location: state.matchedLocation,
+          location: state.uri.path,
           child: child,
         ),
         routes: [

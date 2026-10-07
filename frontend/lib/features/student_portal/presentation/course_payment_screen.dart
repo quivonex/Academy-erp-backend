@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
+import '../../../core/widgets/back_button.dart';
 
 class CoursePaymentScreen extends ConsumerWidget {
   const CoursePaymentScreen({
@@ -58,12 +59,9 @@ class CoursePaymentScreen extends ConsumerWidget {
       children: [
         Row(
           children: [
-            IconButton(
-              tooltip: 'Back to course',
-              onPressed: () {
-                context.go('/explore/$courseUuid');
-              },
-              icon: const Icon(Icons.arrow_back_rounded),
+            AppBackButton(
+              fallbackRoute: '/explore/$courseUuid',
+              color: Colors.black87,
             ),
             const SizedBox(width: 8),
             Expanded(

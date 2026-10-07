@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/back_button.dart';
 import 'widgets/student_ui.dart';
 
 class StudentShell extends ConsumerWidget {
@@ -17,80 +18,69 @@ class StudentShell extends ConsumerWidget {
   final Widget child;
   final String location;
 
-  String? get _backFallback {
-    if (location.startsWith('/student/course-payment/')) {
-      return '/student/courses';
+  String? _getBackFallback(String loc) {
+    final path = loc.split('?').first;
+    if (path == '/student/courses' || path == '/student/courses/') {
+      return null;
     }
 
-    if (location.startsWith('/student/courses/')) {
-      return '/student/courses';
-    }
-
-    if (location.startsWith('/student/live-classes/')) {
+    if (path.startsWith('/student/live-classes/')) {
       return '/student/live-classes';
     }
 
-    if (location.startsWith('/student/assignments/') &&
-        location.endsWith('/result')) {
-      return location.substring(
+    if (path.startsWith('/student/assignments/') &&
+        path.endsWith('/result')) {
+      return path.substring(
         0,
-        location.length - '/result'.length,
+        path.length - '/result'.length,
       );
     }
 
-    if (location.startsWith('/student/materials/') ||
-        location.startsWith('/student/assignments/')) {
-      return '/student/courses';
-    }
-
-    if (location.startsWith('/student/fees') ||
-        location.startsWith('/student/notifications')) {
-      return '/student/courses';
-    }
-
-    return null;
+    return '/student/courses';
   }
 
-  String get _title {
-    if (location.startsWith('/student/notifications')) {
+  String _getTitle(String loc) {
+    final path = loc.split('?').first;
+
+    if (path.startsWith('/student/notifications')) {
       return 'Notifications';
     }
 
-    if (location.startsWith('/student/fees')) {
+    if (path.startsWith('/student/fees')) {
       return 'My Fees';
     }
 
-    if (location.startsWith('/student/course-payment/')) {
+    if (path.startsWith('/student/course-payment/')) {
       return 'Fees & Enrollment';
     }
 
-    if (location.startsWith('/student/profile')) {
+    if (path.startsWith('/student/profile')) {
       return 'Profile';
     }
 
-    if (location.startsWith('/student/live-classes/')) {
+    if (path.startsWith('/student/live-classes/')) {
       return 'Live Class';
     }
 
-    if (location.startsWith('/student/live-classes')) {
+    if (path.startsWith('/student/live-classes')) {
       return 'Live Classes';
     }
 
-    if (location.startsWith('/student/materials/')) {
+    if (path.startsWith('/student/materials/')) {
       return 'Study Material';
     }
 
-    if (location.startsWith('/student/assignments/') &&
-        location.endsWith('/result')) {
+    if (path.startsWith('/student/assignments/') &&
+        path.endsWith('/result')) {
       return 'Result';
     }
 
-    if (location.startsWith('/student/assignments/')) {
+    if (path.startsWith('/student/assignments/')) {
       return 'Assignment';
     }
 
-    if (location.startsWith('/student/courses/')) {
-      return 'Course';
+    if (path.startsWith('/student/courses/')) {
+      return 'Course Details';
     }
 
     return 'My Courses';
@@ -100,11 +90,20 @@ class StudentShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final session = ref.watch(sessionControllerProvider);
-    final backFallback = _backFallback;
 
-    final selected = location.startsWith('/student/profile')
+    String currentPath;
+    try {
+      currentPath = GoRouterState.of(context).uri.path;
+    } catch (_) {
+      currentPath = location;
+    }
+
+    final backFallback = _getBackFallback(currentPath);
+    final title = _getTitle(currentPath);
+
+    final selected = currentPath.startsWith('/student/profile')
         ? 3
-        : location.startsWith('/student/live-classes')
+        : currentPath.startsWith('/student/live-classes')
             ? 2
             : 1;
 
@@ -152,37 +151,29 @@ class StudentShell extends ConsumerWidget {
                   child: AcademyMark(size: 40),
                 ),
               )
-            : IconButton(
-                tooltip: 'Back',
-                icon: const Icon(
-                  Icons.arrow_back_rounded,
-                ),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(backFallback);
-                  }
-                },
+            : AppBackButton(
+                fallbackRoute: backFallback,
+                color: colors.textPrimary,
+                iconSize: 24,
               ),
         title: StudentBarTitle(
           eyebrow: session.firmName,
-          title: _title,
+          title: title,
         ),
         actions: [
           IconButton(
             tooltip: 'Notifications',
             icon: Icon(
-              location.startsWith('/student/notifications')
+              currentPath.startsWith('/student/notifications')
                   ? Icons.notifications_rounded
                   : Icons.notifications_outlined,
               color:
-                  location.startsWith('/student/notifications')
+                  currentPath.startsWith('/student/notifications')
                       ? colors.primary
                       : colors.textPrimary,
             ),
             onPressed: () {
-              if (!location.startsWith('/student/notifications')) {
+              if (!currentPath.startsWith('/student/notifications')) {
                 context.go('/student/notifications');
               }
             },
