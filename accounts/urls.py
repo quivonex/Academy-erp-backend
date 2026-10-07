@@ -7,6 +7,8 @@ from .views import (
     LogoutView,
     MeView,
     StudentRegisterView,
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
 
 )
 
@@ -18,5 +20,8 @@ urlpatterns = [
     path("me/", MeView.as_view(), name="me",),  
     
     path("student/register/", StudentRegisterView.as_view(), name="student-register",),
+    
+    path("password-reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request",),
+    path("password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm",),
     
 ]

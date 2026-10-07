@@ -16,12 +16,17 @@ from .serializers import (
     UserSerializer,
     FirmAdminCreateSerializer,
     StudentRegisterSerializer,
-
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
 )
+
 
 from .services import (
     generate_tokens_for_user,
     register_student,
+    PasswordResetError,
+    reset_password_with_otp,
+    send_password_reset_otp,
 )
 from accounts.services import (create_firm_admin,)
 
@@ -138,3 +143,81 @@ class StudentRegisterView(APIView):
         
 
         
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_request"
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(
+            data=request.data,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Password reset request failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            send_password_reset_otp(
+                serializer.validated_data["email"]
+            )
+        except Exception:
+            # Do not disclose whether the email exists.
+            return success_response(
+                message=(
+                    "If an active account exists for this email, "
+                    "a reset OTP has been sent."
+                ),
+            )
+
+        return success_response(
+            message=(
+                "If an active account exists for this email, "
+                "a reset OTP has been sent."
+            ),
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_confirm"
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(
+            data=request.data,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Password reset failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            reset_password_with_otp(
+                email=serializer.validated_data["email"],
+                otp=serializer.validated_data["otp"],
+                new_password=serializer.validated_data[
+                    "new_password"
+                ],
+            )
+        except PasswordResetError as exc:
+            return error_response(
+                message="Password reset failed",
+                errors={"otp": [str(exc)]},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(
+            message=(
+                "Password reset successful. "
+                "Please sign in with your new password."
+            ),
+        )

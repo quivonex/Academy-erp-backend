@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate
-
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -188,6 +188,59 @@ class StudentRegisterSerializer(serializers.Serializer):
                     "Passwords do not match."
                 ]
             })
+
+        return attrs
+    
+    
+    
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    otp = serializers.CharField(
+        min_length=6,
+        max_length=6,
+        trim_whitespace=False,
+    )
+
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        trim_whitespace=False,
+    )
+
+    confirm_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        trim_whitespace=False,
+    )
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_otp(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError(
+                "OTP must contain six digits."
+            )
+
+        return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({
+                "confirm_password": [
+                    "Passwords do not match."
+                ]
+            })
+
+        validate_password(attrs["new_password"])
 
         return attrs
     

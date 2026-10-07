@@ -64,7 +64,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=True,
         db_index=True,
     )
-
+    
+    auth_version = models.PositiveIntegerField(
+        default=1,
+    )
+        
     is_staff = models.BooleanField(
         default=False,
     )
@@ -100,7 +104,45 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     
     
+class PasswordResetOTP(models.Model):
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="password_reset_otps",
+    )
+
+    otp_hash = models.CharField(
+        max_length=128,
+    )
+
+    expires_at = models.DateTimeField()
+
+    used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    attempts = models.PositiveSmallIntegerField(
+        default=0,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        db_table = "password_reset_otps"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "expires_at"]),
+        ]
+
+    def __str__(self):
+        return f"Password reset OTP for {self.user.email}"
     
+    
+
 class Role(models.Model):
 
     uuid = models.UUIDField(
