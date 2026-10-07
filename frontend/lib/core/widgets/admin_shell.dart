@@ -23,7 +23,6 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider);
-    final colors = context.colors;
     final width = MediaQuery.sizeOf(context).width;
     final role = session.role;
     if (role == null) return const SizedBox.shrink();
@@ -33,11 +32,7 @@ class AdminShell extends ConsumerWidget {
     final isCompact = AppBreakpoints.isCompact(width);
     final isRailOnly = AppBreakpoints.isLaptopOrTabletLandscape(width);
 
-    final brandSubtitle = role == UserRole.superAdmin
-        ? 'Multi-Academy SaaS'
-        : (session.firmName?.trim().isNotEmpty == true
-            ? session.firmName!.trim()
-            : 'Academy ERP');
+    const brandSubtitle = 'Knowledge Bridge';
 
     Widget sidebar(bool expanded) => _Sidebar(
           items: navItems,
@@ -105,17 +100,35 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: kAdminGradient,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(size * 0.28),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x404F46E5),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x1A000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
           ),
         ],
       ),
-      child: Icon(Icons.school_rounded, color: Colors.white, size: size * 0.55),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.28),
+        child: Image.asset(
+          'assets/images/vidyasetu_logo.jpeg',
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: kAdminGradient,
+              borderRadius: BorderRadius.circular(size * 0.28),
+            ),
+            child: Icon(
+              Icons.school_rounded,
+              color: Colors.white,
+              size: size * 0.55,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -167,7 +180,7 @@ class _Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'EduSphere',
+                                  'VidyaSetu',
                                   style: jakarta(
                                     textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w800,
@@ -501,7 +514,7 @@ class _TopBar extends ConsumerWidget {
                         child: Text(
                           session.firmName?.trim().isNotEmpty == true
                               ? session.firmName!.trim()
-                              : 'EduSphere',
+                              : 'VidyaSetu',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.labelMedium?.copyWith(

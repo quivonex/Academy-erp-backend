@@ -710,7 +710,7 @@ class _WebTopNav extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'EduSphere',
+                  'VidyaSetu',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -810,7 +810,7 @@ class _WebFooter extends StatelessWidget {
                         const AcademyMark(size: 32),
                         const SizedBox(width: 10),
                         Text(
-                          'EduSphere',
+                          'VidyaSetu',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -878,7 +878,7 @@ class _WebFooter extends StatelessWidget {
           const Divider(height: 1, color: Color(0xFFEEF0F5)),
           const SizedBox(height: 18),
           Text(
-            '© ${DateTime.now().year} EduSphere. All rights reserved.',
+            '© ${DateTime.now().year} VidyaSetu. All rights reserved.',
             style: textTheme.bodySmall?.copyWith(color: colors.textSubtle),
           ),
         ],

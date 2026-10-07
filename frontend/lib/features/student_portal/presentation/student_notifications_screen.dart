@@ -588,17 +588,33 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
               'and academy announcements.',
             ),
             const SizedBox(height: 16),
-            Card(
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3525CD), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x263525CD),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Unread in your inbox: '
-                      '${_unreadCount ?? '…'}',
-                      style: theme.textTheme.titleMedium,
+                      'Unread in your inbox: ${_unreadCount ?? '…'}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     if (_countError != null) ...[
                       const SizedBox(height: 12),
@@ -608,9 +624,29 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                     DropdownButtonFormField<String>(
                       value: _type,
                       isExpanded: true,
-                      decoration: const InputDecoration(
+                      dropdownColor: Colors.white,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
                         labelText: 'Notification type',
-                        border: OutlineInputBorder(),
+                        labelStyle: const TextStyle(color: Color(0xFF475569)),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white, width: 2),
+                        ),
                       ),
                       items: [
                         const DropdownMenuItem(
@@ -634,7 +670,15 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Unread only'),
+                      title: const Text(
+                        'Unread only',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      activeColor: Colors.white,
+                      activeTrackColor: const Color(0xFF818CF8),
                       value: _unreadOnly,
                       onChanged: _busy
                           ? null
@@ -650,18 +694,36 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                       runSpacing: 8,
                       children: [
                         OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           onPressed: _busy ? null : _refresh,
                           icon: const Icon(Icons.refresh),
                           label: const Text('Refresh'),
                         ),
-                        FilledButton.icon(
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF3525CD),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           onPressed: _busy ||
                                   _unreadCount == null ||
                                   _unreadCount == 0
                               ? null
                               : _markAllRead,
                           icon: const Icon(Icons.done_all),
-                          label: const Text('Mark all read'),
+                          label: const Text(
+                            'Mark all read',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),

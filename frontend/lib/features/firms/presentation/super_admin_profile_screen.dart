@@ -425,7 +425,7 @@ class _SuperAdminProfileScreenState
                       Expanded(
                         child: Text(
                           'Signed in with platform-wide super admin access '
-                          'across all EduSphere academies.',
+                          'across all VidyaSetu academies.',
                           style: textTheme.bodySmall?.copyWith(
                             color: const Color(0xFF475569),
                           ),

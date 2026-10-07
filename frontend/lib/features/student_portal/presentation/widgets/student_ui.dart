@@ -446,14 +446,28 @@ class AcademyMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: colors.heroGradient,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(size * 0.3),
         boxShadow: colors.heroShadow,
       ),
-      child: Icon(
-        Icons.auto_stories_rounded,
-        color: Colors.white,
-        size: size * 0.55,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.3),
+        child: Image.asset(
+          'assets/images/vidyasetu_logo.jpeg',
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: colors.heroGradient,
+              borderRadius: BorderRadius.circular(size * 0.3),
+            ),
+            child: Icon(
+              Icons.auto_stories_rounded,
+              color: Colors.white,
+              size: size * 0.55,
+            ),
+          ),
+        ),
       ),
     );
   }
