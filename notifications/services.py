@@ -641,3 +641,81 @@ def create_live_class_updated_notifications(
     return len(recipient_user_ids)
 
 
+def create_chapter_video_access_notifications(
+    *,
+    course,
+    students,
+    chapters,
+    access_start_at,
+    access_end_at,
+):
+    from students.models import Student
+
+    student_ids = [student.id for student in students]
+
+    recipient_user_ids = (
+        Student.objects.filter(
+            firm=course.firm,
+            id__in=student_ids,
+            is_active=True,
+            user__is_active=True,
+        )
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
+
+    if not recipient_user_ids:
+        return 0
+
+    chapter_titles = [chapter.title for chapter in chapters]
+
+    if len(chapter_titles) <= 3:
+        chapter_text = ", ".join(chapter_titles)
+    else:
+        chapter_text = (
+            f"{', '.join(chapter_titles[:3])} "
+            f"and {len(chapter_titles) - 3} more"
+        )
+
+    if access_start_at <= timezone.now():
+        body = (
+            f"You can now watch videos for {chapter_text} "
+            f"in {course.name}."
+        )
+    else:
+        start_at = timezone.localtime(access_start_at)
+        body = (
+            f"Video access for {chapter_text} in {course.name} "
+            f"starts on {start_at.strftime('%d %b %Y, %I:%M %p')}."
+        )
+
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                firm=course.firm,
+                recipient_id=user_id,
+                notification_type=Notification.NotificationType.MATERIAL,
+                title="Chapter video access granted",
+                body=body,
+                data={
+                    "course_uuid": str(course.uuid),
+                    "chapter_uuids": [
+                        str(chapter.uuid)
+                        for chapter in chapters
+                    ],
+                    "access_start_at": access_start_at.isoformat(),
+                    "access_end_at": (
+                        access_end_at.isoformat()
+                        if access_end_at
+                        else None
+                    ),
+                },
+            )
+            for user_id in recipient_user_ids
+        ],
+        batch_size=500,
+    )
+
+    return len(recipient_user_ids)
+
+

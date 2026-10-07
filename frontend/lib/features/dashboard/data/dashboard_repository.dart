@@ -41,7 +41,15 @@ class DashboardMetric {
 class DashboardSummary {
   const DashboardSummary(this.metrics);
   final List<DashboardMetric> metrics;
+  DashboardMetric metricFor(String label) {
+    for (final metric in metrics) {
+      if (metric.label == label) {
+        return metric;
+      }
+    }
 
+    throw FormatException('Dashboard metric "$label" is missing.');
+  }
   factory DashboardSummary.fromJson(Map<String, dynamic> json) {
     final metrics = <DashboardMetric>[];
     for (final entry in {'students': 'Students', 'teachers': 'Teachers', 'courses': 'Courses'}.entries) {

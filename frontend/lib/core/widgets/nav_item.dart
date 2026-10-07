@@ -26,6 +26,7 @@ const List<NavItem> kAllNavItems = [
     roles: [
       UserRole.superAdmin,
       UserRole.academyAdmin,
+      UserRole.firmStaff,
     ],
   ),
   NavItem(
