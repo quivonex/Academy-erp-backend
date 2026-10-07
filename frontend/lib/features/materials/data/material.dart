@@ -49,12 +49,29 @@ class LearningMaterial {
   factory LearningMaterial.fromJson(
     Map<String, dynamic> json,
   ) {
+    final course = json['course'];
+    final courseName = json['course_name']?.toString() ??
+        (course is Map ? course['name']?.toString() : null) ??
+        '';
+
+    final subject = json['subject'];
+    final subjectName = json['subject_name']?.toString() ??
+        (subject is Map ? subject['name']?.toString() : null);
+
+    final chapter = json['chapter'];
+    final chapterTitle = json['chapter_title']?.toString() ??
+        (chapter is Map ? chapter['title']?.toString() : null);
+
+    final lesson = json['lesson'];
+    final lessonTitle = json['lesson_title']?.toString() ??
+        (lesson is Map ? lesson['title']?.toString() : null);
+
     return LearningMaterial(
       uuid: json['uuid']?.toString() ?? '',
-      courseName: json['course_name']?.toString() ?? '',
-      subjectName: json['subject_name']?.toString(),
-      chapterTitle: json['chapter_title']?.toString(),
-      lessonTitle: json['lesson_title']?.toString(),
+      courseName: courseName,
+      subjectName: subjectName,
+      chapterTitle: chapterTitle,
+      lessonTitle: lessonTitle,
       title: json['title']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       materialType: json['material_type']?.toString() ?? '',
@@ -94,14 +111,32 @@ class LearningMaterialPage {
   factory LearningMaterialPage.fromJson(
     Map<String, dynamic> json,
   ) {
-    final list = json['results'] as List<dynamic>? ?? [];
+    Map<String, dynamic> data = json;
+    if (json['data'] is Map<String, dynamic>) {
+      data = json['data'] as Map<String, dynamic>;
+    } else if (json['data'] is Map) {
+      data = Map<String, dynamic>.from(json['data'] as Map);
+    }
+
+    List<dynamic> list = [];
+    if (data['results'] is List) {
+      list = data['results'] as List<dynamic>;
+    } else if (json['results'] is List) {
+      list = json['results'] as List<dynamic>;
+    } else if (json['data'] is List) {
+      list = json['data'] as List<dynamic>;
+    }
+
+    final count = (data['count'] as num?)?.toInt() ??
+        (json['count'] as num?)?.toInt() ??
+        list.length;
 
     return LearningMaterialPage(
-      count: json['count'] as int? ?? list.length,
+      count: count,
       results: list
           .map(
             (item) => LearningMaterial.fromJson(
-              Map<String, dynamic>.from(item),
+              Map<String, dynamic>.from(item as Map),
             ),
           )
           .toList(),

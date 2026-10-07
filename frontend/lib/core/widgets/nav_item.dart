@@ -26,6 +26,7 @@ const List<NavItem> kAllNavItems = [
     roles: [
       UserRole.superAdmin,
       UserRole.academyAdmin,
+      UserRole.firmStaff,
     ],
   ),
   NavItem(
@@ -56,14 +57,6 @@ const List<NavItem> kAllNavItems = [
     label: 'Courses',
     icon: Icons.auto_stories_outlined,
     route: '/courses',
-    roles: [
-      UserRole.academyAdmin,
-    ],
-  ),
-  NavItem(
-    label: 'Course Categories',
-    icon: Icons.category_outlined,
-    route: '/course-categories',
     roles: [
       UserRole.academyAdmin,
     ],
@@ -104,14 +97,6 @@ const List<NavItem> kAllNavItems = [
     label: 'Assignments',
     icon: Icons.assignment_outlined,
     route: '/assignments',
-    roles: [
-      UserRole.academyAdmin,
-    ],
-  ),
-  NavItem(
-    label: 'Subjects',
-    icon: Icons.menu_book_outlined,
-    route: '/subjects',
     roles: [
       UserRole.academyAdmin,
     ],
