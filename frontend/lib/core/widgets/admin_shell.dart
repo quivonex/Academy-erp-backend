@@ -1,3 +1,4 @@
+// admin_shell.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +11,6 @@ import '../theme/breakpoints.dart';
 import 'admin_ui.dart';
 import 'nav_item.dart';
 
-/// The shared shell for every authenticated admin screen. Responsive states:
-///   >=1280px  fixed 264px sidebar
-///   1024-1279 72px icon rail
-///   <1024     off-canvas drawer
 class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child, required this.currentRoute});
 
@@ -35,12 +32,12 @@ class AdminShell extends ConsumerWidget {
     const brandSubtitle = 'Knowledge Bridge';
 
     Widget sidebar(bool expanded) => _Sidebar(
-          items: navItems,
-          currentRoute: currentRoute,
-          expanded: expanded,
-          subtitle: brandSubtitle,
-          roleLabel: _roleLabel(role),
-        );
+      items: navItems,
+      currentRoute: currentRoute,
+      expanded: expanded,
+      subtitle: brandSubtitle,
+      roleLabel: _roleLabel(role),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -113,7 +110,7 @@ class _BrandMark extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.28),
         child: Image.asset(
-          'assets/images/vidyasetu_logo.jpeg',
+          'assets/images/vidyasetu_logo.jpg',
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => Container(
             alignment: Alignment.center,
@@ -171,37 +168,37 @@ class _Sidebar extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: expanded ? 20 : 0),
                 child: expanded
                     ? Row(
+                  children: [
+                    const _BrandMark(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const _BrandMark(),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'VidyaSetu',
-                                  style: jakarta(
-                                    textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.4,
-                                      color: const Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.labelMedium?.copyWith(
-                                    color: colors.textMuted,
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            'VidyaSetu',
+                            style: jakarta(
+                              textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: colors.textMuted,
                             ),
                           ),
                         ],
-                      )
+                      ),
+                    ),
+                  ],
+                )
                     : const Center(child: _BrandMark()),
               ),
             ),
@@ -314,42 +311,42 @@ class _NavTile extends StatelessWidget {
             height: 44,
             child: expanded
                 ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      children: [
-                        Icon(item.icon, size: 20, color: fg),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            item.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: selected
-                                  ? colors.primary
-                                  : const Color(0xFF334155),
-                              fontWeight:
-                                  selected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (selected)
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x996366F1),
-                                  blurRadius: 6,
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Icon(item.icon, size: 20, color: fg),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: selected
+                            ? colors.primary
+                            : const Color(0xFF334155),
+                        fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w500,
+                      ),
                     ),
-                  )
+                  ),
+                  if (selected)
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x996366F1),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            )
                 : Center(child: Icon(item.icon, size: 22, color: fg)),
           ),
         ),

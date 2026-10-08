@@ -116,11 +116,11 @@ class _SplashScreenState extends State<SplashScreen>
                       ],
                     ),
                     child: Image.asset(
-                      'assets/images/vidyasetu_logo.png',
+                      'assets/images/vidyasetu_logo.jpg',
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
                         return Image.asset(
-                          'assets/images/vidyasetu_logo.jpeg',
+                          'assets/images/vidyasetu_logo.png',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
                             return const Icon(

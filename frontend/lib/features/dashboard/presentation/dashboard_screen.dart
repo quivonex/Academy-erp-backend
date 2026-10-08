@@ -300,18 +300,26 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                   const Icon(Icons.notification_important_outlined,
                       size: 22, color: Color(0xFFBA1A1A)),
                   const SizedBox(width: 8),
-                  Text(
-                    'Needs attention',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF131B2E),
+                  Expanded(
+                    child: Text(
+                      'Needs attention',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF131B2E),
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    'Auto-refreshed 2m ago',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF8E90A6),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Auto-refreshed 2m ago',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8E90A6),
+                      ),
                     ),
                   ),
                 ],
@@ -799,23 +807,33 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF131B2E),
-            letterSpacing: -0.3,
-          ),
-        ),
-        const Spacer(),
-        if (trailing != null)
-          Text(
-            trailing!,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: const Color(0xFF8E90A6),
-              fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF131B2E),
+              letterSpacing: -0.3,
             ),
           ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              trailing!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: const Color(0xFF8E90A6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

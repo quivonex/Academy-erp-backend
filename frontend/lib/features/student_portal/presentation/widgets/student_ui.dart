@@ -453,7 +453,7 @@ class AcademyMark extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.3),
         child: Image.asset(
-          'assets/images/vidyasetu_logo.jpeg',
+          'assets/images/vidyasetu_logo.jpg',
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => Container(
             alignment: Alignment.center,

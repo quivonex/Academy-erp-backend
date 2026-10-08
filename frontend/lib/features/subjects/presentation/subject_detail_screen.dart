@@ -184,7 +184,6 @@ class _SubjectDetailScreenState extends ConsumerState<SubjectDetailScreen> {
         },
       ),
       const SizedBox(height: 12),
-      // Attach both futures immediately, including while subject details load.
       FutureBuilder<ChapterPage>(
         future: chaptersFuture,
         builder: (context, snapshot) {
@@ -585,4 +584,3 @@ class _InfoRow extends StatelessWidget {
     ),
   );
 }
-

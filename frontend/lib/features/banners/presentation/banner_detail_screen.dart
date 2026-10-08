@@ -768,18 +768,16 @@ class _BannerDetailScreenState
                               ),
                             if (imageBytes != null) ...[
                               ClipRRect(
-                                borderRadius:
-                                BorderRadius.circular(12),
-                                child: Image.memory(
-                                  imageBytes!,
-                                  height: 180,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                  const SizedBox(
-                                    height: 80,
-                                    child: Center(
-                                      child: Text(
-                                        'Preview unavailable.',
+                                borderRadius: BorderRadius.circular(12),
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 7,
+                                  child: Image.memory(
+                                    imageBytes!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const SizedBox(
+                                      height: 80,
+                                      child: Center(
+                                        child: Text('Preview unavailable.'),
                                       ),
                                     ),
                                   ),
