@@ -59,6 +59,7 @@ import '../session/session_controller.dart';
 import '../session/user_role.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/nav_item.dart';
+import '../widgets/splash_screen.dart';
 
 bool _roleCanAccess(String location, UserRole? role) {
   if (role == null) return false;
@@ -74,18 +75,30 @@ bool _roleCanAccess(String location, UserRole? role) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/explore',
+    initialLocation: '/splash',
     refreshListenable: _SessionRefreshListenable(ref),
     redirect: (context, state) {
       final session = ref.read(sessionControllerProvider);
       final location = state.matchedLocation;
+
+      if (session.isLoading) {
+        return location == '/splash' ? null : '/splash';
+      }
+
+      if (location == '/splash') {
+        if (!session.isAuthenticated) {
+          return '/explore';
+        }
+        return session.role == UserRole.student
+            ? '/student/courses'
+            : '/dashboard';
+      }
+
       final goingToLogin = location == '/login';
 
       final isPublic = goingToLogin ||
           location == '/register' ||
           location.startsWith('/explore');
-
-      if (session.isLoading) return null;
 
       if (!session.isAuthenticated) {
         return isPublic ? null : '/login';
@@ -135,6 +148,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/explore',
         builder: (context, state) => const ExploreScreen(),

@@ -424,6 +424,31 @@ class _TopBar extends ConsumerWidget {
 
               if (value != 'logout') return;
 
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Log out?'),
+                  content: const Text(
+                    'Are you sure you want to log out of VidyaSetu?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.danger,
+                      ),
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Log out'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm != true || !context.mounted) return;
+
               try {
                 await ref.read(sessionControllerProvider.notifier).logout();
               } on ApiException catch (error) {
