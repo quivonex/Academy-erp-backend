@@ -66,14 +66,15 @@ INSTALLED_APPS = [
 
     # Project apps
     "accounts",
+    "assignments",
     "firms",
     "students",
     "teachers",
     "courses",
     "classes",
+    "dashboard",
     "materials",
     "progress",
-    "assignments",
     "banners",
     "payments",
     "notifications",
