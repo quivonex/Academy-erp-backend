@@ -14,7 +14,9 @@ class StudentNotificationsScreen extends ConsumerWidget {
     final session = ref.watch(sessionControllerProvider);
 
     if (session.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (!session.isAuthenticated ||
@@ -32,7 +34,9 @@ class StudentNotificationsScreen extends ConsumerWidget {
     }
 
     return _StudentInbox(
-      key: ValueKey('${session.userUuid}_${session.firmUuid}'),
+      key: ValueKey(
+        '${session.userUuid}_${session.firmUuid}',
+      ),
     );
   }
 }
@@ -41,7 +45,8 @@ class _StudentInbox extends ConsumerStatefulWidget {
   const _StudentInbox({super.key});
 
   @override
-  ConsumerState<_StudentInbox> createState() => _StudentInboxState();
+  ConsumerState<_StudentInbox> createState() =>
+      _StudentInboxState();
 }
 
 class _StudentInboxState extends ConsumerState<_StudentInbox> {
@@ -84,6 +89,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
   String _errorMessage(Object error) {
     if (error is ApiException) return error.message;
+
     return 'Could not complete this request. Please retry.';
   }
 
@@ -108,16 +114,22 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
         final result = await _repository.list(
           page: requestedPage,
           unread: requestedUnread,
-          type: requestedType == 'ALL' ? null : requestedType,
+          type: requestedType == 'ALL'
+              ? null
+              : requestedType,
         );
+
         if (!current()) return;
+
         setState(() {
           _result = result;
           _page = result.page;
         });
       } catch (error) {
         if (current()) {
-          setState(() => _listError = _errorMessage(error));
+          setState(() {
+            _listError = _errorMessage(error);
+          });
         }
       }
     }
@@ -125,17 +137,23 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     Future<void> loadCount() async {
       try {
         final count = await _repository.unreadCount();
+
         if (current()) {
           setState(() => _unreadCount = count);
         }
       } catch (error) {
         if (current()) {
-          setState(() => _countError = _errorMessage(error));
+          setState(() {
+            _countError = _errorMessage(error);
+          });
         }
       }
     }
 
-    await Future.wait([loadList(), loadCount()]);
+    await Future.wait([
+      loadList(),
+      loadCount(),
+    ]);
 
     if (current()) {
       setState(() => _loading = false);
@@ -144,32 +162,41 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
   Future<void> _refresh() async {
     if (_busy) return;
+
     setState(() => _actionError = null);
     await _load();
   }
 
-  void _changeFilter({String? type, bool? unreadOnly}) {
+  void _changeFilter({
+    String? type,
+    bool? unreadOnly,
+  }) {
     if (_busy) return;
+
     setState(() {
       _type = type ?? _type;
       _unreadOnly = unreadOnly ?? _unreadOnly;
       _page = 1;
       _actionError = null;
     });
+
     _load();
   }
 
   void _changePage(int page) {
     if (_busy || page < 1) return;
+
     setState(() {
       _page = page;
       _actionError = null;
     });
+
     _load();
   }
 
   Future<void> _markRead(InboxNotification item) async {
     if (_busy || item.isRead) return;
+
     setState(() {
       _working = true;
       _actionError = null;
@@ -177,24 +204,40 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
     try {
       await _repository.markRead(item.uuid);
+
       if (!mounted) return;
-      if (_unreadOnly) setState(() => _page = 1);
+
+      // Return to the first page when the unread list shrinks.
+      if (_unreadOnly) {
+        setState(() => _page = 1);
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification marked as read.')),
+        const SnackBar(
+          content: Text('Notification marked as read.'),
+        ),
       );
+
       await _load();
     } catch (error) {
       if (mounted) {
-        setState(() => _actionError = _errorMessage(error));
+        setState(() {
+          _actionError = _errorMessage(error);
+        });
       }
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() => _working = false);
+      }
     }
   }
 
   Future<void> _markAllRead() async {
-    if (_busy || _unreadCount == null || _unreadCount == 0) return;
+    if (_busy ||
+        _unreadCount == null ||
+        _unreadCount == 0) {
+      return;
+    }
 
     setState(() {
       _working = true;
@@ -203,7 +246,11 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
     try {
       var resolved = false;
-      void closeDialog(BuildContext dialogContext, bool result) {
+
+      void closeDialog(
+        BuildContext dialogContext,
+        bool result,
+      ) {
         if (resolved) return;
         resolved = true;
         Navigator.of(dialogContext).pop(result);
@@ -216,15 +263,19 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
           title: const Text('Mark all notifications as read?'),
           content: const Text(
             'This marks your entire inbox as read, '
-                'including other pages and notification types.',
+            'including other pages and notification types.',
           ),
           actions: [
             TextButton(
-              onPressed: () => closeDialog(dialogContext, false),
+              onPressed: () {
+                closeDialog(dialogContext, false);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => closeDialog(dialogContext, true),
+              onPressed: () {
+                closeDialog(dialogContext, true);
+              },
               child: const Text('Mark all read'),
             ),
           ],
@@ -234,21 +285,30 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
       if (!mounted || confirmed != true) return;
 
       final count = await _repository.markAllRead();
+
       if (!mounted) return;
 
       setState(() => _page = 1);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$count notifications marked as read.')),
+        SnackBar(
+          content: Text(
+            '$count notifications marked as read.',
+          ),
+        ),
       );
 
       await _load();
     } catch (error) {
       if (mounted) {
-        setState(() => _actionError = _errorMessage(error));
+        setState(() {
+          _actionError = _errorMessage(error);
+        });
       }
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() => _working = false);
+      }
     }
   }
 
@@ -273,14 +333,19 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
   String _date(DateTime? value) {
     if (value == null) return 'Date unavailable';
+
     final date = value.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
+
+    String two(int number) =>
+        number.toString().padLeft(2, '0');
+
     return '${two(date.day)}/${two(date.month)}/${date.year} '
         '${two(date.hour)}:${two(date.minute)}';
   }
 
   Widget _errorCard(String message) {
     final colors = Theme.of(context).colorScheme;
+
     return Card(
       color: colors.errorContainer,
       child: Padding(
@@ -288,12 +353,17 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.error_outline, color: colors.onErrorContainer),
+            Icon(
+              Icons.error_outline,
+              color: colors.onErrorContainer,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 message,
-                style: TextStyle(color: colors.onErrorContainer),
+                style: TextStyle(
+                  color: colors.onErrorContainer,
+                ),
               ),
             ),
           ],
@@ -302,8 +372,11 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     );
   }
 
-  Future<void> _viewNotification(InboxNotification item) async {
+  Future<void> _viewNotification(
+    InboxNotification item,
+  ) async {
     if (_busy) return;
+
     setState(() {
       _working = true;
       _actionError = null;
@@ -311,6 +384,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
     try {
       var closed = false;
+
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -324,12 +398,16 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                 children: [
                   Text(
                     _types[item.type] ?? item.type,
-                    style: Theme.of(dialogContext).textTheme.labelLarge,
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .labelLarge,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     _date(item.createdAt),
-                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .bodySmall,
                   ),
                   const SizedBox(height: 16),
                   SelectableText(item.body),
@@ -351,16 +429,24 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
       );
 
       if (!mounted || item.isRead) return;
+
       await _repository.markRead(item.uuid);
+
       if (!mounted) return;
+
       setState(() => _page = 1);
+
       await _load();
     } catch (error) {
       if (mounted) {
-        setState(() => _actionError = _errorMessage(error));
+        setState(() {
+          _actionError = _errorMessage(error);
+        });
       }
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() => _working = false);
+      }
     }
   }
 
@@ -372,7 +458,9 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: _busy ? null : () => _viewNotification(item),
+        onTap: _busy
+            ? null
+            : () => _viewNotification(item),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -395,11 +483,13 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Text(
                           item.title,
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(
                             fontWeight: item.isRead
                                 ? FontWeight.w500
                                 : FontWeight.w700,
@@ -416,7 +506,8 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                   const SizedBox(width: 8),
                   Text(
                     item.isRead ? 'Read' : 'Unread',
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(
                       color: item.isRead
                           ? colors.onSurfaceVariant
                           : colors.primary,
@@ -442,14 +533,22 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                 runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _viewNotification(item),
-                    icon: const Icon(Icons.visibility_outlined),
+                    onPressed: _busy
+                        ? null
+                        : () => _viewNotification(item),
+                    icon: const Icon(
+                      Icons.visibility_outlined,
+                    ),
                     label: const Text('View'),
                   ),
                   if (!item.isRead)
                     TextButton.icon(
-                      onPressed: _busy ? null : () => _markRead(item),
-                      icon: const Icon(Icons.done_rounded),
+                      onPressed: _busy
+                          ? null
+                          : () => _markRead(item),
+                      icon: const Icon(
+                        Icons.done_rounded,
+                      ),
                       label: const Text('Mark read'),
                     ),
                 ],
@@ -457,216 +556,6 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // HERO CARD — extracted so it can be placed OUTSIDE the scrollable list
-  // ═══════════════════════════════════════════════════════════════════════
-  Widget _buildHeroCard() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF3525CD), Color(0xFF4F46E5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x263525CD),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Unread in your inbox: ${_unreadCount ?? '…'}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.1,
-            ),
-          ),
-          if (_countError != null) ...[
-            const SizedBox(height: 12),
-            _errorCard(_countError!),
-          ],
-          const SizedBox(height: 18),
-          const Text(
-            'NOTIFICATION TYPE',
-            style: TextStyle(
-              color: Color(0xFFB7B3FF),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _type,
-                isExpanded: true,
-                isDense: true,
-                borderRadius: BorderRadius.circular(12),
-                dropdownColor: Colors.white,
-                icon: const Icon(
-                  Icons.expand_more_rounded,
-                  color: Color(0xFF64748B),
-                  size: 20,
-                ),
-                style: const TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: 'ALL',
-                    child: Text('All types'),
-                  ),
-                  for (final entry in _types.entries)
-                    DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (value) {
-                  if (value != null) _changeFilter(type: value);
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Unread only',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ),
-              Transform.scale(
-                scale: 0.9,
-                child: Switch(
-                  value: _unreadOnly,
-                  onChanged: _busy
-                      ? null
-                      : (value) => _changeFilter(unreadOnly: value),
-                  activeColor: Colors.white,
-                  activeTrackColor: Colors.white.withValues(alpha: 0.45),
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.28),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                      backgroundColor: Colors.white.withValues(alpha: 0.12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    onPressed: _busy ? null : _refresh,
-                    child: const Text(
-                      'Filter list',
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF3525CD),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                    ),
-                    onPressed: _busy ||
-                        _unreadCount == null ||
-                        _unreadCount == 0
-                        ? null
-                        : _markAllRead,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_rounded,
-                          size: 16,
-                          color: Color(0xFF3525CD),
-                        ),
-                        SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'Mark all\nread',
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.15,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF3525CD),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -681,122 +570,195 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
 
     return PopScope(
       canPop: !_working,
-      child: Column(
-        // ── Outer column: static hero + scrollable list ──
-        children: [
-          // ── HERO CARD (STATIC, does NOT scroll) ──
-          _buildHeroCard(),
-
-          // ── SCROLLABLE AREA (title + notifications + pagination) ──
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: [
-                  Text(
-                    'Your notifications',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Course updates, assignments, results '
-                        'and academy announcements.',
-                  ),
-                  const SizedBox(height: 16),
-
-                  if (_working) ...[
-                    const LinearProgressIndicator(),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_actionError != null) ...[
-                    _errorCard(_actionError!),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  if (_listError != null) ...[
-                    _errorCard(_listError!),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: _busy ? null : _refresh,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
-                    ),
-                    if (_page > 1)
-                      TextButton(
-                        onPressed: _busy ? null : () => _changePage(1),
-                        child: const Text('Return to first page'),
-                      ),
-                  ],
-                  if (result != null) ...[
-                    if (result.items.isEmpty)
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.notifications_none_rounded,
-                                size: 48,
-                              ),
-                              SizedBox(height: 12),
-                              Text(
-                                'No notifications match these filters.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    for (final item in result.items)
-                      _notificationCard(item),
-                    const SizedBox(height: 8),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Your notifications',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Course updates, assignments, results '
+              'and academy announcements.',
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                  children: [
                     Text(
-                      '${result.count} notifications',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall,
+                      'Unread in your inbox: '
+                      '${_unreadCount ?? '…'}',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    if (_countError != null) ...[
+                      const SizedBox(height: 12),
+                      _errorCard(_countError!),
+                    ],
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _type,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Notification type',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: 'ALL',
+                          child: Text('All types'),
+                        ),
+                        for (final entry in _types.entries)
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                _changeFilter(type: value);
+                              }
+                            },
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Unread only'),
+                      value: _unreadOnly,
+                      onChanged: _busy
+                          ? null
+                          : (value) {
+                              _changeFilter(
+                                unreadOnly: value,
+                              );
+                            },
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
-                        IconButton(
-                          tooltip: 'Previous page',
-                          onPressed: _busy || _page <= 1
-                              ? null
-                              : () => _changePage(_page - 1),
-                          icon: const Icon(Icons.chevron_left),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _refresh,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
                         ),
-                        Expanded(
-                          child: Text(
-                            'Page $_page of $totalPages',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Next page',
-                          onPressed: _busy || _page >= totalPages
+                        FilledButton.icon(
+                          onPressed: _busy ||
+                                  _unreadCount == null ||
+                                  _unreadCount == 0
                               ? null
-                              : () => _changePage(_page + 1),
-                          icon: const Icon(Icons.chevron_right),
+                              : _markAllRead,
+                          icon: const Icon(Icons.done_all),
+                          label: const Text('Mark all read'),
                         ),
                       ],
                     ),
                   ],
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            if (_working) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+            ],
+            if (_actionError != null) ...[
+              _errorCard(_actionError!),
+              const SizedBox(height: 12),
+            ],
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            if (_listError != null) ...[
+              _errorCard(_listError!),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : _refresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ),
+              if (_page > 1)
+                TextButton(
+                  onPressed:
+                      _busy ? null : () => _changePage(1),
+                  child: const Text('Return to first page'),
+                ),
+            ],
+            if (result != null) ...[
+              if (result.items.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.notifications_none_rounded,
+                          size: 48,
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'No notifications match these filters.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              for (final item in result.items)
+                _notificationCard(item),
+              const SizedBox(height: 8),
+              Text(
+                '${result.count} notifications',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Previous page',
+                    onPressed: _busy || _page <= 1
+                        ? null
+                        : () => _changePage(_page - 1),
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Page $_page of $totalPages',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Next page',
+                    onPressed: _busy || _page >= totalPages
+                        ? null
+                        : () => _changePage(_page + 1),
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }

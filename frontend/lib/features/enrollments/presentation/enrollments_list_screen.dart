@@ -654,7 +654,7 @@ class _BulkEnrollmentDialogState
 
     if (joinedDateFrom == null) {
       setState(() {
-        error = 'Joined Date From is required.';
+        error = 'Student Admission Date From is required.';
       });
 
       return;
@@ -798,7 +798,7 @@ class _BulkEnrollmentDialogState
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
-                  'Joined Date From *',
+                  'Student Admission Date From *',
                 ),
                 subtitle: Text(
                   formatDate(
@@ -823,7 +823,7 @@ class _BulkEnrollmentDialogState
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
-                  'Joined Date To',
+                  'Student Admission Date To',
                 ),
                 subtitle: Text(
                   formatDate(

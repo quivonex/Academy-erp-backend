@@ -24,7 +24,7 @@ class EduSphereApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'VidyaSetu',
+      title: 'EduSphere ERP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: router,

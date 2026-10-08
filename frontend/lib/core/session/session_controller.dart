@@ -17,7 +17,6 @@ class SessionState {
     this.role,
     this.firmUuid,
     this.firmName,
-    this.userName,
   });
 
   final bool isLoading;
@@ -26,7 +25,6 @@ class SessionState {
   final UserRole? role;
   final String? firmUuid;
   final String? firmName;
-  final String? userName;
 
   static const unauthenticated = SessionState(isLoading: false);
 }
@@ -63,9 +61,6 @@ class SessionController extends Notifier<SessionState> {
       );
     }
 
-    final fullName = user['full_name']?.toString() ??
-        '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
-
     return SessionState(
       isLoading: false,
       isAuthenticated: true,
@@ -73,7 +68,6 @@ class SessionController extends Notifier<SessionState> {
       role: role,
       firmUuid: user['firm_uuid']?.toString(),
       firmName: user['firm_name']?.toString(),
-      userName: fullName.isEmpty ? user['email']?.toString() : fullName,
     );
   }
 
@@ -115,10 +109,6 @@ class SessionController extends Notifier<SessionState> {
         'user_type': user.userType,
         'firm_uuid': user.firmUuid,
         'firm_name': user.firmName,
-        'full_name': user.fullName,
-        'first_name': user.firstName,
-        'last_name': user.lastName,
-        'email': user.email,
       });
       if (response.data.tokens.access.isEmpty || response.data.tokens.refresh.isEmpty) {
         throw const ApiException('Login response did not include tokens.');
