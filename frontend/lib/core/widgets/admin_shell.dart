@@ -90,9 +90,9 @@ bool _isSelected(String itemRoute, String current) =>
     current == itemRoute || current.startsWith('$itemRoute/');
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 38});
+  const _BrandMark({super.key});
 
-  final double size;
+  static const double size = 38;
 
   @override
   Widget build(BuildContext context) {

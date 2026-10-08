@@ -187,7 +187,6 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
           final monthCollection = summary.metricFor('Collected since month start');
           final pendingGrading = summary.metricFor('Pending grading');
           final upcomingClasses = summary.metricFor('Upcoming classes');
-          final liveNow = summary.metricFor('Live now');
 
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),

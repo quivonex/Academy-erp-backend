@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import 'api_urls.dart';
 import 'token_storage.dart';
 
 /// Django backend on the same local network. Override with --dart-define=API_BASE_URL=...

@@ -64,6 +64,10 @@ dependencies:
 
   video_player: 2.9.2
 
+  # Receipt printing and PDF generation
+  pdf: ^3.10.8
+  printing: ^5.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

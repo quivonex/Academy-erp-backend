@@ -50,7 +50,6 @@ String _dueLabel(DateTime due) {
 // PREMIUM COLORS
 // ═══════════════════════════════════════════════════════════════════════════
 class _PremiumPalette {
-  static const bg = Color(0xFFF3F4F8);
   static const surface = Color(0xFFFFFFFF);
   static const surfaceMuted = Color(0xFFF8FAFC);
   static const border = Color(0xFFE2E8F0);

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../courses/data/course.dart';
 import '../../courses/data/course_repository.dart';
 
-import '../data/banner.dart';
 import '../data/banner_repository.dart';
 
 class BannerFormScreen extends ConsumerStatefulWidget {

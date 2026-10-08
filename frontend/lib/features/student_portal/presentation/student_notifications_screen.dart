@@ -573,7 +573,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
                   onChanged: _busy
                       ? null
                       : (value) => _changeFilter(unreadOnly: value),
-                  activeColor: Colors.white,
+                  activeThumbColor: Colors.white,
                   activeTrackColor: Colors.white.withValues(alpha: 0.45),
                   inactiveThumbColor: Colors.white,
                   inactiveTrackColor: Colors.white.withValues(alpha: 0.28),
