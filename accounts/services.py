@@ -6,6 +6,7 @@ from students.models import Student
 import uuid
 from firms.models import Firm
 from django.conf import settings
+from django.utils import timezone
 
 
 def generate_tokens_for_user(user):
@@ -123,6 +124,7 @@ def register_student(validated_data):
         last_name=last_name,
         email=email,
         phone=phone,
+        joined_date=timezone.localdate(),
         is_active=True,
     )
 
