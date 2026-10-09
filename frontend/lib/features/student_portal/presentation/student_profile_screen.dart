@@ -76,14 +76,37 @@ class _StudentProfileScreenState
   Future<void> _logout() async {
     if (_loggingOut) return;
 
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'Are you sure you want to log out of VidyaSetu?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
     setState(() => _loggingOut = true);
 
     try {
       await ref
           .read(sessionControllerProvider.notifier)
           .logout();
-
-      // Session बदलल्यावर router login/explore कडे नेईल.
     } catch (error) {
       if (!mounted) return;
 

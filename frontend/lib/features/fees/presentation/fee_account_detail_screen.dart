@@ -263,8 +263,8 @@ class _FeeAccountDetailScreenState
           ),
           const SizedBox(height: 12),
           Wrap(
-            spacing: 24,
-            runSpacing: 12,
+            spacing: 16,
+            runSpacing: 8,
             children: [
               Text('Total: ${formatInr(a.totalAmount)}'),
               Text('Discount: ${formatInr(a.discountAmount)}'),

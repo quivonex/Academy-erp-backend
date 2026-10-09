@@ -45,7 +45,6 @@ String _dueLabel(DateTime due) {
       '${_dueMonths[local.month - 1]} ${local.day} · '
       '$hour:$minute ${local.hour < 12 ? 'AM' : 'PM'}';
 }
-
 class StudentAssignmentScreen extends ConsumerStatefulWidget {
   const StudentAssignmentScreen({
     super.key,

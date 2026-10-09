@@ -560,6 +560,216 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // HERO CARD — extracted so it can be placed OUTSIDE the scrollable list
+  // ═══════════════════════════════════════════════════════════════════════
+  Widget _buildHeroCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF3525CD), Color(0xFF4F46E5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x263525CD),
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Unread in your inbox: ${_unreadCount ?? '…'}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.1,
+            ),
+          ),
+          if (_countError != null) ...[
+            const SizedBox(height: 12),
+            _errorCard(_countError!),
+          ],
+          const SizedBox(height: 18),
+          const Text(
+            'NOTIFICATION TYPE',
+            style: TextStyle(
+              color: Color(0xFFB7B3FF),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _type,
+                isExpanded: true,
+                isDense: true,
+                borderRadius: BorderRadius.circular(12),
+                dropdownColor: Colors.white,
+                icon: const Icon(
+                  Icons.expand_more_rounded,
+                  color: Color(0xFF64748B),
+                  size: 20,
+                ),
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: 'ALL',
+                    child: Text('All types'),
+                  ),
+                  for (final entry in _types.entries)
+                    DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (value) {
+                  if (value != null) _changeFilter(type: value);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Unread only',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: 0.9,
+                child: Switch(
+                  value: _unreadOnly,
+                  onChanged: _busy
+                      ? null
+                      : (value) => _changeFilter(unreadOnly: value),
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: Colors.white.withValues(alpha: 0.45),
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.28),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 46,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                      backgroundColor: Colors.white.withValues(alpha: 0.12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    onPressed: _busy ? null : _refresh,
+                    child: const Text(
+                      'Filter list',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF3525CD),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                    ),
+                    onPressed: _busy ||
+                        _unreadCount == null ||
+                        _unreadCount == 0
+                        ? null
+                        : _markAllRead,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: Color(0xFF3525CD),
+                        ),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Mark all\nread',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF3525CD),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -588,6 +798,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
               'and academy announcements.',
             ),
             const SizedBox(height: 16),
+            _buildHeroCard(),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),

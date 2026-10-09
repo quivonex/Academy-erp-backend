@@ -212,7 +212,6 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         },
       ),
       const SizedBox(height: 12),
-      // Subscribe independently so lesson failures are handled immediately.
       FutureBuilder<LessonPage>(
         future: lessonsFuture,
         builder: (context, snapshot) {
@@ -268,7 +267,6 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   );
 }
 
-// Chapter editing and lesson creation share the same field requirements.
 class _ChapterFormDialog extends ConsumerStatefulWidget {
   const _ChapterFormDialog({
     required this.chapterUuid,
@@ -471,4 +469,3 @@ class _InfoRow extends StatelessWidget {
     ),
   );
 }
-

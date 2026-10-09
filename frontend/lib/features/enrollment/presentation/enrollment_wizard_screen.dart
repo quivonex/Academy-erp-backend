@@ -54,6 +54,7 @@ class _EnrollmentWizardScreenState extends ConsumerState<EnrollmentWizardScreen>
   Widget build(BuildContext context) {
     final wizardState = ref.watch(enrollmentWizardProvider);
     final colors = context.colors;
+    final isWide = MediaQuery.sizeOf(context).width >= 800;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,7 +80,7 @@ class _EnrollmentWizardScreenState extends ConsumerState<EnrollmentWizardScreen>
           child: SingleChildScrollView(
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(isWide ? 24 : 16),
                 child: _buildStepBody(context, wizardState),
               ),
             ),
@@ -125,8 +126,10 @@ class _StageIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final isWide = MediaQuery.sizeOf(context).width >= 800;
+
     return SizedBox(
-      height: 56,
+      height: isWide ? 56 : 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _stageLabels.length,
@@ -139,7 +142,10 @@ class _StageIndicator extends StatelessWidget {
             onTap: () => onTapStep(step),
             borderRadius: BorderRadius.circular(999),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: EdgeInsets.symmetric(
+                horizontal: isWide ? 14 : 10,
+                vertical: isWide ? 8 : 6,
+              ),
               decoration: BoxDecoration(
                 color: isActive ? colors.primary : (isDone ? colors.successBg : colors.surface),
                 borderRadius: BorderRadius.circular(999),
@@ -177,13 +183,17 @@ class _StepFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= 600;
     return Align(
-      alignment: Alignment.centerRight,
-      child: ElevatedButton(
-        onPressed: isSubmitting ? null : onNext,
-        child: isSubmitting
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Text(label),
+      alignment: isWide ? Alignment.centerRight : Alignment.center,
+      child: SizedBox(
+        width: isWide ? null : double.infinity,
+        child: ElevatedButton(
+          onPressed: isSubmitting ? null : onNext,
+          child: isSubmitting
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(label),
+        ),
       ),
     );
   }

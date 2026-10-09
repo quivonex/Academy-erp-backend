@@ -1,3 +1,4 @@
+// admin_shell.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +11,6 @@ import '../theme/breakpoints.dart';
 import 'admin_ui.dart';
 import 'nav_item.dart';
 
-/// The shared shell for every authenticated admin screen. Responsive states:
-///   >=1280px  fixed 264px sidebar
-///   1024-1279 72px icon rail
-///   <1024     off-canvas drawer
 class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child, required this.currentRoute});
 
@@ -23,7 +20,6 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider);
-    final colors = context.colors;
     final width = MediaQuery.sizeOf(context).width;
     final role = session.role;
     if (role == null) return const SizedBox.shrink();
@@ -40,12 +36,12 @@ class AdminShell extends ConsumerWidget {
             : 'Academy ERP');
 
     Widget sidebar(bool expanded) => _Sidebar(
-          items: navItems,
-          currentRoute: currentRoute,
-          expanded: expanded,
-          subtitle: brandSubtitle,
-          roleLabel: _roleLabel(role),
-        );
+      items: navItems,
+      currentRoute: currentRoute,
+      expanded: expanded,
+      subtitle: brandSubtitle,
+      roleLabel: _roleLabel(role),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -95,9 +91,9 @@ bool _isSelected(String itemRoute, String current) =>
     current == itemRoute || current.startsWith('$itemRoute/');
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 38});
+  const _BrandMark({super.key});
 
-  final double size;
+  static const double size = 38;
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +111,25 @@ class _BrandMark extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(Icons.school_rounded, color: Colors.white, size: size * 0.55),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.28),
+        child: Image.asset(
+          'assets/images/vidyasetu_logo.jpg',
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: kAdminGradient,
+              borderRadius: BorderRadius.circular(size * 0.28),
+            ),
+            child: Icon(
+              Icons.school_rounded,
+              color: Colors.white,
+              size: size * 0.55,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -167,7 +181,7 @@ class _Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'EduSphere',
+                                  'VidyaSetu',
                                   style: jakarta(
                                     textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w800,
@@ -301,42 +315,42 @@ class _NavTile extends StatelessWidget {
             height: 44,
             child: expanded
                 ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      children: [
-                        Icon(item.icon, size: 20, color: fg),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            item.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: selected
-                                  ? colors.primary
-                                  : const Color(0xFF334155),
-                              fontWeight:
-                                  selected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (selected)
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x996366F1),
-                                  blurRadius: 6,
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Icon(item.icon, size: 20, color: fg),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: selected
+                            ? colors.primary
+                            : const Color(0xFF334155),
+                        fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w500,
+                      ),
                     ),
-                  )
+                  ),
+                  if (selected)
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x996366F1),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            )
                 : Center(child: Icon(item.icon, size: 22, color: fg)),
           ),
         ),
@@ -410,6 +424,31 @@ class _TopBar extends ConsumerWidget {
               }
 
               if (value != 'logout') return;
+
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Log out?'),
+                  content: const Text(
+                    'Are you sure you want to log out of VidyaSetu?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.danger,
+                      ),
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Log out'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm != true || !context.mounted) return;
 
               try {
                 await ref.read(sessionControllerProvider.notifier).logout();

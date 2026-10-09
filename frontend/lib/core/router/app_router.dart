@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/data/login_screen.dart';
+import '../../features/auth/data/forgot_password_screen.dart';
+import '../../features/auth/data/reset_password_screen.dart';
 import '../../features/courses/presentation/course_detail_screen.dart';
 import '../../features/courses/presentation/courses_list_screen.dart';
 import '../../features/course_categories/presentation/course_categories_screen.dart';
@@ -59,6 +61,8 @@ import '../session/session_controller.dart';
 import '../session/user_role.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/nav_item.dart';
+import '../widgets/splash_screen.dart';
+
 
 bool _roleCanAccess(String location, UserRole? role) {
   if (role == null) return false;
@@ -74,24 +78,41 @@ bool _roleCanAccess(String location, UserRole? role) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/explore',
+    initialLocation: '/splash',
     refreshListenable: _SessionRefreshListenable(ref),
     redirect: (context, state) {
       final session = ref.read(sessionControllerProvider);
       final location = state.matchedLocation;
+
+      if (session.isLoading) {
+        return location == '/splash' ? null : '/splash';
+      }
+
+      if (location == '/splash') {
+        if (!session.isAuthenticated) {
+          return '/explore';
+        }
+        return session.role == UserRole.student
+            ? '/student/courses'
+            : '/dashboard';
+      }
+
       final goingToLogin = location == '/login';
 
       final isPublic = goingToLogin ||
           location == '/register' ||
+          location == '/forgot-password' ||
+          location == '/reset-password' ||
           location.startsWith('/explore');
-
-      if (session.isLoading) return null;
 
       if (!session.isAuthenticated) {
         return isPublic ? null : '/login';
       }
 
-      if (goingToLogin || location == '/register') {
+      if (goingToLogin ||
+          location == '/register' ||
+          location == '/forgot-password' ||
+          location == '/reset-password') {
         final returnTo = state.uri.queryParameters['returnTo'];
 
         final courseDetailPath = RegExp(
@@ -136,6 +157,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
         path: '/explore',
         builder: (context, state) => const ExploreScreen(),
         routes: [
@@ -158,6 +183,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => LoginScreen(
           returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        redirect: (context, state) {
+          final email = state.uri.queryParameters['email']?.trim() ?? '';
+          return email.isEmpty ? '/forgot-password' : null;
+        },
+        builder: (context, state) => ResetPasswordScreen(
+          email: state.uri.queryParameters['email']!.trim(),
         ),
       ),
       ShellRoute(

@@ -989,14 +989,16 @@ class _CreateCourseDialogState extends ConsumerState<_CreateCourseDialog> {
               const Divider(),
               const SizedBox(height: 10),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Curriculum (Subjects, Chapters & Lessons)',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                  Expanded(
+                    child: Text(
+                      'Curriculum (Subjects, Chapters & Lessons)',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: saving ? null : _promptAddSubject,
                     icon: const Icon(Icons.add_rounded, size: 18),

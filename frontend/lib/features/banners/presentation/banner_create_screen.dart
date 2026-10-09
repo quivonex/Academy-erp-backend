@@ -532,15 +532,16 @@ class _BannerCreateScreenState extends ConsumerState<BannerCreateScreen> {
                         if (imageBytes != null) ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.memory(
-                              imageBytes!,
-                              height: 180,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                              const SizedBox(
-                                height: 80,
-                                child: Center(
-                                  child: Text('Preview unavailable.'),
+                            child: AspectRatio(
+                              aspectRatio: 16 / 7,
+                              child: Image.memory(
+                                imageBytes!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const SizedBox(
+                                  height: 80,
+                                  child: Center(
+                                    child: Text('Preview unavailable.'),
+                                  ),
                                 ),
                               ),
                             ),

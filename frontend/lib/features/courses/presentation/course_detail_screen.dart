@@ -461,6 +461,7 @@ class _SubjectCardState extends ConsumerState<_SubjectCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.book_rounded, color: Theme.of(context).primaryColor),
                 const SizedBox(width: 10),
@@ -487,12 +488,18 @@ class _SubjectCardState extends ConsumerState<_SubjectCard> {
                     ],
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
                 TextButton.icon(
                   onPressed: _editSubject,
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Edit'),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: _addChapter,
                   icon: const Icon(Icons.add_rounded, size: 16),
@@ -623,10 +630,10 @@ class _ChapterTileState extends ConsumerState<_ChapterTile> {
         ),
         subtitle: widget.chapter.description.isNotEmpty
             ? Text(
-                widget.chapter.description,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
+          widget.chapter.description,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        )
             : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -739,7 +746,7 @@ class _AddSubjectDialogState extends ConsumerState<_AddSubjectDialog> {
   late final name = TextEditingController(text: widget.subject?.name ?? '');
   late final code = TextEditingController(text: widget.subject?.code ?? '');
   late final desc =
-      TextEditingController(text: widget.subject?.description ?? '');
+  TextEditingController(text: widget.subject?.description ?? '');
   bool saving = false;
   String? error;
 
@@ -829,10 +836,10 @@ class _AddSubjectDialogState extends ConsumerState<_AddSubjectDialog> {
           onPressed: saving ? null : _save,
           child: saving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : Text(isEdit ? 'Save Changes' : 'Add Subject'),
         ),
       ],
@@ -853,7 +860,7 @@ class _AddChapterDialogState extends ConsumerState<_AddChapterDialog> {
   final formKey = GlobalKey<FormState>();
   late final title = TextEditingController(text: widget.chapter?.title ?? '');
   late final desc =
-      TextEditingController(text: widget.chapter?.description ?? '');
+  TextEditingController(text: widget.chapter?.description ?? '');
   late final sequence = TextEditingController(
       text: widget.chapter?.sequence.toString() ?? '1');
   bool saving = false;
@@ -947,10 +954,10 @@ class _AddChapterDialogState extends ConsumerState<_AddChapterDialog> {
           onPressed: saving ? null : _save,
           child: saving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : Text(isEdit ? 'Save Changes' : 'Add Chapter'),
         ),
       ],
@@ -971,7 +978,7 @@ class _AddLessonDialogState extends ConsumerState<_AddLessonDialog> {
   final formKey = GlobalKey<FormState>();
   late final title = TextEditingController(text: widget.lesson?.title ?? '');
   late final desc =
-      TextEditingController(text: widget.lesson?.description ?? '');
+  TextEditingController(text: widget.lesson?.description ?? '');
   late final sequence = TextEditingController(
       text: widget.lesson?.sequence.toString() ?? '1');
   bool saving = false;
@@ -1065,10 +1072,10 @@ class _AddLessonDialogState extends ConsumerState<_AddLessonDialog> {
           onPressed: saving ? null : _save,
           child: saving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : Text(isEdit ? 'Save Changes' : 'Add Lesson'),
         ),
       ],
@@ -1145,7 +1152,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
         if (selectedCategory == null && widget.course.categoryName != null) {
           try {
             selectedCategory = categories.firstWhere(
-              (c) => c.name == widget.course.categoryName,
+                  (c) => c.name == widget.course.categoryName,
             );
           } catch (_) {}
         }
@@ -1170,7 +1177,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
       await loadCategories();
       setState(() {
         selectedCategory = categories.firstWhere(
-          (c) => c.uuid == newCat.uuid,
+              (c) => c.uuid == newCat.uuid,
           orElse: () => newCat,
         );
         categoryChanged = true;
@@ -1275,21 +1282,21 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
                 items: categories
                     .map(
                       (category) => DropdownMenuItem<String>(
-                        value: category.uuid,
-                        child: Text(category.name, overflow: TextOverflow.ellipsis),
-                      ),
-                    )
+                    value: category.uuid,
+                    child: Text(category.name, overflow: TextOverflow.ellipsis),
+                  ),
+                )
                     .toList(),
                 onChanged: saving || loadingCategories
                     ? null
                     : (value) {
-                        setState(() {
-                          selectedCategory = value == null
-                              ? null
-                              : categories.firstWhere((c) => c.uuid == value);
-                          categoryChanged = true;
-                        });
-                      },
+                  setState(() {
+                    selectedCategory = value == null
+                        ? null
+                        : categories.firstWhere((c) => c.uuid == value);
+                    categoryChanged = true;
+                  });
+                },
               ),
             ),
             const SizedBox(width: 8),
@@ -1320,9 +1327,9 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
               onPressed: saving || loadingCategories
                   ? null
                   : () => setState(() {
-                        selectedCategory = null;
-                        categoryChanged = true;
-                      }),
+                selectedCategory = null;
+                categoryChanged = true;
+              }),
               child: const Text('Clear category'),
             ),
           ),
@@ -1526,9 +1533,9 @@ class __CreateCategoryQuickDialogState
     });
     try {
       final created = await ref.read(courseCategoryRepositoryProvider).create(
-            name: nameController.text,
-            description: descController.text,
-          );
+        name: nameController.text,
+        description: descController.text,
+      );
       if (mounted) Navigator.of(context).pop(created);
     } on ApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -1575,10 +1582,10 @@ class __CreateCategoryQuickDialogState
           onPressed: saving ? null : _save,
           child: saving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : const Text('Save Category'),
         ),
       ],
