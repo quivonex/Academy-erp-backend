@@ -174,6 +174,24 @@ class CourseListCreateView(APIView):
         )
 
     def post(self, request):
+        certificate_fields = {
+            "is_certificate_enabled",
+            "certificate_required_watch_percentage",
+        }
+
+        if (
+            certificate_fields.intersection(request.data.keys())
+            and request.user.user_type != "FIRM_ADMIN"
+        ):
+            return error_response(
+                message=(
+                    "Only the Firm Admin can configure "
+                    "course certificate settings."
+                ),
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+            
         serializer = CourseSerializer(
             data=request.data
         )
@@ -606,6 +624,28 @@ class CourseDetailView(TenantDetailView):
     lookup_kwarg = "course_uuid"
     success_name = "Course"
 
+    def patch(self, request, **kwargs):
+        certificate_fields = {
+            "is_certificate_enabled",
+            "certificate_required_watch_percentage",
+        }
+
+        if (
+            certificate_fields.intersection(request.data.keys())
+            and request.user.user_type != "FIRM_ADMIN"
+        ):
+            return error_response(
+                message=(
+                    "Only the Firm Admin can configure "
+                    "course certificate settings."
+                ),
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().patch(request, **kwargs)
+    
+    
     def resolve_relationships(
         self,
         request,

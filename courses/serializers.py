@@ -1,5 +1,5 @@
 from rest_framework import serializers
-
+from decimal import Decimal
 from .models import (
     Chapter,
     Course,
@@ -40,7 +40,18 @@ class CourseSerializer(serializers.ModelSerializer):
     category = CourseCategorySerializer(
         read_only=True,
     )
+    
+    is_certificate_enabled = serializers.BooleanField(
+        required=False,
+    )
 
+    certificate_required_watch_percentage = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal("1.00"),
+        max_value=Decimal("100.00"),
+        required=False,
+    )
     class Meta:
         model = Course
 
@@ -62,6 +73,8 @@ class CourseSerializer(serializers.ModelSerializer):
             "is_featured",
             "featured_order",
             "access_duration_days",
+            "is_certificate_enabled",
+            "certificate_required_watch_percentage",
         )
 
         read_only_fields = (

@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import models
-
+from decimal import Decimal
 from firms.models import Firm
 from students.models import Student
 from teachers.models import Teacher
@@ -129,6 +129,17 @@ class Course(models.Model):
     )
     
 
+    is_certificate_enabled = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    certificate_required_watch_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("100.00"),
+    )
+    
     is_active = models.BooleanField(
         default=True,
         db_index=True,
