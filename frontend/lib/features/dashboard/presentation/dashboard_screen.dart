@@ -6,9 +6,14 @@ import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/admin_ui.dart';
-import '../../firms/data/firm_admin_repository.dart';
-import '../../firms/data/firm_repository.dart';
 import '../data/dashboard_repository.dart';
+
+final superAdminDashboardSummaryProvider =
+    FutureProvider.autoDispose<SuperAdminDashboardSummary>((ref) {
+  return ref
+      .watch(dashboardRepositoryProvider)
+      .superAdminSummary();
+});
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -1830,99 +1835,113 @@ class _SuperAdminDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    final firms = ref.watch(firmsListProvider);
-    final admins = ref.watch(allFirmAdminsProvider);
+    final summaryState = ref.watch(superAdminDashboardSummaryProvider);
 
     void refresh() {
-      ref.invalidate(firmsListProvider);
-      ref.invalidate(allFirmAdminsProvider);
+      ref.invalidate(superAdminDashboardSummaryProvider);
     }
 
-    final firmList = firms.valueOrNull ?? [];
-    final adminList = admins.valueOrNull ?? [];
-
     return RefreshIndicator(
-      onRefresh: () async => refresh(),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          _HeroSection(
-            academyName: 'Platform administration',
-            students: '${firmList.length} academies',
-            onRefresh: refresh,
-            refreshing: firms.isLoading || admins.isLoading,
-            superAdmin: true,
-          ),
-          const SizedBox(height: 24),
-
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              _MetricCard(
-                label: 'Academies',
-                value: firmList.length.toString(),
-                caption: 'Registered organizations',
-                icon: Icons.apartment_outlined,
-                color: colors.primary,
-                onTap: () => context.go('/firms'),
-              ),
-              _MetricCard(
-                label: 'Active academies',
-                value: firmList.where((item) => item.isActive).length.toString(),
-                caption: 'Currently operational',
-                icon: Icons.verified_outlined,
-                color: colors.success,
-                onTap: () => context.go('/firms'),
-              ),
-              _MetricCard(
-                label: 'Firm admins',
-                value: adminList.length.toString(),
-                caption: 'Academy administrators',
-                icon: Icons.admin_panel_settings_outlined,
-                color: const Color(0xFF7C3AED),
-                onTap: () => context.go('/firm-admins'),
-              ),
-              _MetricCard(
-                label: 'Active admins',
-                value: adminList.where((item) => item.isActive).length.toString(),
-                caption: 'Accounts with active access',
-                icon: Icons.people_outline_rounded,
-                color: const Color(0xFF0284C7),
-                onTap: () => context.go('/firm-admins'),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 28),
-
-          Text(
-            'Platform actions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
+      onRefresh: () async {
+        refresh();
+        await ref.read(superAdminDashboardSummaryProvider.future);
+      },
+      child: summaryState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 100),
+            _DashboardMessage(
+              icon: Icons.cloud_off_rounded,
+              title: 'Could not load dashboard',
+              message: 'Check your internet connection and try again.',
+              actionLabel: 'Retry',
+              onAction: refresh,
             ),
-          ),
-          const SizedBox(height: 12),
+          ],
+        ),
+        data: (summary) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            _HeroSection(
+              academyName: 'Platform administration',
+              students: '${summary.totalFirms} academies',
+              onRefresh: refresh,
+              refreshing: summaryState.isLoading,
+              superAdmin: true,
+            ),
+            const SizedBox(height: 24),
 
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _QuickAction(
-                label: 'Manage academies',
-                icon: Icons.business_outlined,
-                onTap: () => context.go('/firms'),
-              ),
-              _QuickAction(
-                label: 'Manage firm admins',
-                icon: Icons.manage_accounts_outlined,
-                onTap: () => context.go('/firm-admins'),
-              ),
-            ],
-          ),
-        ],
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                _MetricCard(
+                  label: 'Academies',
+                  value: summary.totalFirms.toString(),
+                  caption: '${summary.activeFirms} currently active',
+                  icon: Icons.apartment_outlined,
+                  color: colors.primary,
+                  onTap: () => context.go('/firms'),
+                ),
+                _MetricCard(
+                  label: 'Students',
+                  value: summary.totalStudents.toString(),
+                  caption: '${summary.activeStudents} active students',
+                  icon: Icons.school_outlined,
+                  color: colors.success,
+                  onTap: () => context.go('/firms'),
+                ),
+                _MetricCard(
+                  label: 'Courses',
+                  value: summary.totalCourses.toString(),
+                  caption: '${summary.activeCourses} active courses',
+                  icon: Icons.auto_stories_outlined,
+                  color: const Color(0xFF7C3AED),
+                  onTap: () => context.go('/firms'),
+                ),
+                _MetricCard(
+                  label: 'Enrollments',
+                  value: summary.totalEnrollments.toString(),
+                  caption: '${summary.activeEnrollments} active enrollments',
+                  icon: Icons.how_to_reg_outlined,
+                  color: const Color(0xFF0284C7),
+                  onTap: () => context.go('/firms'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 28),
+
+            Text(
+              'Platform actions',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colors.textPrimary,
+                  ),
+            ),
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _QuickAction(
+                  label: 'Manage academies',
+                  icon: Icons.business_outlined,
+                  onTap: () => context.go('/firms'),
+                ),
+                _QuickAction(
+                  label: 'Manage firm admins',
+                  icon: Icons.manage_accounts_outlined,
+                  onTap: () => context.go('/firm-admins'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

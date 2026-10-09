@@ -8,6 +8,8 @@ class ApiUrls {
   static const String refresh = '/auth/refresh/';
   static const String logout = '/auth/logout/';
   static const String me = '/auth/me/';
+  static const String passwordResetRequest = '/auth/password-reset/request/';
+  static const String passwordResetConfirm = '/auth/password-reset/confirm/';
 
   // Firms
   static const String firms = '/firms/';

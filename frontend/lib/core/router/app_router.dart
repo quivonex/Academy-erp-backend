@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/data/login_screen.dart';
+import '../../features/auth/data/forgot_password_screen.dart';
+import '../../features/auth/data/reset_password_screen.dart';
 import '../../features/courses/presentation/course_detail_screen.dart';
 import '../../features/courses/presentation/courses_list_screen.dart';
 import '../../features/course_categories/presentation/course_categories_screen.dart';
@@ -61,6 +63,7 @@ import '../widgets/admin_shell.dart';
 import '../widgets/nav_item.dart';
 import '../widgets/splash_screen.dart';
 
+
 bool _roleCanAccess(String location, UserRole? role) {
   if (role == null) return false;
 
@@ -98,13 +101,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       final isPublic = goingToLogin ||
           location == '/register' ||
+          location == '/forgot-password' ||
+          location == '/reset-password' ||
           location.startsWith('/explore');
 
       if (!session.isAuthenticated) {
         return isPublic ? null : '/login';
       }
 
-      if (goingToLogin || location == '/register') {
+      if (goingToLogin ||
+          location == '/register' ||
+          location == '/forgot-password' ||
+          location == '/reset-password') {
         final returnTo = state.uri.queryParameters['returnTo'];
 
         final courseDetailPath = RegExp(
@@ -175,6 +183,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => LoginScreen(
           returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        redirect: (context, state) {
+          final email = state.uri.queryParameters['email']?.trim() ?? '';
+          return email.isEmpty ? '/forgot-password' : null;
+        },
+        builder: (context, state) => ResetPasswordScreen(
+          email: state.uri.queryParameters['email']!.trim(),
         ),
       ),
       ShellRoute(

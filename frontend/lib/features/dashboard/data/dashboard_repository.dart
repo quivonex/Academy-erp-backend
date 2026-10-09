@@ -267,8 +267,6 @@ class SuperAdminDashboardSummary {
     required this.activeCourses,
     required this.totalEnrollments,
     required this.activeEnrollments,
-    required this.paidEnrollments,
-    required this.firms,
   });
 
   final int totalFirms;
@@ -279,28 +277,19 @@ class SuperAdminDashboardSummary {
   final int activeCourses;
   final int totalEnrollments;
   final int activeEnrollments;
-  final int paidEnrollments;
-  final List<SuperAdminFirmOverview> firms;
 
   factory SuperAdminDashboardSummary.fromJson(Map<String, dynamic> json) {
     final summary = _map(json['summary']);
-    final rawFirms = json['firms'];
 
     return SuperAdminDashboardSummary(
-      totalFirms: _number(summary['total_firms']).toInt(),
-      activeFirms: _number(summary['active_firms']).toInt(),
-      totalStudents: _number(summary['total_students']).toInt(),
-      activeStudents: _number(summary['active_students']).toInt(),
-      totalCourses: _number(summary['total_courses']).toInt(),
-      activeCourses: _number(summary['active_courses']).toInt(),
-      totalEnrollments: _number(summary['total_enrollments']).toInt(),
-      activeEnrollments: _number(summary['active_enrollments']).toInt(),
-      paidEnrollments: _number(summary['paid_enrollments']).toInt(),
-      firms: rawFirms is List
-          ? rawFirms
-          .map((item) => SuperAdminFirmOverview.fromJson(_map(item)))
-          .toList()
-          : const [],
+      totalFirms: _count(summary['total_firms']),
+      activeFirms: _count(summary['active_firms']),
+      totalStudents: _count(summary['total_students']),
+      activeStudents: _count(summary['active_students']),
+      totalCourses: _count(summary['total_courses']),
+      activeCourses: _count(summary['active_courses']),
+      totalEnrollments: _count(summary['total_enrollments']),
+      activeEnrollments: _count(summary['active_enrollments']),
     );
   }
 }
@@ -406,9 +395,8 @@ class DashboardRepository {
   }
 
   Future<SuperAdminDashboardSummary> superAdminSummary() async {
-    return SuperAdminDashboardSummary.fromJson(
-      await _get('/dashboard/super-admin/summary/'),
-    );
+    final data = await _get('/dashboard/super-admin/summary/');
+    return SuperAdminDashboardSummary.fromJson(data);
   }
 
   Future<DashboardReportPage> report({
@@ -450,6 +438,8 @@ num _number(dynamic value) {
   final number = value is num ? value : num.tryParse('$value');
   return number ?? 0;
 }
+
+int _count(dynamic value) => _number(value).toInt();
 
 String _text(dynamic value) => value?.toString() ?? '';
 
