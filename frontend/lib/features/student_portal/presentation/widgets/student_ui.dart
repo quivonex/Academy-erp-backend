@@ -450,7 +450,6 @@ class AcademyMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.3),
         boxShadow: colors.heroShadow,
       ),
-<<<<<<< HEAD
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.3),
         child: Image.asset(
@@ -469,12 +468,6 @@ class AcademyMark extends StatelessWidget {
             ),
           ),
         ),
-=======
-      child: Icon(
-        Icons.auto_stories_rounded,
-        color: Colors.white,
-        size: size * 0.55,
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
       ),
     );
   }

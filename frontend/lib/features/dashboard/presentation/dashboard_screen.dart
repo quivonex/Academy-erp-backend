@@ -142,6 +142,7 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
 
           final pendingGrading = summary.metricFor('Pending grading');
           final upcomingClasses = summary.metricFor('Upcoming classes');
+          final liveNow = summary.metricFor('Live now');
 
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -218,32 +219,6 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                 spacing: 16,
                 runSpacing: 16,
                 children: [
-<<<<<<< HEAD
-                  const Icon(Icons.notification_important_outlined,
-                      size: 22, color: Color(0xFFBA1A1A)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Needs attention',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF131B2E),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Auto-refreshed 2m ago',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8E90A6),
-                      ),
-                    ),
-=======
                   _AttentionCard(
                     title: 'Pending grading',
                     value: pendingGrading.text,
@@ -265,12 +240,11 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                   _AttentionCard(
                     title: 'Upcoming classes',
                     value: upcomingClasses.text,
-                    message: '$liveNow currently live class(es).',
+                    message: '${liveNow.text} currently live class(es).',
                     icon: Icons.video_camera_front_outlined,
                     background: const Color(0xFFEFF6FF),
                     foreground: const Color(0xFF1D4ED8),
                     onTap: () => _open('/live-classes'),
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
                   ),
                 ],
               ),
@@ -373,7 +347,6 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
   }
 }
 
-<<<<<<< HEAD
 // ═══════════════════════════════════════════════════════════════════════════════
 // HERO BANNER
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -462,10 +435,10 @@ class _HeroBanner extends StatelessWidget {
                     child: Text(
                       'ACADEMIC SESSION 2026–27',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: const Color(0xFFE3DFFF),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
+                        color: const Color(0xFFE3DFFF),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                   Container(
@@ -493,9 +466,9 @@ class _HeroBanner extends StatelessWidget {
                               .textTheme
                               .labelSmall
                               ?.copyWith(
-                                color: const Color(0xFFA7F3D0),
-                                fontWeight: FontWeight.w600,
-                              ),
+                            color: const Color(0xFFA7F3D0),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -507,18 +480,18 @@ class _HeroBanner extends StatelessWidget {
               Text(
                 'Welcome back, $academyName',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
               ),
               const SizedBox(height: 8),
               // Subtitle
               Text(
                 '$studentCount students currently registered • Campus ID: $campusId • 100% of staff records verified',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFE3DFFF).withValues(alpha: 0.9),
-                    ),
+                  color: const Color(0xFFE3DFFF).withValues(alpha: 0.9),
+                ),
               ),
             ],
           ),
@@ -716,8 +689,8 @@ class _OverviewCard extends StatelessWidget {
 // ATTENTION CARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _AttentionCard extends StatelessWidget {
-  const _AttentionCard({
+class _LegacyAttentionCard extends StatelessWidget {
+  const _LegacyAttentionCard({
     required this.icon,
     required this.iconBg,
     required this.iconFg,
@@ -1129,6 +1102,71 @@ class _DetailedReportsCard extends StatelessWidget {
               );
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+String _displayDate(DateTime dt) {
+  final months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  final month = months[dt.month - 1];
+  final day = dt.day.toString().padLeft(2, '0');
+  return '$month $day, ${dt.year}';
+}
+
+class _InlineMessage extends StatelessWidget {
+  const _InlineMessage({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF64748B), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF525469),
+                  ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null)
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
         ],
       ),
     );
@@ -1786,8 +1824,6 @@ class _QuickActionTile extends StatelessWidget {
 // SUPER ADMIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
-=======
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
 class _SuperAdminDashboard extends ConsumerWidget {
   const _SuperAdminDashboard();
 

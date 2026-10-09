@@ -20,7 +20,6 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider);
-    final colors = context.colors;
     final width = MediaQuery.sizeOf(context).width;
     final role = session.role;
     if (role == null) return const SizedBox.shrink();
@@ -112,7 +111,6 @@ class _BrandMark extends StatelessWidget {
           ),
         ],
       ),
-<<<<<<< HEAD
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.28),
         child: Image.asset(
@@ -132,9 +130,6 @@ class _BrandMark extends StatelessWidget {
           ),
         ),
       ),
-=======
-      child: Icon(Icons.school_rounded, color: Colors.white, size: size * 0.55),
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
     );
   }
 }
@@ -177,32 +172,7 @@ class _Sidebar extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: expanded ? 20 : 0),
                 child: expanded
                     ? Row(
-                  children: [
-                    const _BrandMark(),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-<<<<<<< HEAD
-                          Text(
-                            'VidyaSetu',
-                            style: jakarta(
-                              textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.labelMedium?.copyWith(
-                              color: colors.textMuted,
-=======
                           const _BrandMark(),
                           const SizedBox(width: 12),
                           Expanded(
@@ -211,7 +181,7 @@ class _Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'EduSphere',
+                                  'VidyaSetu',
                                   style: jakarta(
                                     textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w800,
@@ -229,14 +199,10 @@ class _Sidebar extends StatelessWidget {
                                   ),
                                 ),
                               ],
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-                )
+                      )
                     : const Center(child: _BrandMark()),
               ),
             ),

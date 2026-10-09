@@ -560,7 +560,6 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     );
   }
 
-<<<<<<< HEAD
   // ═══════════════════════════════════════════════════════════════════════
   // HERO CARD — extracted so it can be placed OUTSIDE the scrollable list
   // ═══════════════════════════════════════════════════════════════════════
@@ -771,8 +770,6 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
     );
   }
 
-=======
->>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -801,6 +798,7 @@ class _StudentInboxState extends ConsumerState<_StudentInbox> {
               'and academy announcements.',
             ),
             const SizedBox(height: 16),
+            _buildHeroCard(),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
