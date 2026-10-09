@@ -20,6 +20,7 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider);
+    final colors = context.colors;
     final width = MediaQuery.sizeOf(context).width;
     final role = session.role;
     if (role == null) return const SizedBox.shrink();
@@ -29,7 +30,11 @@ class AdminShell extends ConsumerWidget {
     final isCompact = AppBreakpoints.isCompact(width);
     final isRailOnly = AppBreakpoints.isLaptopOrTabletLandscape(width);
 
-    const brandSubtitle = 'Knowledge Bridge';
+    final brandSubtitle = role == UserRole.superAdmin
+        ? 'Multi-Academy SaaS'
+        : (session.firmName?.trim().isNotEmpty == true
+            ? session.firmName!.trim()
+            : 'Academy ERP');
 
     Widget sidebar(bool expanded) => _Sidebar(
       items: navItems,
@@ -97,16 +102,17 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: kAdminGradient,
         borderRadius: BorderRadius.circular(size * 0.28),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Color(0x404F46E5),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
         ],
       ),
+<<<<<<< HEAD
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.28),
         child: Image.asset(
@@ -126,6 +132,9 @@ class _BrandMark extends StatelessWidget {
           ),
         ),
       ),
+=======
+      child: Icon(Icons.school_rounded, color: Colors.white, size: size * 0.55),
+>>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
     );
   }
 }
@@ -176,6 +185,7 @@ class _Sidebar extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+<<<<<<< HEAD
                           Text(
                             'VidyaSetu',
                             style: jakarta(
@@ -192,6 +202,34 @@ class _Sidebar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: textTheme.labelMedium?.copyWith(
                               color: colors.textMuted,
+=======
+                          const _BrandMark(),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'EduSphere',
+                                  style: jakarta(
+                                    textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                      color: const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: colors.textMuted,
+                                  ),
+                                ),
+                              ],
+>>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
                             ),
                           ),
                         ],
@@ -536,7 +574,7 @@ class _TopBar extends ConsumerWidget {
                         child: Text(
                           session.firmName?.trim().isNotEmpty == true
                               ? session.firmName!.trim()
-                              : 'VidyaSetu',
+                              : 'EduSphere',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.labelMedium?.copyWith(

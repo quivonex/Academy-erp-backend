@@ -1,8 +1,9 @@
 from django.db import transaction
-
+from django.utils import timezone
 from .models import ParentGuardian, Student
 
 
+@transaction.atomic
 @transaction.atomic
 def create_student(
     firm,
@@ -13,8 +14,14 @@ def create_student(
         [],
     )
 
+    admission_date = (
+        validated_data.pop("joined_date", None)
+        or timezone.localdate()
+    )
+
     student = Student.objects.create(
         firm=firm,
+        joined_date=admission_date,
         **validated_data,
     )
 
@@ -25,7 +32,6 @@ def create_student(
         )
 
     return student
-
 
 @transaction.atomic
 def update_student(

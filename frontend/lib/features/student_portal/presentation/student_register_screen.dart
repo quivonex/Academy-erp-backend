@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/back_button.dart';
 import '../data/student_portal_repository.dart';
 import 'widgets/student_ui.dart';
 
@@ -140,9 +139,16 @@ class _StudentRegisterScreenState
       backgroundColor: colors.canvas,
       appBar: AppBar(
         centerTitle: true,
-        leading: AppBackButton(
-          fallbackRoute: '/login',
-          color: Colors.black87,
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              _goToLogin();
+            }
+          },
         ),
         title: const Text('Create account'),
       ),

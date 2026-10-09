@@ -33,7 +33,7 @@ class ApiException implements Exception {
       case DioExceptionType.receiveTimeout:
         return const ApiException('The request timed out. Check your connection and try again.');
       case DioExceptionType.connectionError:
-        return const ApiException('Could not reach the VidyaSetu server.');
+        return const ApiException('Could not reach the EduSphere server.');
       default:
         return ApiException(e.message ?? 'Something went wrong.');
     }

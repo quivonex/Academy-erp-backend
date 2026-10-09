@@ -875,94 +875,96 @@ class _LedgerState extends ConsumerState<_Ledger> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Payments recorded by your academy appear here.',
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'My Fees',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: () => changePage(1),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        FutureBuilder<StudentFeePage>(
-          future: result,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: () => changePage(1),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          const Text(
+            'Payments recorded by your academy appear here.',
+          ),
+          const SizedBox(height: 18),
+          FutureBuilder<StudentFeePage>(
+            future: result,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              }
 
-            if (snapshot.hasError || !snapshot.hasData) {
-              final error = snapshot.error;
+              if (snapshot.hasError || !snapshot.hasData) {
+                final error = snapshot.error;
+
+                return Column(
+                  children: [
+                    Text(
+                      error is ApiException
+                          ? error.message
+                          : 'Could not load fees. Please try again.',
+                    ),
+                    TextButton(
+                      onPressed: () => setState(load),
+                      child: const Text('Retry'),
+                    ),
+                    if (page > 1)
+                      TextButton(
+                        onPressed: () => changePage(page - 1),
+                        child: const Text('Previous page'),
+                      ),
+                  ],
+                );
+              }
+
+              final data = snapshot.data!;
 
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    error is ApiException
-                        ? error.message
-                        : 'Could not load fees. Please try again.',
-                  ),
-                  TextButton(
-                    onPressed: () => setState(load),
-                    child: const Text('Retry'),
-                  ),
-                  if (page > 1)
-                    TextButton(
-                      onPressed: () => changePage(page - 1),
-                      child: const Text('Previous page'),
+                  Text('${data.count} fee accounts'),
+                  const SizedBox(height: 12),
+                  if (data.accounts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('No fee accounts on this page.'),
                     ),
+                  for (final account in data.accounts)
+                    accountCard(account),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: page > 1
+                            ? () => changePage(page - 1)
+                            : null,
+                        child: const Text('Previous'),
+                      ),
+                      Text('Page $page'),
+                      TextButton(
+                        onPressed: data.hasNext
+                            ? () => changePage(page + 1)
+                            : null,
+                        child: const Text('Next'),
+                      ),
+                    ],
+                  ),
                 ],
               );
-            }
-
-            final data = snapshot.data!;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('${data.count} fee accounts'),
-                const SizedBox(height: 12),
-                if (data.accounts.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No fee accounts on this page.'),
-                  ),
-                for (final account in data.accounts)
-                  accountCard(account),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: page > 1
-                          ? () => changePage(page - 1)
-                          : null,
-                      child: const Text('Previous'),
-                    ),
-                    Text('Page $page'),
-                    TextButton(
-                      onPressed: data.hasNext
-                          ? () => changePage(page + 1)
-                          : null,
-                      child: const Text('Next'),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
+            },
+          ),
+        ],
+      );
 }

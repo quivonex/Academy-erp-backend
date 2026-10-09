@@ -20,138 +20,80 @@ class DashboardScreen extends ConsumerWidget {
     if (session.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
     if (session.role == UserRole.superAdmin) {
       return const _SuperAdminDashboard();
     }
 
-    final isFirmUser = session.role == UserRole.academyAdmin ||
-        session.role == UserRole.firmStaff;
-    if (!isFirmUser || (session.firmUuid ?? '').isEmpty) {
+    if ((session.role != UserRole.academyAdmin &&
+        session.role != UserRole.firmStaff) ||
+        (session.firmUuid ?? '').isEmpty) {
       return const _DashboardMessage(
         icon: Icons.lock_outline_rounded,
         title: 'Dashboard unavailable',
-        message: 'Please sign in with an academy account to view this page.',
+        message: 'Please sign in with an academy admin account.',
       );
     }
 
     return _AcademyDashboard(
       key: ValueKey('${session.userUuid}_${session.firmUuid}'),
-      academyName: (session.firmName ?? '').trim().isEmpty
-          ? 'Your Academy'
-          : session.firmName!.trim(),
-      campusId: session.firmUuid ?? 'RADSAT2026',
-      adminName: session.userName ?? 'Admin',
-      canManageAcademy: session.role == UserRole.academyAdmin,
+      academyName: session.firmName?.trim().isNotEmpty == true
+          ? session.firmName!.trim()
+          : 'Your Academy',
     );
   }
 }
 
 class _AcademyDashboard extends ConsumerStatefulWidget {
-  const _AcademyDashboard({
-    super.key,
-    required this.academyName,
-    required this.campusId,
-    required this.adminName,
-    required this.canManageAcademy,
-  });
+  const _AcademyDashboard({super.key, required this.academyName});
 
   final String academyName;
-  final String campusId;
-  final String adminName;
-  final bool canManageAcademy;
 
   @override
-  ConsumerState<_AcademyDashboard> createState() => _AcademyDashboardState();
+  ConsumerState<_AcademyDashboard> createState() =>
+      _AcademyDashboardState();
 }
 
 class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
   late Future<DashboardSummary> _summaryFuture;
-  late Future<DashboardReportPage> _reportFuture;
-  DashboardReport _selectedReport = DashboardReport.collection;
-  DateTime? _dateFrom;
-  DateTime? _dateTo;
-  String? _enrollmentStatus;
   bool _refreshing = false;
 
-  DashboardRepository get _repository => ref.read(dashboardRepositoryProvider);
+  DashboardRepository get _repository =>
+      ref.read(dashboardRepositoryProvider);
 
   @override
   void initState() {
     super.initState();
     _summaryFuture = _repository.summary();
-    _loadReport();
-  }
-
-  void _loadReport() {
-    _reportFuture = _repository.report(
-      type: _selectedReport,
-      status: _selectedReport == DashboardReport.enrollments
-          ? _enrollmentStatus
-          : null,
-      dateFrom: _selectedReport.usesDates ? _dateFrom : null,
-      dateTo: _selectedReport.usesDates ? _dateTo : null,
-    );
   }
 
   Future<void> _refresh() async {
     if (_refreshing) return;
+
     setState(() {
       _refreshing = true;
       _summaryFuture = _repository.summary();
-      _loadReport();
     });
+
     try {
-      await Future.wait([_summaryFuture, _reportFuture]);
-    } catch (_) {}
-    finally {
-      if (mounted) setState(() => _refreshing = false);
+      await _summaryFuture;
+    } catch (_) {
+      // Error is shown inside FutureBuilder.
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
     }
   }
 
-  void _open(String route) => context.go(route);
-
-  void _selectReport(DashboardReport report) {
-    if (_selectedReport == report) return;
-    setState(() {
-      _selectedReport = report;
-      if (!report.usesDates) {
-        _dateFrom = null;
-        _dateTo = null;
-      }
-      _loadReport();
-    });
-  }
-
-  Future<void> _pickDate({required bool isFrom}) async {
-    final initial = (isFrom ? _dateFrom : _dateTo) ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (!mounted || picked == null) return;
-
-    final nextFrom = isFrom ? picked : _dateFrom;
-    final nextTo = isFrom ? _dateTo : picked;
-    if (nextFrom != null && nextTo != null && nextTo.isBefore(nextFrom)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('End date must be after start date.')),
-      );
-      return;
-    }
-    setState(() {
-      if (isFrom) {
-        _dateFrom = picked;
-      } else {
-        _dateTo = picked;
-      }
-      _loadReport();
-    });
+  void _open(String route) {
+    context.go(route);
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+
     return RefreshIndicator(
       onRefresh: _refresh,
       child: FutureBuilder<DashboardSummary>(
@@ -161,7 +103,8 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
               !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError || snapshot.data == null) {
+
+          if (snapshot.hasError) {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
@@ -169,7 +112,8 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                 _DashboardMessage(
                   icon: Icons.cloud_off_rounded,
                   title: 'Could not load dashboard',
-                  message: 'Check the connection and try again.',
+                  message:
+                  'Check your internet connection and try again.',
                   actionLabel: 'Retry',
                   onAction: _refresh,
                 ),
@@ -177,126 +121,104 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
             );
           }
 
-          final summary = snapshot.data!;
+          final summary = snapshot.data;
+          if (summary == null) {
+            return const _DashboardMessage(
+              icon: Icons.dashboard_outlined,
+              title: 'Dashboard unavailable',
+              message: 'No dashboard data was received.',
+            );
+          }
+
           final students = summary.metricFor('Students');
           final teachers = summary.metricFor('Teachers');
           final courses = summary.metricFor('Courses');
           final enrollments = summary.metricFor('Enrollments');
+
           final totalPaid = summary.metricFor('Total paid');
           final pendingBalance = summary.metricFor('Pending balance');
-          final monthCollection = summary.metricFor('Collected since month start');
+          final monthCollection =
+          summary.metricFor('Collected since month start');
+
           final pendingGrading = summary.metricFor('Pending grading');
           final upcomingClasses = summary.metricFor('Upcoming classes');
 
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 40),
+            padding: const EdgeInsets.only(bottom: 32),
             children: [
-              // ═══════════════════════════════════════════════════════════
-              // 1. HERO WELCOME BANNER
-              // ═══════════════════════════════════════════════════════════
-              _HeroBanner(
+              _HeroSection(
                 academyName: widget.academyName,
-                campusId: widget.campusId,
-                studentCount: students.text,
-                refreshing: _refreshing,
+                students: students.text,
                 onRefresh: _refresh,
+                refreshing: _refreshing,
               ),
+              const SizedBox(height: 24),
+
+              Text(
+                'Academy overview',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  _MetricCard(
+                    label: 'Students',
+                    value: students.text,
+                    caption: students.caption ?? 'Registered students',
+                    icon: Icons.school_outlined,
+                    color: colors.primary,
+                    onTap: () => _open('/students'),
+                  ),
+                  _MetricCard(
+                    label: 'Teachers',
+                    value: teachers.text,
+                    caption: teachers.caption ?? 'Active teaching staff',
+                    icon: Icons.co_present_outlined,
+                    color: const Color(0xFF7C3AED),
+                    onTap: () => _open('/teachers'),
+                  ),
+                  _MetricCard(
+                    label: 'Courses',
+                    value: courses.text,
+                    caption: courses.caption ?? 'Active courses',
+                    icon: Icons.auto_stories_outlined,
+                    color: const Color(0xFF0284C7),
+                    onTap: () => _open('/courses'),
+                  ),
+                  _MetricCard(
+                    label: 'Enrollments',
+                    value: enrollments.text,
+                    caption: 'Course allocations',
+                    icon: Icons.how_to_reg_outlined,
+                    color: const Color(0xFF059669),
+                    onTap: () => _open('/enrollments'),
+                  ),
+                ],
+              ),
+
               const SizedBox(height: 28),
 
-              // ═══════════════════════════════════════════════════════════
-              // 2. ACADEMY OVERVIEW
-              // ═══════════════════════════════════════════════════════════
-              const _SectionHeader(
-                title: 'Academy overview',
-                trailing: 'Real-time Directory Sync',
+              Text(
+                'Needs attention',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colors.textPrimary,
+                ),
               ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final columns = width >= 1100
-                      ? 4
-                      : width >= 700
-                      ? 2
-                      : 1;
-                  const gap = 16.0;
-                  final cardWidth = (width - gap * (columns - 1)) / columns;
-                  return Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      SizedBox(
-                        width: cardWidth,
-                        child: _OverviewCard(
-                          label: 'Students',
-                          value: students.text,
-                          badge: '${students.text} active',
-                          badgeColor: const Color(0xFF059669),
-                          badgeBg: const Color(0xFFECFDF5),
-                          caption: 'Class 10 Science & IT',
-                          icon: Icons.school_outlined,
-                          iconBg: const Color(0xFFEEF0FF),
-                          iconFg: const Color(0xFF4F46E5),
-                          onTap: () => _open('/students'),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _OverviewCard(
-                          label: 'Teachers',
-                          value: teachers.text,
-                          badge: '${teachers.text} active',
-                          badgeColor: const Color(0xFF059669),
-                          badgeBg: const Color(0xFFECFDF5),
-                          caption: 'Rahul Patil (Lead)',
-                          icon: Icons.co_present_outlined,
-                          iconBg: const Color(0xFFE1E0FF),
-                          iconFg: const Color(0xFF4648D4),
-                          onTap: () => _open('/teachers'),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _OverviewCard(
-                          label: 'Courses',
-                          value: courses.text,
-                          badge: '${courses.text} active',
-                          badgeColor: const Color(0xFF059669),
-                          badgeBg: const Color(0xFFECFDF5),
-                          caption: 'Curriculum published',
-                          icon: Icons.auto_stories_outlined,
-                          iconBg: const Color(0xFFC9E6FF),
-                          iconFg: const Color(0xFF003F5C),
-                          onTap: () => _open('/courses'),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _OverviewCard(
-                          label: 'Enrollments',
-                          value: enrollments.text,
-                          badge: 'Allocated',
-                          badgeColor: const Color(0xFF4F46E5),
-                          badgeBg: const Color(0xFFEEF0FF),
-                          caption: 'Course allocations',
-                          icon: Icons.how_to_reg_outlined,
-                          iconBg: const Color(0xFFE6E9FF),
-                          iconFg: const Color(0xFF334155),
-                          onTap: () => _open('/enrollments'),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 12),
 
-              // ═══════════════════════════════════════════════════════════
-              // 3. NEEDS ATTENTION
-              // ═══════════════════════════════════════════════════════════
-              Row(
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
                 children: [
+<<<<<<< HEAD
                   const Icon(Icons.notification_important_outlined,
                       size: 22, color: Color(0xFFBA1A1A)),
                   const SizedBox(width: 8),
@@ -321,315 +243,127 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                         color: const Color(0xFF8E90A6),
                       ),
                     ),
+=======
+                  _AttentionCard(
+                    title: 'Pending grading',
+                    value: pendingGrading.text,
+                    message: 'Student submissions need review.',
+                    icon: Icons.assignment_late_outlined,
+                    background: const Color(0xFFFFF7ED),
+                    foreground: const Color(0xFFC2410C),
+                    onTap: () => _open('/assignments'),
+                  ),
+                  _AttentionCard(
+                    title: 'Pending fee balance',
+                    value: pendingBalance.text,
+                    message: 'Fees still awaiting collection.',
+                    icon: Icons.account_balance_wallet_outlined,
+                    background: const Color(0xFFFFF1F2),
+                    foreground: const Color(0xFFBE123C),
+                    onTap: () => _open('/fees'),
+                  ),
+                  _AttentionCard(
+                    title: 'Upcoming classes',
+                    value: upcomingClasses.text,
+                    message: '$liveNow currently live class(es).',
+                    icon: Icons.video_camera_front_outlined,
+                    background: const Color(0xFFEFF6FF),
+                    foreground: const Color(0xFF1D4ED8),
+                    onTap: () => _open('/live-classes'),
+>>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final columns = width >= 900 ? 3 : width >= 600 ? 2 : 1;
-                  const gap = 16.0;
-                  final cardWidth = (width - gap * (columns - 1)) / columns;
-                  return Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      SizedBox(
-                        width: cardWidth,
-                        child: _AttentionCard(
-                          icon: Icons.assignment_late_outlined,
-                          iconBg: const Color(0xFFFFE8CC),
-                          iconFg: const Color(0xFFD97706),
-                          value: pendingGrading.text,
-                          valueColor: const Color(0xFF92400E),
-                          title: 'Pending grading',
-                          titleColor: const Color(0xFF92400E),
-                          message: 'Student submissions need review.',
-                          messageColor: const Color(0xFFB45309),
-                          bgColor: const Color(0xFFFFF9F2),
-                          onTap: () => _selectReport(DashboardReport.grading),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _AttentionCard(
-                          icon: Icons.account_balance_wallet_outlined,
-                          iconBg: const Color(0xFFFED7D7),
-                          iconFg: const Color(0xFFBA1A1A),
-                          value: pendingBalance.text,
-                          valueColor: const Color(0xFFBA1A1A),
-                          title: 'Pending balance',
-                          titleColor: const Color(0xFFBA1A1A),
-                          message: 'Fees still awaiting collection.',
-                          messageColor: const Color(0xFFBA1A1A).withValues(alpha: 0.8),
-                          bgColor: const Color(0xFFFFF5F5),
-                          onTap: () => _selectReport(DashboardReport.dues),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _AttentionCard(
-                          icon: Icons.videocam_outlined,
-                          iconBg: const Color(0xFFD0E5FF),
-                          iconFg: const Color(0xFF00577E),
-                          value: upcomingClasses.text,
-                          valueColor: const Color(0xFF003F5C),
-                          title: 'Upcoming classes',
-                          titleColor: const Color(0xFF003F5C),
-                          message: 'No live class(es) running right now.',
-                          messageColor: const Color(0xFF003F5C).withValues(alpha: 0.8),
-                          bgColor: const Color(0xFFF0F7FF),
-                          onTap: () => _open('/live-classes'),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
 
-              // ═══════════════════════════════════════════════════════════
-              // 4. FINANCIAL OVERVIEW
-              // ═══════════════════════════════════════════════════════════
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 28),
+
+              Text(
+                'Financial overview',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              AdminCard(
+                child: Wrap(
+                  spacing: 32,
+                  runSpacing: 24,
+                  children: [
+                    _FinanceValue(
+                      label: 'Collected this month',
+                      value: monthCollection.text,
+                      icon: Icons.trending_up_rounded,
+                      color: colors.success,
+                    ),
+                    _FinanceValue(
+                      label: 'Total paid',
+                      value: totalPaid.text,
+                      icon: Icons.payments_outlined,
+                      color: colors.primary,
+                    ),
+                    _FinanceValue(
+                      label: 'Pending balance',
+                      value: pendingBalance.text,
+                      icon: Icons.warning_amber_rounded,
+                      color: colors.warning,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              Text(
+                'Quick actions',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Financial overview',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF131B2E),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Real-time fee collections, total receipts, and cashflow summary',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF525469),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _QuickAction(
+                    label: 'Add student',
+                    icon: Icons.person_add_alt_1_outlined,
+                    onTap: () => _open('/students'),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6E9FF),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Currency: INR (₹)',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF334155),
-                      ),
-                    ),
+                  _QuickAction(
+                    label: 'Create course',
+                    icon: Icons.add_circle_outline_rounded,
+                    onTap: () => _open('/courses'),
+                  ),
+                  _QuickAction(
+                    label: 'Manage fees',
+                    icon: Icons.currency_rupee_rounded,
+                    onTap: () => _open('/fees'),
+                  ),
+                  _QuickAction(
+                    label: 'Schedule class',
+                    icon: Icons.add_to_queue_outlined,
+                    onTap: () => _open('/live-classes'),
+                  ),
+                  _QuickAction(
+                    label: 'Upload material',
+                    icon: Icons.upload_file_outlined,
+                    onTap: () => _open('/materials'),
+                  ),
+                  _QuickAction(
+                    label: 'Assignments',
+                    icon: Icons.assignment_outlined,
+                    onTap: () => _open('/assignments'),
+                  ),
+                  _QuickAction(
+                    label: 'Notifications',
+                    icon: Icons.notifications_outlined,
+                    onTap: () => _open('/notifications'),
                   ),
                 ],
-              ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final columns = width >= 900 ? 3 : width >= 600 ? 2 : 1;
-                  const gap = 16.0;
-                  final cardWidth = (width - gap * (columns - 1)) / columns;
-                  return Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      SizedBox(
-                        width: cardWidth,
-                        child: _FinanceCard(
-                          icon: Icons.trending_up_rounded,
-                          iconBg: const Color(0xFFECFDF5),
-                          iconFg: const Color(0xFF059669),
-                          value: monthCollection.text,
-                          label: 'Collected this month',
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '+100% vs Sep',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                color: const Color(0xFF047857),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _FinanceCard(
-                          icon: Icons.payments_outlined,
-                          iconBg: const Color(0xFFEEF0FF),
-                          iconFg: const Color(0xFF4F46E5),
-                          value: totalPaid.text,
-                          label: 'Total paid',
-                          trailing: Text(
-                            '2 vouchers',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: const Color(0xFF8E90A6),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: cardWidth,
-                        child: _FinanceCard(
-                          icon: Icons.warning_amber_rounded,
-                          iconBg: const Color(0xFFFFE4E1),
-                          iconFg: const Color(0xFFBA1A1A),
-                          value: pendingBalance.text,
-                          valueColor: const Color(0xFFBA1A1A),
-                          label: 'Pending balance',
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFE4E1),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              'Action Due',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                color: const Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
-
-              // ═══════════════════════════════════════════════════════════
-              // 5. DETAILED REPORTS + SIDEBAR WIDGETS
-              // ═══════════════════════════════════════════════════════════
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 1000;
-                  if (isWide) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 8,
-                          child: _DetailedReportsCard(
-                            report: _selectedReport,
-                            reportFuture: _reportFuture,
-                            enrollmentStatus: _enrollmentStatus,
-                            dateFrom: _dateFrom,
-                            dateTo: _dateTo,
-                            onSelectReport: _selectReport,
-                            onEnrollmentStatusChanged: (value) {
-                              setState(() {
-                                _enrollmentStatus = value;
-                                _loadReport();
-                              });
-                            },
-                            onPickDate: _pickDate,
-                            onClearDates: () {
-                              setState(() {
-                                _dateFrom = null;
-                                _dateTo = null;
-                                _loadReport();
-                              });
-                            },
-                            onOpenReport: _open,
-                            onRetry: () => setState(_loadReport),
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          flex: 4,
-                          child: Column(
-                            children: [
-                              _TodayScheduleCard(
-                                onLaunchRoom: () => _open('/live-classes'),
-                              ),
-                              const SizedBox(height: 16),
-                              _CampusBroadcastCard(
-                                onWhatsAppAlert: () =>
-                                    _open('/notifications/broadcast'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  return Column(
-                    children: [
-                      _DetailedReportsCard(
-                        report: _selectedReport,
-                        reportFuture: _reportFuture,
-                        enrollmentStatus: _enrollmentStatus,
-                        dateFrom: _dateFrom,
-                        dateTo: _dateTo,
-                        onSelectReport: _selectReport,
-                        onEnrollmentStatusChanged: (value) {
-                          setState(() {
-                            _enrollmentStatus = value;
-                            _loadReport();
-                          });
-                        },
-                        onPickDate: _pickDate,
-                        onClearDates: () {
-                          setState(() {
-                            _dateFrom = null;
-                            _dateTo = null;
-                            _loadReport();
-                          });
-                        },
-                        onOpenReport: _open,
-                        onRetry: () => setState(_loadReport),
-                      ),
-                      const SizedBox(height: 16),
-                      _TodayScheduleCard(
-                        onLaunchRoom: () => _open('/live-classes'),
-                      ),
-                      const SizedBox(height: 16),
-                      _CampusBroadcastCard(
-                        onWhatsAppAlert: () => _open('/notifications/broadcast'),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
-
-              // ═══════════════════════════════════════════════════════════
-              // 6. QUICK ACTIONS
-              // ═══════════════════════════════════════════════════════════
-              const _SectionHeader(
-                title: 'Quick actions',
-                trailing: 'Institutional Shortcuts',
-              ),
-              const SizedBox(height: 14),
-              _QuickActionsGrid(
-                canManageAcademy: widget.canManageAcademy,
-                onOpen: _open,
               ),
             ],
           );
@@ -639,6 +373,7 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
   }
 }
 
+<<<<<<< HEAD
 // ═══════════════════════════════════════════════════════════════════════════════
 // HERO BANNER
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2051,6 +1786,8 @@ class _QuickActionTile extends StatelessWidget {
 // SUPER ADMIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
+=======
+>>>>>>> b38ee07af57210a3a2703edb3ef4d9ebe37879b1
 class _SuperAdminDashboard extends ConsumerWidget {
   const _SuperAdminDashboard();
 
@@ -2059,13 +1796,14 @@ class _SuperAdminDashboard extends ConsumerWidget {
     final colors = context.colors;
     final firms = ref.watch(firmsListProvider);
     final admins = ref.watch(allFirmAdminsProvider);
-    final firmList = firms.valueOrNull ?? [];
-    final adminList = admins.valueOrNull ?? [];
 
     void refresh() {
       ref.invalidate(firmsListProvider);
       ref.invalidate(allFirmAdminsProvider);
     }
+
+    final firmList = firms.valueOrNull ?? [];
+    final adminList = admins.valueOrNull ?? [];
 
     return RefreshIndicator(
       onRefresh: () async => refresh(),
@@ -2073,21 +1811,22 @@ class _SuperAdminDashboard extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _HeroBanner(
+          _HeroSection(
             academyName: 'Platform administration',
-            campusId: 'ADMIN',
-            studentCount: '${firmList.length}',
-            refreshing: firms.isLoading || admins.isLoading,
+            students: '${firmList.length} academies',
             onRefresh: refresh,
+            refreshing: firms.isLoading || admins.isLoading,
+            superAdmin: true,
           ),
           const SizedBox(height: 24),
+
           Wrap(
             spacing: 16,
             runSpacing: 16,
             children: [
               _MetricCard(
                 label: 'Academies',
-                value: '${firmList.length}',
+                value: firmList.length.toString(),
                 caption: 'Registered organizations',
                 icon: Icons.apartment_outlined,
                 color: colors.primary,
@@ -2095,7 +1834,7 @@ class _SuperAdminDashboard extends ConsumerWidget {
               ),
               _MetricCard(
                 label: 'Active academies',
-                value: '${firmList.where((item) => item.isActive).length}',
+                value: firmList.where((item) => item.isActive).length.toString(),
                 caption: 'Currently operational',
                 icon: Icons.verified_outlined,
                 color: colors.success,
@@ -2103,7 +1842,7 @@ class _SuperAdminDashboard extends ConsumerWidget {
               ),
               _MetricCard(
                 label: 'Firm admins',
-                value: '${adminList.length}',
+                value: adminList.length.toString(),
                 caption: 'Academy administrators',
                 icon: Icons.admin_panel_settings_outlined,
                 color: const Color(0xFF7C3AED),
@@ -2111,8 +1850,7 @@ class _SuperAdminDashboard extends ConsumerWidget {
               ),
               _MetricCard(
                 label: 'Active admins',
-                value:
-                '${adminList.where((item) => item.isActive).length}',
+                value: adminList.where((item) => item.isActive).length.toString(),
                 caption: 'Accounts with active access',
                 icon: Icons.people_outline_rounded,
                 color: const Color(0xFF0284C7),
@@ -2120,30 +1858,33 @@ class _SuperAdminDashboard extends ConsumerWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 28),
-          const _SectionHeader(title: 'Platform actions'),
+
+          Text(
+            'Platform actions',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 12),
+
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              _QuickActionTile(
+              _QuickAction(
                 label: 'Manage academies',
                 icon: Icons.business_outlined,
                 onTap: () => context.go('/firms'),
               ),
-              _QuickActionTile(
+              _QuickAction(
                 label: 'Manage firm admins',
                 icon: Icons.manage_accounts_outlined,
                 onTap: () => context.go('/firm-admins'),
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-          const _InlineMessage(
-            icon: Icons.info_outline_rounded,
-            message:
-            'Firm-wise students, fees and course analytics will appear here when the Super Admin overview API is available.',
           ),
         ],
       ),
@@ -2151,9 +1892,90 @@ class _SuperAdminDashboard extends ConsumerWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SHARED WIDGETS
-// ═══════════════════════════════════════════════════════════════════════════════
+class _HeroSection extends StatelessWidget {
+  const _HeroSection({
+    required this.academyName,
+    required this.students,
+    required this.onRefresh,
+    required this.refreshing,
+    this.superAdmin = false,
+  });
+
+  final String academyName;
+  final String students;
+  final VoidCallback onRefresh;
+  final bool refreshing;
+  final bool superAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: context.colors.heroGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: context.colors.heroShadow,
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 20,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                superAdmin ? 'Welcome back' : 'Good to see you',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                academyName,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                superAdmin
+                    ? 'Manage your Academy ERP platform from one place.'
+                    : '$students students are currently in your academy.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.86),
+                ),
+              ),
+            ],
+          ),
+          OutlinedButton.icon(
+            onPressed: refreshing ? null : onRefresh,
+            icon: refreshing
+                ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.refresh_rounded),
+            label: Text(refreshing ? 'Refreshing...' : 'Refresh'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white54),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
@@ -2165,7 +1987,9 @@ class _MetricCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final String label, value, caption;
+  final String label;
+  final String value;
+  final String caption;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
@@ -2180,9 +2004,10 @@ class _MetricCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AdminIconTile(
-                icon: icon,
-                background: color.withValues(alpha: 0.12),
-                foreground: color),
+              icon: icon,
+              background: color.withValues(alpha: 0.12),
+              foreground: color,
+            ),
             const SizedBox(height: 20),
             Text(
               value,
@@ -2193,18 +2018,16 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               caption,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: context.colors.textMuted),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: context.colors.textMuted,
+              ),
             ),
           ],
         ),
@@ -2213,35 +2036,151 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _InlineMessage extends StatelessWidget {
-  const _InlineMessage({
-    required this.icon,
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard({
+    required this.title,
+    required this.value,
     required this.message,
-    this.actionLabel,
-    this.onAction,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
   });
 
-  final IconData icon;
+  final String title;
+  final String value;
   final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.colors.primaryTonal.withValues(alpha: 0.48),
-        borderRadius: BorderRadius.circular(14),
+    return SizedBox(
+      width: 320,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              AdminIconTile(
+                icon: icon,
+                background: Colors.white,
+                foreground: foreground,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: foreground,
+                      ),
+                    ),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_rounded, color: foreground),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _FinanceValue extends StatelessWidget {
+  const _FinanceValue({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 220,
       child: Row(
         children: [
-          Icon(icon, color: context.colors.primary),
-          const SizedBox(width: 10),
-          Expanded(child: Text(message)),
-          if (actionLabel != null && onAction != null)
-            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          AdminIconTile(
+            icon: icon,
+            background: color.withValues(alpha: 0.12),
+            foreground: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.colors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 19),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: context.colors.textPrimary,
+        side: BorderSide(color: context.colors.borderSubtle),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
@@ -2257,7 +2196,8 @@ class _DashboardMessage extends StatelessWidget {
   });
 
   final IconData icon;
-  final String title, message;
+  final String title;
+  final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -2274,16 +2214,18 @@ class _DashboardMessage extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 8),
               Text(message, textAlign: TextAlign.center),
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: 18),
-                GradientButton(label: actionLabel!, onPressed: onAction),
+                GradientButton(
+                  label: actionLabel!,
+                  onPressed: onAction,
+                ),
               ],
             ],
           ),
@@ -2292,6 +2234,3 @@ class _DashboardMessage extends StatelessWidget {
     );
   }
 }
-
-String _displayDate(DateTime value) =>
-    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
