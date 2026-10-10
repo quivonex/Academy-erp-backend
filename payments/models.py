@@ -337,3 +337,114 @@ class InstallmentPayment(models.Model):
             f"{self.fee_account.uuid} - "
             f"{self.amount} - {self.status}"
         )
+        
+        
+        
+class InstallmentPaymentReceipt(models.Model):
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    firm = models.ForeignKey(
+        Firm,
+        on_delete=models.PROTECT,
+        related_name="payment_receipts",
+    )
+
+    installment = models.OneToOneField(
+        InstallmentPayment,
+        on_delete=models.PROTECT,
+        related_name="receipt",
+    )
+
+    receipt_number = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+    )
+
+    student_name = models.CharField(
+        max_length=255,
+    )
+
+    admission_number = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    course_name = models.CharField(
+        max_length=255,
+    )
+
+    paid_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+    )
+
+    balance_after_payment = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+    )
+
+    payment_method = models.CharField(
+        max_length=30,
+    )
+
+    transaction_reference = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    payment_date = models.DateField()
+
+    file_key = models.CharField(
+        max_length=1000,
+        blank=True,
+    )
+
+    generated_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    is_voided = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    voided_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    void_reason = models.TextField(
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "installment_payment_receipts"
+
+        ordering = [
+            "-payment_date",
+            "-generated_at",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "firm",
+                    "receipt_number",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "firm",
+                    "is_voided",
+                ]
+            ),
+        ]
+
+    def __str__(self):
+        return self.receipt_number

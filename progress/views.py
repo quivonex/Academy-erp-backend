@@ -16,12 +16,22 @@ from courses.models import Course
 from courses.access import get_student_active_enrollment
 from materials.models import LearningMaterial
 
-from .models import StudentMaterialProgress
+from .models import (
+    StudentMaterialProgress,
+    StudentVideoWatchSession,
+)
 from .serializers import (
     ProgressUpdateSerializer,
     StudentMaterialProgressSerializer,
+    StudentVideoWatchSessionSerializer,
+    VideoWatchHeartbeatSerializer,
 )
-from .services import update_material_progress
+from .services import (
+    end_video_watch_session,
+    record_verified_video_heartbeat,
+    start_video_watch_session,
+    update_material_progress,
+)
 
 
 def get_student_available_material(
@@ -246,5 +256,176 @@ class StudentCourseProgressView(APIView):
         )
         
         
+class StudentVideoWatchSessionStartView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
 
+    def post(self, request, material_uuid):
+        student = request.user.student_profile
+
+        material = get_student_available_material(
+            request=request,
+            material_uuid=material_uuid,
+        )
+
+        if not material:
+            return error_response(
+                message="Video not found or unavailable.",
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        enrollment = get_student_active_enrollment(
+            student=student,
+            course=material.course,
+        )
+
+        if not enrollment:
+            return error_response(
+                message="You do not have access to this video.",
+                errors={},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if (
+            material.material_type
+            != LearningMaterial.MaterialType.VIDEO
+        ):
+            return error_response(
+                message=(
+                    "Watch sessions are available only for videos."
+                ),
+                errors={},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not material.duration_seconds:
+            return error_response(
+                message=(
+                    "Video duration is required before secure "
+                    "watch tracking can start."
+                ),
+                errors={},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        session = start_video_watch_session(
+            student=student,
+            material=material,
+        )
+
+        return success_response(
+            message="Video watch session started successfully",
+            data=StudentVideoWatchSessionSerializer(
+                session
+            ).data,
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class StudentVideoWatchHeartbeatView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def post(self, request, session_uuid):
+        student = request.user.student_profile
+
+        session = (
+            StudentVideoWatchSession.objects
+            .filter(
+                uuid=session_uuid,
+                firm=request.user.firm,
+                student=student,
+            )
+            .select_related(
+                "progress",
+                "material",
+            )
+            .first()
+        )
+
+        if not session:
+            return error_response(
+                message="Video watch session not found.",
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = VideoWatchHeartbeatSerializer(
+            data=request.data,
+        )
+
+        if not serializer.is_valid():
+            return error_response(
+                message="Video progress update failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            session = record_verified_video_heartbeat(
+                session=session,
+                player_position_seconds=(
+                    serializer.validated_data[
+                        "player_position_seconds"
+                    ]
+                ),
+            )
+        except ValueError as exc:
+            return error_response(
+                message="Video progress update failed",
+                errors={
+                    "session": [str(exc)],
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(
+            message="Verified video progress updated successfully",
+            data=StudentVideoWatchSessionSerializer(
+                session
+            ).data,
+        )
+
+
+class StudentVideoWatchSessionEndView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def post(self, request, session_uuid):
+        student = request.user.student_profile
+
+        session = (
+            StudentVideoWatchSession.objects
+            .filter(
+                uuid=session_uuid,
+                firm=request.user.firm,
+                student=student,
+            )
+            .first()
+        )
+
+        if not session:
+            return error_response(
+                message="Video watch session not found.",
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        session = end_video_watch_session(
+            session=session,
+        )
+
+        return success_response(
+            message="Video watch session ended successfully",
+            data=StudentVideoWatchSessionSerializer(
+                session
+            ).data,
+        )
 
