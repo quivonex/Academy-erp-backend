@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from django.core.files.storage import default_storage
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,7 @@ from .models import (
     CoursePayment,
     EnrollmentFeeAccount,
     InstallmentPayment,
+    InstallmentPaymentReceipt,
 )
 from .serializers import (
     StudentFeeAccountLedgerSerializer,
@@ -23,6 +25,7 @@ from .serializers import (
     InstallmentPaymentCreateSerializer,
     InstallmentPaymentSerializer,
     InstallmentPaymentVoidSerializer,
+    InstallmentPaymentReceiptSerializer
 )
 from .services import (
     create_course_payment,
@@ -456,6 +459,143 @@ class StudentFeeAccountLedgerListView(APIView):
             serializer.data
         )
         
+        
+        
+        
+class StudentPaymentReceiptListView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request):
+        student = request.user.student_profile
+
+        receipts = (
+            InstallmentPaymentReceipt.objects
+            .filter(
+                firm=request.user.firm,
+                installment__fee_account__enrollment__student=student,
+            )
+            .select_related(
+                "installment",
+                "installment__fee_account",
+                "installment__fee_account__enrollment",
+            )
+            .order_by(
+                "-payment_date",
+                "-generated_at",
+            )
+        )
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(
+            receipts,
+            request,
+        )
+
+        return paginator.get_paginated_response(
+            InstallmentPaymentReceiptSerializer(
+                page,
+                many=True,
+            ).data
+        )
+
+
+class StudentPaymentReceiptDownloadView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request, receipt_uuid):
+        student = request.user.student_profile
+
+        receipt = (
+            InstallmentPaymentReceipt.objects
+            .filter(
+                uuid=receipt_uuid,
+                firm=request.user.firm,
+                installment__fee_account__enrollment__student=student,
+            )
+            .first()
+        )
+
+        if not receipt:
+            return error_response(
+                message="Payment receipt not found.",
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if receipt.is_voided:
+            return error_response(
+                message=(
+                    "This payment receipt has been voided "
+                    "and cannot be downloaded."
+                ),
+                errors={},
+                status_code=status.HTTP_410_GONE,
+            )
+
+        if not receipt.file_key:
+            return error_response(
+                message="Receipt file is not available.",
+                errors={},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        return success_response(
+            message="Payment receipt download URL generated successfully",
+            data={
+                "receipt_uuid": str(receipt.uuid),
+                "receipt_number": receipt.receipt_number,
+                "download_url": default_storage.url(
+                    receipt.file_key
+                ),
+            },
+        )
+
+
+class PaymentReceiptListView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsFirmAdminOrStaff,
+    ]
+
+    def get(self, request):
+        receipts = (
+            InstallmentPaymentReceipt.objects
+            .filter(firm=request.user.firm)
+            .order_by(
+                "-payment_date",
+                "-generated_at",
+            )
+        )
+
+        student_uuid = request.query_params.get(
+            "student_uuid"
+        )
+
+        if student_uuid:
+            receipts = receipts.filter(
+                installment__fee_account__enrollment__student__uuid=(
+                    student_uuid
+                )
+            )
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(
+            receipts,
+            request,
+        )
+
+        return paginator.get_paginated_response(
+            InstallmentPaymentReceiptSerializer(
+                page,
+                many=True,
+            ).data
+        )
         
         
         

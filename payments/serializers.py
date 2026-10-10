@@ -6,6 +6,7 @@ from .models import (
     CoursePayment,
     EnrollmentFeeAccount,
     InstallmentPayment,
+    InstallmentPaymentReceipt,
 )
 
 
@@ -487,3 +488,36 @@ class StudentFeeAccountLedgerSerializer(
 
         read_only_fields = fields
         
+        
+class InstallmentPaymentReceiptSerializer(
+    serializers.ModelSerializer
+):
+    file_available = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InstallmentPaymentReceipt
+
+        fields = (
+            "uuid",
+            "receipt_number",
+            "student_name",
+            "admission_number",
+            "course_name",
+            "paid_amount",
+            "balance_after_payment",
+            "payment_method",
+            "transaction_reference",
+            "payment_date",
+            "file_available",
+            "generated_at",
+            "is_voided",
+            "voided_at",
+            "void_reason",
+        )
+
+        read_only_fields = fields
+
+    def get_file_available(self, obj):
+        return bool(obj.file_key) and not obj.is_voided
+    
+    
