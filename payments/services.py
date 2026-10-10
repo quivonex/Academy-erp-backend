@@ -12,7 +12,14 @@ from .models import (
     CoursePayment,
     EnrollmentFeeAccount,
     InstallmentPayment,
+    InstallmentPaymentReceipt,
 )
+
+from io import BytesIO
+from django.core.files.base import ContentFile
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 
 @transaction.atomic
@@ -327,6 +334,224 @@ def create_fee_account(
     )
 
 
+def generate_receipt_number():
+    while True:
+        receipt_number = (
+            f"RCP-{timezone.localdate():%Y%m%d}-"
+            f"{uuid.uuid4().hex[:10].upper()}"
+        )
+
+        if not InstallmentPaymentReceipt.objects.filter(
+            receipt_number=receipt_number
+        ).exists():
+            return receipt_number
+
+
+def build_installment_receipt_pdf(
+    *,
+    receipt,
+    firm,
+):
+    buffer = BytesIO()
+
+    pdf = canvas.Canvas(
+        buffer,
+        pagesize=A4,
+    )
+
+    page_width, page_height = A4
+
+    pdf.setFillColor(colors.HexColor("#1E3A8A"))
+    pdf.rect(
+        0,
+        page_height - 95,
+        page_width,
+        95,
+        fill=1,
+        stroke=0,
+    )
+
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(
+        40,
+        page_height - 52,
+        "VIDYASETU",
+    )
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(
+        40,
+        page_height - 72,
+        "Verified Payment Receipt",
+    )
+
+    pdf.setFillColor(colors.HexColor("#111827"))
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(
+        40,
+        page_height - 135,
+        "Payment Receipt",
+    )
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawRightString(
+        page_width - 40,
+        page_height - 132,
+        f"Receipt No: {receipt.receipt_number}",
+    )
+
+    rows = [
+        ("Academy", firm.name),
+        ("Student Name", receipt.student_name),
+        (
+            "Admission Number",
+            receipt.admission_number or "-",
+        ),
+        ("Course", receipt.course_name),
+        (
+            "Payment Date",
+            receipt.payment_date.strftime("%d %b %Y"),
+        ),
+        (
+            "Payment Method",
+            receipt.payment_method.replace("_", " ").title(),
+        ),
+        (
+            "Transaction Reference",
+            receipt.transaction_reference or "-",
+        ),
+        (
+            "Paid Amount",
+            f"INR {receipt.paid_amount:,.2f}",
+        ),
+        (
+            "Balance After Payment",
+            f"INR {receipt.balance_after_payment:,.2f}",
+        ),
+        ("Status", "VERIFIED"),
+    ]
+
+    y_position = page_height - 180
+
+    for label, value in rows:
+        pdf.setFillColor(colors.HexColor("#F3F4F6"))
+        pdf.rect(
+            40,
+            y_position - 18,
+            page_width - 80,
+            28,
+            fill=1,
+            stroke=0,
+        )
+
+        pdf.setFillColor(colors.HexColor("#374151"))
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(
+            50,
+            y_position - 7,
+            f"{label}:",
+        )
+
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.setFont("Helvetica", 10)
+        pdf.drawRightString(
+            page_width - 50,
+            y_position - 7,
+            str(value),
+        )
+
+        y_position -= 37
+
+    pdf.setFillColor(colors.HexColor("#6B7280"))
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(
+        40,
+        55,
+        (
+            "This is a system-generated verified payment receipt. "
+            "No signature is required."
+        ),
+    )
+
+    pdf.showPage()
+    pdf.save()
+
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def create_installment_payment_receipt(
+    *,
+    installment,
+    fee_account,
+):
+    existing_receipt = (
+        InstallmentPaymentReceipt.objects
+        .filter(installment=installment)
+        .first()
+    )
+
+    if existing_receipt:
+        return existing_receipt
+
+    if (
+        installment.status
+        != InstallmentPayment.Status.RECORDED
+    ):
+        raise ValidationError({
+            "installment": [
+                "Only recorded payments can receive a receipt."
+            ]
+        })
+
+    enrollment = fee_account.enrollment
+    student = enrollment.student
+    course = enrollment.course
+
+    receipt = InstallmentPaymentReceipt.objects.create(
+        firm=installment.firm,
+        installment=installment,
+        receipt_number=generate_receipt_number(),
+        student_name=student.full_name,
+        admission_number=student.admission_number or "",
+        course_name=course.name,
+        paid_amount=installment.amount,
+        balance_after_payment=fee_account.balance_amount,
+        payment_method=installment.payment_method,
+        transaction_reference=(
+            installment.transaction_reference or ""
+        ),
+        payment_date=installment.payment_date,
+    )
+
+    pdf_content = build_installment_receipt_pdf(
+        receipt=receipt,
+        firm=installment.firm,
+    )
+
+    file_path = (
+        f"payment_receipts/"
+        f"{installment.firm.uuid}/"
+        f"{student.uuid}/"
+        f"{course.uuid}/"
+        f"{receipt.receipt_number}.pdf"
+    )
+
+    receipt.file_key = default_storage.save(
+        file_path,
+        ContentFile(pdf_content),
+    )
+
+    receipt.save(
+        update_fields=[
+            "file_key",
+        ]
+    )
+
+    return receipt
+
+
 @transaction.atomic
 def record_installment_payment(
     *,
@@ -421,6 +646,11 @@ def record_installment_payment(
 
     refresh_fee_account_summary(fee_account)
 
+    create_installment_payment_receipt(
+        installment=installment,
+        fee_account=fee_account,
+    )
+
     return installment, fee_account
 
 
@@ -479,6 +709,15 @@ def void_installment_payment(
             "void_reason",
             "updated_at",
         ]
+    )
+
+    InstallmentPaymentReceipt.objects.filter(
+        installment=installment,
+        is_voided=False,
+    ).update(
+        is_voided=True,
+        voided_at=timezone.now(),
+        void_reason=installment.void_reason,
     )
 
     refresh_fee_account_summary(fee_account)
