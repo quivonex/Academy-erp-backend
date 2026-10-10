@@ -11,6 +11,33 @@ from .models import (
 )
 
 
+VIDEO_COMPLETION_PERCENTAGE = Decimal("90.00")
+
+# Flutter should send a heartbeat every 15 seconds.
+# The small tolerance supports normal network delay.
+HEARTBEAT_TOLERANCE_SECONDS = 5
+MAX_CREDIT_PER_HEARTBEAT_SECONDS = 20
+
+
+def _issue_certificate_after_verified_progress(enrollment_id):
+    """
+    Called only after a video becomes verified-complete.
+    The certificate service performs the final eligibility checks:
+    video percentage, active enrollment, and full fee payment.
+    """
+    from certificates.services import issue_certificate_if_eligible
+    from courses.models import Enrollment
+
+    enrollment = Enrollment.objects.filter(
+        pk=enrollment_id
+    ).first()
+
+    if enrollment:
+        issue_certificate_if_eligible(
+            enrollment=enrollment
+        )
+
+
 @transaction.atomic
 def update_material_progress(
     *,
@@ -51,7 +78,6 @@ def update_material_progress(
     )
 
     if watched_seconds is not None:
-        # Never move cumulative watched time backward.
         progress.watched_seconds = max(
             progress.watched_seconds,
             watched_seconds,
@@ -79,15 +105,12 @@ def update_material_progress(
             Decimal("100.00"),
         )
 
-        # 90% watched = completed.
         if progress.completion_percentage >= Decimal(
             "90.00"
         ):
             progress.is_completed = True
 
     elif mark_completed:
-        # PDF / document / link can be explicitly
-        # marked complete by the client.
         progress.completion_percentage = Decimal(
             "100.00"
         )
@@ -97,18 +120,9 @@ def update_material_progress(
         progress.completed_at = now
 
     progress.last_accessed_at = now
-
     progress.save()
 
     return progress
-
-
-VIDEO_COMPLETION_PERCENTAGE = Decimal("90.00")
-
-# Flutter should send a heartbeat every 15 seconds.
-# The small tolerance supports normal network delay.
-HEARTBEAT_TOLERANCE_SECONDS = 5
-MAX_CREDIT_PER_HEARTBEAT_SECONDS = 20
 
 
 @transaction.atomic
@@ -135,9 +149,13 @@ def start_video_watch_session(
 
     if not progress.started_at:
         progress.started_at = now
-        progress.save(update_fields=["started_at", "updated_at"])
+        progress.save(
+            update_fields=[
+                "started_at",
+                "updated_at",
+            ]
+        )
 
-    # A new session replaces an unfinished session for the same video.
     StudentVideoWatchSession.objects.filter(
         firm=student.firm,
         student=student,
@@ -179,6 +197,7 @@ def record_verified_video_heartbeat(
         .select_related(
             "progress",
             "material",
+            "student",
         )
         .get(pk=session.pk)
     )
@@ -196,6 +215,12 @@ def record_verified_video_heartbeat(
         raise ValueError(
             "Video duration is required for secure tracking."
         )
+
+    # Remember the previous status. This prevents certificate
+    # evaluation on every heartbeat after video completion.
+    was_verified_completed = (
+        progress.is_verified_completed
+    )
 
     player_position = min(
         player_position_seconds,
@@ -223,8 +248,7 @@ def record_verified_video_heartbeat(
         MAX_CREDIT_PER_HEARTBEAT_SECONDS,
     )
 
-    # We only verify normal forward playback.
-    # Seeking forward cannot give certificate progress.
+    # Seeking forward cannot give verified certificate progress.
     can_verify_forward_playback = (
         player_position >= previous_position
         and previous_position
@@ -277,6 +301,30 @@ def record_verified_video_heartbeat(
         ]
     )
 
+    # Check certificate eligibility only when this video changes
+    # from incomplete to verified-complete.
+    if (
+        progress.is_verified_completed
+        and not was_verified_completed
+    ):
+        from courses.models import Enrollment
+
+        enrollment = Enrollment.objects.filter(
+            firm=material.firm,
+            student=session.student,
+            course=material.course,
+            status=Enrollment.Status.ACTIVE,
+        ).only("pk").first()
+
+        if enrollment:
+            transaction.on_commit(
+                lambda enrollment_id=enrollment.pk: (
+                    _issue_certificate_after_verified_progress(
+                        enrollment_id
+                    )
+                )
+            )
+
     return session
 
 
@@ -301,5 +349,3 @@ def end_video_watch_session(*, session):
         )
 
     return session
-
-
