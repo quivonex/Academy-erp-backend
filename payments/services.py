@@ -552,6 +552,23 @@ def create_installment_payment_receipt(
     return receipt
 
 
+def _issue_certificate_after_fee_payment(enrollment_id):
+    """
+    Checks certificate eligibility after the final installment
+    makes the course fee account fully paid.
+    """
+    from certificates.services import issue_certificate_if_eligible
+
+    enrollment = Enrollment.objects.filter(
+        pk=enrollment_id
+    ).first()
+
+    if enrollment:
+        issue_certificate_if_eligible(
+            enrollment=enrollment
+        )
+        
+
 @transaction.atomic
 def record_installment_payment(
     *,
@@ -639,7 +656,10 @@ def record_installment_payment(
         amount=amount,
         payment_method=validated_data["payment_method"],
         transaction_reference=transaction_reference,
-        payment_date=(validated_data.get("payment_date") or timezone.localdate()),
+        payment_date=(
+            validated_data.get("payment_date")
+            or timezone.localdate()
+        ),
         notes=validated_data.get("notes", ""),
         recorded_by=recorded_by,
     )
@@ -650,6 +670,17 @@ def record_installment_payment(
         installment=installment,
         fee_account=fee_account,
     )
+
+    # Run certificate eligibility check only after the
+    # final payment has made this fee account fully paid.
+    if fee_account.status == EnrollmentFeeAccount.Status.PAID:
+        transaction.on_commit(
+            lambda enrollment_id=fee_account.enrollment_id: (
+                _issue_certificate_after_fee_payment(
+                    enrollment_id
+                )
+            )
+        )
 
     return installment, fee_account
 
