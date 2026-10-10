@@ -52,6 +52,34 @@ from .services import (
     bulk_grant_chapter_video_access,
 )
 
+def _recheck_course_certificate_eligibility(course_id):
+    """
+    Rechecks all active enrollments when a Firm Admin changes
+    a course certificate setting.
+    """
+    from certificates.services import (
+        issue_certificate_if_eligible,
+    )
+
+    enrollments = (
+        Enrollment.objects
+        .filter(
+            course_id=course_id,
+            status=Enrollment.Status.ACTIVE,
+        )
+        .select_related(
+            "firm",
+            "student",
+            "course",
+        )
+    )
+
+    for enrollment in enrollments.iterator():
+        issue_certificate_if_eligible(
+            enrollment=enrollment
+        )
+        
+
 def validation_error_response(exc):
     return error_response(
         message="Validation failed",
@@ -630,8 +658,14 @@ class CourseDetailView(TenantDetailView):
             "certificate_required_watch_percentage",
         }
 
+        certificate_settings_updated = bool(
+            certificate_fields.intersection(
+                request.data.keys()
+            )
+        )
+
         if (
-            certificate_fields.intersection(request.data.keys())
+            certificate_settings_updated
             and request.user.user_type != "FIRM_ADMIN"
         ):
             return error_response(
@@ -643,9 +677,14 @@ class CourseDetailView(TenantDetailView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
+        # This APIView object is created per request, so this flag
+        # is safe to use in after_update().
+        self._certificate_settings_updated = (
+            certificate_settings_updated
+        )
+
         return super().patch(request, **kwargs)
-    
-    
+
     def resolve_relationships(
         self,
         request,
@@ -666,6 +705,28 @@ class CourseDetailView(TenantDetailView):
                 else None
             )
 
+    def after_update(
+        self,
+        request,
+        obj,
+        previous_status,
+    ):
+        if not getattr(
+            self,
+            "_certificate_settings_updated",
+            False,
+        ):
+            return
+
+        # Runs only after the course update is committed successfully.
+        transaction.on_commit(
+            lambda course_id=obj.pk: (
+                _recheck_course_certificate_eligibility(
+                    course_id
+                )
+            )
+        )
+        
 
 class SubjectDetailView(TenantDetailView):
     model = Subject

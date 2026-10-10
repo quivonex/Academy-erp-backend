@@ -37,6 +37,11 @@ from payments.urls import admin_payment_urlpatterns, student_payment_urlpatterns
 from teachers.urls import staff_urlpatterns
 from banners.urls import urlpatterns as banner_urlpatterns
 from banners.public_urls import urlpatterns as public_banner_urlpatterns
+from certificates.urls import (
+    certificate_urlpatterns,
+    public_certificate_urlpatterns,
+    student_certificate_urlpatterns,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls,),
@@ -83,8 +88,14 @@ urlpatterns = [
     path("api/v1/dashboard/", include("dashboard.urls")),
     
     path("api/v1/notifications/", include("notifications.urls"),),
+    
+    path("api/v1/certificates/", include(certificate_urlpatterns),),
 
-]
+    path("api/v1/student/", include(student_certificate_urlpatterns),),
+
+    path("api/v1/public/certificates/", include(public_certificate_urlpatterns),),
+
+]   
 
 from django.conf import settings
 from django.conf.urls.static import static
