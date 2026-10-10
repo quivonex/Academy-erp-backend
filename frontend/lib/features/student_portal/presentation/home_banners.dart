@@ -152,6 +152,7 @@ class _HomeBannersState extends ConsumerState<HomeBanners> {
             height: widget.height,
             child: PageView.builder(
               controller: _pageController,
+              physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
               itemCount: _banners.length,
               onPageChanged: (index) {
                 setState(() => _currentIndex = index);

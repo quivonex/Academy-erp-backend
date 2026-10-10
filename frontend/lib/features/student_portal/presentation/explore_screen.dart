@@ -134,6 +134,16 @@ class _ExploreScreenState
     );
   }
 
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.pixels >=
+        notification.metrics.maxScrollExtent - 300) {
+      if (!_loading && !_loadingMore && _hasMore && _error == null) {
+        _loadCourses(reset: false);
+      }
+    }
+    return false;
+  }
+
   @override
   void dispose() {
     _searchTimer?.cancel();
@@ -187,9 +197,11 @@ class _ExploreScreenState
             _loadCourses(reset: true),
           ]);
         },
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             const SizedBox(height: 56),
             section(
               Column(
@@ -377,8 +389,9 @@ class _ExploreScreenState
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _webSearchField(BuildContext context) {
     final colors = context.colors;
@@ -494,7 +507,8 @@ class _ExploreScreenState
             _loadCourses(reset: true),
           ]);
         },
-        child: StudentPageFrame(
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(
@@ -504,137 +518,148 @@ class _ExploreScreenState
               24,
             ),
             children: [
-              Text(
-                'Find your next course',
-                style: textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                session.firmName == null || session.firmName!.isEmpty
-                    ? 'Explore courses available at the academy.'
-                    : 'Explore courses available at ${session.firmName}.',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colors.textMuted,
-                ),
-              ),
-              const SizedBox(height: 16),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: colors.cardShadow,
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() {});
-                    _onSearchChanged(value);
-                  },
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search courses, subjects…',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colors.borderSubtle),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: kStudentMaxWidth),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Find your next course',
+                      style: textTheme.headlineMedium,
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colors.borderSubtle),
+                    const SizedBox(height: 4),
+                    Text(
+                      session.firmName == null || session.firmName!.isEmpty
+                          ? 'Explore courses available at the academy.'
+                          : 'Explore courses available at ${session.firmName}.',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colors.textMuted,
+                      ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide:
-                          BorderSide(color: colors.primary, width: 2),
+                    const SizedBox(height: 16),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: colors.cardShadow,
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) {
+                          setState(() {});
+                          _onSearchChanged(value);
+                        },
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Search courses, subjects…',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: colors.borderSubtle),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: colors.borderSubtle),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide:
+                                BorderSide(color: colors.primary, width: 2),
+                          ),
+                          suffixIcon: _searchController.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Clear search',
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    _searchTimer?.cancel();
+                                    _loadCourses(reset: true);
+                                  },
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                        ),
+                      ),
                     ),
-                    suffixIcon: _searchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              _searchController.clear();
-                              _searchTimer?.cancel();
+                    const SizedBox(height: 14),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      clipBehavior: Clip.none,
+                      child: Row(
+                        children: [
+                          FilterPill(
+                            label: 'All',
+                            selected: _selectedCategoryUuid == null,
+                            onTap: () {
+                              _selectedCategoryUuid = null;
                               _loadCourses(reset: true);
                             },
-                            icon: const Icon(Icons.close_rounded),
                           ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                child: Row(
-                  children: [
-                    FilterPill(
-                      label: 'All',
-                      selected: _selectedCategoryUuid == null,
-                      onTap: () {
-                        _selectedCategoryUuid = null;
-                        _loadCourses(reset: true);
-                      },
-                    ),
-                    for (final category in _categories)
-                      FilterPill(
-                        label: category.name,
-                        selected: _selectedCategoryUuid == category.uuid,
-                        onTap: () {
-                          _selectedCategoryUuid = category.uuid;
-                          _loadCourses(reset: true);
-                        },
+                          for (final category in _categories)
+                            FilterPill(
+                              label: category.name,
+                              selected: _selectedCategoryUuid == category.uuid,
+                              onTap: () {
+                                _selectedCategoryUuid = category.uuid;
+                                _loadCourses(reset: true);
+                              },
+                            ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    const HomeBanners(),
+                    SectionHeader(
+                      title: 'Featured & popular',
+                      trailing: _loading || _courses.isEmpty
+                          ? null
+                          : TonalPill(
+                              label: _hasMore
+                                  ? '${_courses.length}+ courses'
+                                  : _courses.length == 1
+                                      ? '1 course'
+                                      : '${_courses.length} courses',
+                            ),
+                    ),
+                    if (_loading)
+                      const StudentLoading()
+                    else if (_error != null && _courses.isEmpty)
+                      StudentStateMessage(
+                        icon: Icons.wifi_off_rounded,
+                        title: 'Courses could not load',
+                        message: _error!,
+                        actionLabel: 'Try again',
+                        onAction: () => _loadCourses(reset: true),
+                        isError: true,
+                      )
+                    else if (_courses.isEmpty)
+                      StudentStateMessage(
+                        icon: Icons.search_off_rounded,
+                        title: 'No courses found',
+                        message: _searchController.text.isEmpty
+                            ? 'Try another category.'
+                            : 'Try a different search or category.',
+                      )
+                    else ...[
+                      for (final course in _courses) _CourseCard(course: course),
+                      if (_error != null)
+                        InlineError(message: 'Could not load more: $_error'),
+                      if (_hasMore)
+                        LoadMoreButton(
+                          label: 'Load more courses',
+                          loading: _loadingMore,
+                          onPressed: () => _loadCourses(reset: false),
+                        ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              const HomeBanners(),
-              SectionHeader(
-                title: 'Featured & popular',
-                trailing: _loading || _courses.isEmpty
-                    ? null
-                    : TonalPill(
-                        label: _hasMore
-                            ? '${_courses.length}+ courses'
-                            : _courses.length == 1
-                                ? '1 course'
-                                : '${_courses.length} courses',
-                      ),
-              ),
-              if (_loading)
-                const StudentLoading()
-              else if (_error != null && _courses.isEmpty)
-                StudentStateMessage(
-                  icon: Icons.wifi_off_rounded,
-                  title: 'Courses could not load',
-                  message: _error!,
-                  actionLabel: 'Try again',
-                  onAction: () => _loadCourses(reset: true),
-                  isError: true,
-                )
-              else if (_courses.isEmpty)
-                StudentStateMessage(
-                  icon: Icons.search_off_rounded,
-                  title: 'No courses found',
-                  message: _searchController.text.isEmpty
-                      ? 'Try another category.'
-                      : 'Try a different search or category.',
-                )
-              else ...[
-                for (final course in _courses) _CourseCard(course: course),
-                if (_error != null)
-                  InlineError(message: 'Could not load more: $_error'),
-                if (_hasMore)
-                  LoadMoreButton(
-                    label: 'Load more courses',
-                    loading: _loadingMore,
-                    onPressed: () => _loadCourses(reset: false),
-                  ),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -710,7 +735,7 @@ class _WebTopNav extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'EduSphere',
+                  'VidyaSetu',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -810,7 +835,7 @@ class _WebFooter extends StatelessWidget {
                         const AcademyMark(size: 32),
                         const SizedBox(width: 10),
                         Text(
-                          'EduSphere',
+                          'VidyaSetu',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -878,7 +903,7 @@ class _WebFooter extends StatelessWidget {
           const Divider(height: 1, color: Color(0xFFEEF0F5)),
           const SizedBox(height: 18),
           Text(
-            '© ${DateTime.now().year} EduSphere. All rights reserved.',
+            '© ${DateTime.now().year} VidyaSetu. All rights reserved.',
             style: textTheme.bodySmall?.copyWith(color: colors.textSubtle),
           ),
         ],

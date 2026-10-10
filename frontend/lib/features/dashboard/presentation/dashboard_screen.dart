@@ -9,7 +9,7 @@ import '../../../core/widgets/admin_ui.dart';
 import '../data/dashboard_repository.dart';
 
 final superAdminDashboardSummaryProvider =
-    FutureProvider.autoDispose<SuperAdminDashboardSummary>((ref) {
+FutureProvider.autoDispose<SuperAdminDashboardSummary>((ref) {
   return ref
       .watch(dashboardRepositoryProvider)
       .superAdminSummary();
@@ -149,9 +149,8 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
           final upcomingClasses = summary.metricFor('Upcoming classes');
           final liveNow = summary.metricFor('Live now');
 
-          return ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 32),
+          return _CenteredList(
+            maxWidth: 1400,
             children: [
               _HeroSection(
                 academyName: widget.academyName,
@@ -170,9 +169,10 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
               ),
               const SizedBox(height: 12),
 
-              Wrap(
-                spacing: 16,
-                runSpacing: 16,
+              _ResponsiveGrid(
+                phoneColumns: 2,
+                tabletColumns: 2,
+                desktopColumns: 4,
                 children: [
                   _MetricCard(
                     label: 'Students',
@@ -220,9 +220,10 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
               ),
               const SizedBox(height: 12),
 
-              Wrap(
-                spacing: 16,
-                runSpacing: 16,
+              _ResponsiveGrid(
+                phoneColumns: 1,
+                tabletColumns: 2,
+                desktopColumns: 3,
                 children: [
                   _AttentionCard(
                     title: 'Pending grading',
@@ -266,9 +267,11 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
               const SizedBox(height: 12),
 
               AdminCard(
-                child: Wrap(
-                  spacing: 32,
-                  runSpacing: 24,
+                child: _ResponsiveGrid(
+                  phoneColumns: 1,
+                  tabletColumns: 3,
+                  desktopColumns: 3,
+                  gap: 18,
                   children: [
                     _FinanceValue(
                       label: 'Collected this month',
@@ -303,9 +306,11 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
               ),
               const SizedBox(height: 12),
 
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+              _ResponsiveGrid(
+                phoneColumns: 2,
+                tabletColumns: 4,
+                desktopColumns: 7,
+                gap: 12,
                 children: [
                   _QuickAction(
                     label: 'Add student',
@@ -1163,8 +1168,8 @@ class _InlineMessage extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF525469),
-                  ),
+                color: const Color(0xFF525469),
+              ),
             ),
           ),
           if (actionLabel != null && onAction != null)
@@ -1861,9 +1866,7 @@ class _SuperAdminDashboard extends ConsumerWidget {
             ),
           ],
         ),
-        data: (summary) => ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 32),
+        data: (summary) => _CenteredList(
           children: [
             _HeroSection(
               academyName: 'Platform administration',
@@ -1874,9 +1877,16 @@ class _SuperAdminDashboard extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
+            _OverviewLabel(
+              title: 'System overview',
+              onRefresh: refresh,
+            ),
+            const SizedBox(height: 10),
+
+            _ResponsiveGrid(
+              phoneColumns: 2,
+              tabletColumns: 2,
+              desktopColumns: 4,
               children: [
                 _MetricCard(
                   label: 'Academies',
@@ -1891,7 +1901,7 @@ class _SuperAdminDashboard extends ConsumerWidget {
                   value: summary.totalStudents.toString(),
                   caption: '${summary.activeStudents} active students',
                   icon: Icons.school_outlined,
-                  color: colors.success,
+                  color: const Color(0xFF0D9488),
                   onTap: () => context.go('/firms'),
                 ),
                 _MetricCard(
@@ -1918,28 +1928,35 @@ class _SuperAdminDashboard extends ConsumerWidget {
             Text(
               'Platform actions',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: colors.textPrimary,
-                  ),
+                fontWeight: FontWeight.w800,
+                color: colors.textPrimary,
+              ),
             ),
             const SizedBox(height: 12),
 
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            _ResponsiveGrid(
+              phoneColumns: 1,
+              tabletColumns: 2,
+              desktopColumns: 2,
+              gap: 12,
               children: [
-                _QuickAction(
-                  label: 'Manage academies',
+                _PlatformActionTile(
+                  title: 'Manage academies',
+                  subtitle: 'View, configure & monitor active tenant firms',
                   icon: Icons.business_outlined,
                   onTap: () => context.go('/firms'),
                 ),
-                _QuickAction(
-                  label: 'Manage firm admins',
+                _PlatformActionTile(
+                  title: 'Manage firm admins',
+                  subtitle: 'Assign roles, credentials & permissions',
                   icon: Icons.manage_accounts_outlined,
                   onTap: () => context.go('/firm-admins'),
                 ),
               ],
             ),
+
+            const SizedBox(height: 24),
+            const Center(child: _SignedInPill(label: 'Super Admin')),
           ],
         ),
       ),
@@ -1964,66 +1981,164 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: context.colors.heroGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: context.colors.heroShadow,
+    final textTheme = Theme.of(context).textTheme;
+    final phone = _isPhoneWidth(MediaQuery.sizeOf(context).width);
+
+    final spinner = const SizedBox(
+      width: 16,
+      height: 16,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        color: Colors.white,
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        runSpacing: 20,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                superAdmin ? 'Welcome back' : 'Good to see you',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white70,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                academyName,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                superAdmin
-                    ? 'Manage your Academy ERP platform from one place.'
-                    : '$students students are currently in your academy.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.86),
-                ),
-              ),
-            ],
+    );
+
+    final refreshButton = phone
+        ? IconButton(
+      tooltip: 'Refresh',
+      onPressed: refreshing ? null : onRefresh,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.18),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: Colors.white.withValues(alpha: 0.12),
+      ),
+      icon: refreshing ? spinner : const Icon(Icons.refresh_rounded),
+    )
+        : OutlinedButton.icon(
+      onPressed: refreshing ? null : onRefresh,
+      icon: refreshing ? spinner : const Icon(Icons.refresh_rounded),
+      label: Text(refreshing ? 'Refreshing...' : 'Refresh'),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.12),
+        foregroundColor: Colors.white,
+        side: const BorderSide(color: Colors.white38),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 14,
+        ),
+      ),
+    );
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF2563EB),
+            Color(0xFF4F46E5),
+            Color(0xFF4338CA),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(phone ? 18 : 22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x334F46E5),
+            blurRadius: 24,
+            offset: Offset(0, 10),
           ),
-          OutlinedButton.icon(
-            onPressed: refreshing ? null : onRefresh,
-            icon: refreshing
-                ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -50,
+            bottom: -60,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
               ),
-            )
-                : const Icon(Icons.refresh_rounded),
-            label: Text(refreshing ? 'Refreshing...' : 'Refresh'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white54),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 14,
-              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(phone ? 20 : 30),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          superAdmin
+                              ? '👋  Welcome back'
+                              : '👋  Good to see you',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: const Color(0xFFE0E7FF),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        academyName,
+                        style: jakarta(
+                          (phone
+                              ? textTheme.headlineSmall
+                              : textTheme.headlineMedium)
+                              ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Text(
+                          superAdmin
+                              ? 'Manage your Academy ERP platform, institutes, '
+                              'courses, and system admins from one place.'
+                              : '$students students are currently in your academy.',
+                          style: (phone
+                              ? textTheme.bodySmall
+                              : textTheme.bodyMedium)
+                              ?.copyWith(
+                            color: const Color(0xFFE0E7FF),
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                      if (superAdmin) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.20),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            students,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                refreshButton,
+              ],
             ),
           ),
         ],
@@ -2051,41 +2166,56 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 245,
-      child: AdminCard(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AdminIconTile(
-              icon: icon,
-              background: color.withValues(alpha: 0.12),
-              foreground: color,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+    final textTheme = Theme.of(context).textTheme;
+    final phone = _isPhoneWidth(MediaQuery.sizeOf(context).width);
+
+    return AdminCard(
+      onTap: onTap,
+      padding: EdgeInsets.all(phone ? 16 : 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AdminIconTile(
+            icon: icon,
+            size: phone ? 38 : 42,
+            background: color.withValues(alpha: 0.10),
+            foreground: color,
+          ),
+          SizedBox(height: phone ? 14 : 18),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: jakarta(
+              (phone ? textTheme.headlineSmall : textTheme.headlineMedium)
+                  ?.copyWith(
                 fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+                letterSpacing: -0.6,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF334155),
             ),
-            const SizedBox(height: 4),
-            Text(
-              caption,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: context.colors.textMuted,
-              ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            caption,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF94A3B8),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2112,21 +2242,25 @@ class _AttentionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 320,
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: background,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: foreground.withValues(alpha: 0.12)),
           ),
           child: Row(
             children: [
               AdminIconTile(
                 icon: icon,
+                size: 46,
                 background: Colors.white,
                 foreground: foreground,
               ),
@@ -2137,26 +2271,35 @@ class _AttentionCard extends StatelessWidget {
                   children: [
                     Text(
                       value,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: foreground,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: jakarta(
+                        textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: foreground,
+                        ),
                       ),
                     ),
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      style: textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       message,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF475569),
+                      ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_rounded, color: foreground),
+              Icon(Icons.arrow_forward_rounded, color: foreground, size: 20),
             ],
           ),
         ),
@@ -2180,37 +2323,45 @@ class _FinanceValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: Row(
-        children: [
-          AdminIconTile(
-            icon: icon,
-            background: color.withValues(alpha: 0.12),
-            foreground: color,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+    final textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        AdminIconTile(
+          icon: icon,
+          size: 44,
+          background: color.withValues(alpha: 0.10),
+          foreground: color,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: jakarta(
+                  textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.colors.textMuted,
-                  ),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(
+                  color: context.colors.textMuted,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -2228,14 +2379,25 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 19),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: context.colors.textPrimary,
-        side: BorderSide(color: context.colors.borderSubtle),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return AdminCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AdminIconTile(icon: icon, size: 42),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: context.colors.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2259,32 +2421,248 @@ class _DashboardMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: AdminCard(
-        child: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 52, color: context.colors.textMuted),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: AdminCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AdminIconTile(icon: icon, size: 56),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(message, textAlign: TextAlign.center),
-              if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 18),
-                GradientButton(
-                  label: actionLabel!,
-                  onPressed: onAction,
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.colors.textMuted,
+                  ),
                 ),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 18),
+                  GradientButton(
+                    label: actionLabel!,
+                    onPressed: onAction,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESPONSIVE LAYOUT HELPERS (design only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Phone < 600px ≤ tablet < 1000px ≤ desktop.
+bool _isPhoneWidth(double width) => width < 600;
+
+/// Scrollable body with centred, width-capped content.
+class _CenteredList extends StatelessWidget {
+  const _CenteredList({required this.children, this.maxWidth = 1200});
+
+  final List<Widget> children;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Equal-width grid: column count depends on the available width.
+class _ResponsiveGrid extends StatelessWidget {
+  const _ResponsiveGrid({
+    required this.children,
+    required this.phoneColumns,
+    required this.tabletColumns,
+    required this.desktopColumns,
+    this.gap = 14,
+  });
+
+  final List<Widget> children;
+  final int phoneColumns;
+  final int tabletColumns;
+  final int desktopColumns;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width < 600
+            ? phoneColumns
+            : width < 1000
+            ? tabletColumns
+            : desktopColumns;
+        final cellWidth = (width - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children)
+              SizedBox(width: cellWidth, child: child),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// "SYSTEM OVERVIEW" label with a small refresh link.
+class _OverviewLabel extends StatelessWidget {
+  const _OverviewLabel({required this.title, required this.onRefresh});
+
+  final String title;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title.toUpperCase(),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: const Color(0xFF94A3B8),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded, size: 16),
+          label: const Text('Refresh'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Full-width action row: icon tile, title, subtitle and chevron.
+class _PlatformActionTile extends StatelessWidget {
+  const _PlatformActionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return AdminCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      child: Row(
+        children: [
+          AdminIconTile(
+            icon: icon,
+            size: 44,
+            background: const Color(0xFFF1F5F9),
+            foreground: const Color(0xFF475569),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+        ],
+      ),
+    );
+  }
+}
+
+/// "● Signed in as Super Admin" pill.
+class _SignedInPill extends StatelessWidget {
+  const _SignedInPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Signed in as $label',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: const Color(0xFF475569),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

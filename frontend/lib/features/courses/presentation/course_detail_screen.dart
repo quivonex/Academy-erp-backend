@@ -223,6 +223,16 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                   _InfoRow(label: 'Published', value: course.isPublished ? 'Yes' : 'No'),
                   _InfoRow(label: 'Purchasable online',
                       value: course.isPurchasableOnline ? 'Yes' : 'No'),
+                  _InfoRow(
+                    label: 'Certificate enabled',
+                    value: course.isCertificateEnabled ? 'Yes' : 'No',
+                  ),
+                  if (course.isCertificateEnabled)
+                    _InfoRow(
+                      label: 'Required video watch',
+                      value:
+                          '${course.certificateRequiredWatchPercentage.toStringAsFixed(0)}%',
+                    ),
                   _InfoRow(label: 'Featured', value: course.isFeatured ? 'Yes' : 'No'),
                   if (course.isFeatured)
                     _InfoRow(label: 'Featured order',
@@ -1102,6 +1112,11 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
   late final durationMonths = TextEditingController(text: widget.course.durationMonths?.toString() ?? '');
   late final accessDays = TextEditingController(text: widget.course.accessDurationDays?.toString() ?? '');
   late final featuredOrder = TextEditingController(text: widget.course.featuredOrder.toString());
+  late final certificateWatchPercentage = TextEditingController(
+    text: widget.course.certificateRequiredWatchPercentage
+        .toString()
+        .replaceAll(RegExp(r'\.0$'), ''),
+  );
 
   late String mode = widget.course.deliveryMode;
 
@@ -1114,6 +1129,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
   late bool isPublished = widget.course.isPublished;
   late bool isPurchasableOnline = widget.course.isPurchasableOnline;
   late bool isFeatured = widget.course.isFeatured;
+  late bool isCertificateEnabled = widget.course.isCertificateEnabled;
 
   bool loadingCategories = false;
   bool saving = false;
@@ -1203,6 +1219,16 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
     return whole.length > 8 ? 'Maximum price is 99999999.99' : null;
   }
 
+  String? validateCertificateWatchPercentage(String? value) {
+    final percentage = double.tryParse((value ?? '').trim());
+
+    if (percentage == null || percentage < 1 || percentage > 100) {
+      return 'Enter a percentage from 1 to 100';
+    }
+
+    return null;
+  }
+
   @override
   void dispose() {
     name.dispose();
@@ -1212,6 +1238,7 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
     durationMonths.dispose();
     accessDays.dispose();
     featuredOrder.dispose();
+    certificateWatchPercentage.dispose();
     super.dispose();
   }
 
@@ -1245,6 +1272,9 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
         isPublished: isPublished,
         isPurchasableOnline: isPurchasableOnline,
         isFeatured: isFeatured,
+        isCertificateEnabled: isCertificateEnabled,
+        certificateRequiredWatchPercentage:
+            certificateWatchPercentage.text.trim(),
         featuredOrder: isFeatured ? int.parse(featuredOrder.text.trim()) : widget.course.featuredOrder,
       );
 
@@ -1449,6 +1479,36 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
                   });
                 },
               ),
+              const SizedBox(height: 10),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable Course Certificate'),
+                subtitle: const Text(
+                  'Set the minimum video-watch progress required for certificate eligibility.',
+                ),
+                value: isCertificateEnabled,
+                onChanged: saving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          isCertificateEnabled = value;
+                        });
+                      },
+              ),
+              if (isCertificateEnabled) ...[
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: certificateWatchPercentage,
+                  enabled: !saving,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: validateCertificateWatchPercentage,
+                  decoration: const InputDecoration(
+                    labelText: 'Required video watch percentage',
+                    hintText: 'Example: 85',
+                    suffixText: '%',
+                  ),
+                ),
+              ],
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Featured Course'),

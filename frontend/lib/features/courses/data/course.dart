@@ -9,6 +9,8 @@ class Course {
     required this.isPublished,
     required this.isPurchasableOnline,
     required this.isFeatured,
+    this.isCertificateEnabled = false,
+    this.certificateRequiredWatchPercentage = 100,
     required this.featuredOrder,
     this.description = '',
     this.categoryName,
@@ -27,6 +29,8 @@ class Course {
   final bool isPublished;
   final bool isPurchasableOnline;
   final bool isFeatured;
+  final bool isCertificateEnabled;
+  final double certificateRequiredWatchPercentage;
 
   final int featuredOrder;
 
@@ -50,6 +54,11 @@ class Course {
       isPublished: json['is_published'] == true,
       isPurchasableOnline: json['is_purchasable_online'] == true,
       isFeatured: json['is_featured'] == true,
+      isCertificateEnabled: json['is_certificate_enabled'] == true,
+      certificateRequiredWatchPercentage: double.tryParse(
+            json['certificate_required_watch_percentage']?.toString() ?? '100',
+          ) ??
+          100,
       featuredOrder: int.tryParse(
             json['featured_order']?.toString() ?? '0',
           ) ??
