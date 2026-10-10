@@ -71,6 +71,8 @@ class CourseRepository {
     bool isPublished = false,
     bool isPurchasableOnline = false,
     bool isFeatured = false,
+    bool isCertificateEnabled = false,
+    String certificateRequiredWatchPercentage = '100',
     int featuredOrder = 0,
   }) =>
       _request(() async {
@@ -91,6 +93,9 @@ class CourseRepository {
             'is_published': isPublished,
             'is_purchasable_online': isPurchasableOnline,
             'is_featured': isFeatured,
+            'is_certificate_enabled': isCertificateEnabled,
+            'certificate_required_watch_percentage':
+                certificateRequiredWatchPercentage.trim(),
             'featured_order': featuredOrder,
           },
         );
@@ -119,6 +124,8 @@ class CourseRepository {
     required bool isPublished,
     required bool isPurchasableOnline,
     required bool isFeatured,
+    required bool isCertificateEnabled,
+    required String certificateRequiredWatchPercentage,
     required int featuredOrder,
   }) =>
       _request(() async {
@@ -134,6 +141,9 @@ class CourseRepository {
           'is_published': isPublished,
           'is_purchasable_online': isPurchasableOnline,
           'is_featured': isFeatured,
+          'is_certificate_enabled': isCertificateEnabled,
+          'certificate_required_watch_percentage':
+              certificateRequiredWatchPercentage.trim(),
           'featured_order': featuredOrder,
         };
 

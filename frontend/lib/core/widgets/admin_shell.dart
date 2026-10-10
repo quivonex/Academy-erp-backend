@@ -540,7 +540,7 @@ class _TopBar extends ConsumerWidget {
                         child: Text(
                           session.firmName?.trim().isNotEmpty == true
                               ? session.firmName!.trim()
-                              : 'EduSphere',
+                              : 'VidyaSetu',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.labelMedium?.copyWith(

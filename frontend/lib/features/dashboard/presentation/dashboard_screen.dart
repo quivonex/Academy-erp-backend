@@ -2480,7 +2480,7 @@ class _CenteredList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         Center(
           child: ConstrainedBox(

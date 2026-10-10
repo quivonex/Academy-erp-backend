@@ -13,18 +13,18 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  runApp(const ProviderScope(child: EduSphereApp()));
+  runApp(const ProviderScope(child: VidyaSetuApp()));
 }
 
-class EduSphereApp extends ConsumerWidget {
-  const EduSphereApp({super.key});
+class VidyaSetuApp extends ConsumerWidget {
+  const VidyaSetuApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'EduSphere ERP',
+      title: 'VidyaSetu ERP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: router,
