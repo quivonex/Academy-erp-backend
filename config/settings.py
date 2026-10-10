@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     "teachers",
     "courses",
     "classes",
+    "certificates",
     "dashboard",
     "materials",
     "progress",
