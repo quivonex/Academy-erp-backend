@@ -1,10 +1,9 @@
 import hashlib
 
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import DeviceToken, Notification
-from django.db.models import Q
-from django.utils import timezone
 
 def get_token_hash(token):
     return hashlib.sha256(

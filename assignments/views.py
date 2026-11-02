@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -146,37 +146,6 @@ class AssignmentListCreateView(APIView):
 # =========================================================
 # ADMIN / STAFF - ASSIGNMENT DETAIL
 # =========================================================
-
-
-class AssignmentDetailView(APIView):
-    permission_classes = [
-        IsAuthenticated,
-        IsFirmAdminOrStaff,
-    ]
-
-    def get(
-        self,
-        request,
-        assignment_uuid,
-    ):
-        assignment = get_object_or_404(
-            Assignment.objects.select_related(
-                "course",
-                "subject",
-                "chapter",
-                "lesson",
-                "created_by",
-            ),
-            uuid=assignment_uuid,
-            firm=request.user.firm,
-        )
-
-        return success_response(
-            message="Assignment retrieved successfully",
-            data=AssignmentSerializer(
-                assignment
-            ).data,
-        )
 
 
 # =========================================================
@@ -1033,16 +1002,26 @@ class StudentAssignmentSubmitView(APIView):
         # CREATE / GET SUBMISSION
         # ---------------------------------------------
         
-        submission, created = (
-            AssignmentSubmission.objects
-            .get_or_create(
-                assignment=assignment,
-                student=student,
-                defaults={
-                    "firm": request.user.firm,
-                },
+        try:
+            submission, created = (
+                AssignmentSubmission.objects
+                .get_or_create(
+                    assignment=assignment,
+                    student=student,
+                    defaults={
+                        "firm": request.user.firm,
+                    },
+                )
             )
-        )
+        except IntegrityError:
+            submission = (
+                AssignmentSubmission.objects
+                .get(
+                    assignment=assignment,
+                    student=student,
+                )
+            )
+            created = False
 
         # ---------------------------------------------
         # CALCULATE / SAVE ANSWERS

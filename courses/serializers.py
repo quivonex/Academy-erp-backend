@@ -375,43 +375,6 @@ class PublicCourseSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
-    category_name = serializers.CharField(
-        source="category.name",
-        read_only=True,
-        allow_null=True,
-    )
-
-    class Meta:
-        model = Course
-
-        fields = (
-            "uuid",
-            "firm_uuid",
-            "firm_name",
-            "category_name",
-            "name",
-            "code",
-            "description",
-            "duration_months",
-            "price",
-            "delivery_mode",
-            "access_duration_days",
-        )
-
-        read_only_fields = fields
-        
-        
-class PublicCourseSerializer(serializers.ModelSerializer):
-    firm_uuid = serializers.UUIDField(
-        source="firm.uuid",
-        read_only=True,
-    )
-
-    firm_name = serializers.CharField(
-        source="firm.name",
-        read_only=True,
-    )
-
     category_uuid = serializers.UUIDField(
         source="category.uuid",
         read_only=True,

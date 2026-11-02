@@ -31,6 +31,9 @@ def deactivate_firm(firm):
         ]
     )
 
+    return firm
+
+
 @transaction.atomic
 def activate_firm(firm):
     firm.is_active = True

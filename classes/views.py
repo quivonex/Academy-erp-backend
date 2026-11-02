@@ -167,16 +167,7 @@ class LiveClassStartView(LiveClassActionBaseView):
                 live_class_uuid,
                 lock=True,
             )
-            from notifications.services import (
-                create_live_class_started_notifications,
-            )
 
-            transaction.on_commit(
-                lambda: create_live_class_started_notifications(
-                    live_class
-                )
-            )
-            
             try:
                 live_class = start_live_class(
                     live_class
@@ -190,6 +181,16 @@ class LiveClassStartView(LiveClassActionBaseView):
                         status.HTTP_400_BAD_REQUEST
                     ),
                 )
+
+            from notifications.services import (
+                create_live_class_started_notifications,
+            )
+
+            transaction.on_commit(
+                lambda: create_live_class_started_notifications(
+                    live_class
+                )
+            )
 
         return success_response(
             message="Live class started successfully",

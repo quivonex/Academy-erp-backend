@@ -1000,33 +1000,9 @@ class PublicCourseDetailView(APIView):
         return success_response(
             message="Course retrieved successfully",
             data=PublicCourseSerializer(course).data,
-        )        
-        
-        
-class PublicCourseDetailView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request, course_uuid):
-        course = get_object_or_404(
-            Course.objects.select_related(
-                "firm",
-                "category",
-            ),
-            uuid=course_uuid,
-            is_active=True,
-            is_published=True,
-            is_purchasable_online=True,
-            firm__is_active=True,
         )
 
-        return success_response(
-            message="Course retrieved successfully",
-            data=PublicCourseSerializer(course).data,
-        )
-        
-        
-        
+
 class BulkStudentChapterVideoAccessView(APIView):
     permission_classes = [
         IsAuthenticated,

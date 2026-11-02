@@ -120,7 +120,15 @@ def update_material_progress(
         progress.completed_at = now
 
     progress.last_accessed_at = now
-    progress.save()
+    progress.save(
+        update_fields=[
+            "watched_seconds",
+            "completion_percentage",
+            "is_completed",
+            "completed_at",
+            "last_accessed_at",
+        ]
+    )
 
     return progress
 

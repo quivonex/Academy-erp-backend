@@ -1,7 +1,9 @@
-from django.db import transaction
-from rest_framework.exceptions import ValidationError
 from datetime import timedelta
+
+from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+
 from students.models import Student
 from teachers.models import Teacher
 from .models import (
@@ -13,8 +15,6 @@ from .models import (
     Subject,
     StudentChapterVideoAccess,
 )
-from datetime import timedelta
-from django.utils import timezone
 
 
 def get_category(firm, category_uuid):
@@ -209,10 +209,24 @@ def create_enrollment(*, firm, granted_by, validated_data):
         student_uuid=student_uuid,
     )
 
+    if not student.is_active:
+        raise ValidationError({
+            "student_uuid": [
+                "Cannot enroll an inactive student."
+            ]
+        })
+
     course = get_course(
         firm=firm,
         course_uuid=course_uuid,
     )
+
+    if not course.is_active:
+        raise ValidationError({
+            "course_uuid": [
+                "Cannot enroll in an inactive course."
+            ]
+        })
     enrollment_status = validated_data.get(
         "status",
         Enrollment.Status.PENDING,
@@ -278,7 +292,10 @@ def update_instance(instance, validated_data):
     for field, value in validated_data.items():
         setattr(instance, field, value)
 
-    instance.save()
+    update_fields = list(validated_data.keys())
+    if hasattr(instance, "updated_at"):
+        update_fields.append("updated_at")
+    instance.save(update_fields=update_fields)
 
     return instance
 

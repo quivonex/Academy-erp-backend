@@ -247,7 +247,15 @@ def refresh_fee_account_summary(fee_account):
     balance_amount = payable_amount - paid_amount
 
     if balance_amount < Decimal("0.00"):
+        overpaid = abs(balance_amount)
         balance_amount = Decimal("0.00")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "Overpayment of %s detected on fee account %s",
+            overpaid,
+            fee_account.uuid,
+        )
 
     if paid_amount <= Decimal("0.00"):
         fee_status = EnrollmentFeeAccount.Status.UNPAID
