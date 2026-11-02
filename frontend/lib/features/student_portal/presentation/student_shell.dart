@@ -45,7 +45,8 @@ class StudentShell extends ConsumerWidget {
     }
 
     if (location.startsWith('/student/fees') ||
-        location.startsWith('/student/notifications')) {
+        location.startsWith('/student/notifications') ||
+        location.startsWith('/student/certificates')) {
       return '/student/courses';
     }
 
@@ -53,6 +54,10 @@ class StudentShell extends ConsumerWidget {
   }
 
   String get _title {
+    if (location.startsWith('/student/certificates')) {
+      return 'Certificates';
+    }
+
     if (location.startsWith('/student/notifications')) {
       return 'Notifications';
     }
@@ -202,6 +207,9 @@ class StudentShell extends ConsumerWidget {
                 case 'fees':
                   context.go('/student/fees');
                   return;
+                case 'certificates':
+                  context.go('/student/certificates');
+                  return;
                 case 'notifications':
                   context.go('/student/notifications');
                   return;
@@ -287,6 +295,11 @@ class StudentShell extends ConsumerWidget {
                 value: 'fees',
                 label: 'My Fees',
                 icon: Icons.receipt_long_outlined,
+              ),
+              menuItem(
+                value: 'certificates',
+                label: 'Certificates',
+                icon: Icons.workspace_premium_outlined,
               ),
               menuItem(
                 value: 'notifications',
