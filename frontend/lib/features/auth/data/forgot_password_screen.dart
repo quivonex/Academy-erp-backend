@@ -149,7 +149,7 @@ class _ForgotPasswordScreenState
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Use the email linked to your VidyaSetu account.',
+                              'Use the email linked to your THE ROLEX ACADEMY account.',
                               style: textTheme.bodyMedium?.copyWith(
                                 color: colors.textMuted,
                               ),

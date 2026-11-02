@@ -69,7 +69,7 @@ class _SuperAdminProfileScreenState
       builder: (dialogContext) => AlertDialog(
         title: const Text('Log out?'),
         content: const Text(
-          'Are you sure you want to log out of VidyaSetu?',
+          'Are you sure you want to log out of THE ROLEX ACADEMY?',
         ),
         actions: [
           TextButton(
@@ -451,7 +451,7 @@ class _SuperAdminProfileScreenState
                       Expanded(
                         child: Text(
                           'Signed in with platform-wide super admin access '
-                          'across all VidyaSetu academies.',
+                          'across all THE ROLEX ACADEMY branches.',
                           style: textTheme.bodySmall?.copyWith(
                             color: const Color(0xFF475569),
                           ),

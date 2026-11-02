@@ -13,18 +13,18 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  runApp(const ProviderScope(child: VidyaSetuApp()));
+  runApp(const ProviderScope(child: RolexAcademyApp()));
 }
 
-class VidyaSetuApp extends ConsumerWidget {
-  const VidyaSetuApp({super.key});
+class RolexAcademyApp extends ConsumerWidget {
+  const RolexAcademyApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'VidyaSetu ERP',
+      title: 'THE ROLEX ACADEMY',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: router,

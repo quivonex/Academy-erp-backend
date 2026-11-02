@@ -7,6 +7,7 @@ import '../network/api_exception.dart';
 import '../network/dio_client.dart';
 import '../network/token_storage.dart';
 import '../services/auth_service.dart';
+import '../utils/brand_utils.dart';
 import 'user_role.dart';
 
 class SessionState {
@@ -67,7 +68,7 @@ class SessionController extends Notifier<SessionState> {
       userUuid: user['uuid']?.toString(),
       role: role,
       firmUuid: user['firm_uuid']?.toString(),
-      firmName: user['firm_name']?.toString(),
+      firmName: cleanFirmName(user['firm_name']?.toString()),
     );
   }
 

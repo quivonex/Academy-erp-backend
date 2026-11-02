@@ -99,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // VidyaSetu Logo Card
+                  // THE ROLEX ACADEMY Logo Card
                   Container(
                     width: 110,
                     height: 110,
@@ -116,11 +116,11 @@ class _SplashScreenState extends State<SplashScreen>
                       ],
                     ),
                     child: Image.asset(
-                      'assets/images/vidyasetu_logo.jpg',
+                      'assets/images/rolex_academy_logo.jpg',
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
                         return Image.asset(
-                          'assets/images/vidyasetu_logo.png',
+                          'assets/images/rolex_academy_logo.png',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
                             return const Icon(
@@ -137,10 +137,11 @@ class _SplashScreenState extends State<SplashScreen>
 
                   // Brand name
                   const Text(
-                    'VidyaSetu',
+                    'THE ROLEX ACADEMY',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 32,
+                      fontSize: 26,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                       fontFamily: 'Plus Jakarta Sans',

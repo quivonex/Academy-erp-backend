@@ -8,6 +8,7 @@ import '../session/user_role.dart';
 import '../network/api_exception.dart';
 import '../theme/app_colors.dart';
 import '../theme/breakpoints.dart';
+import '../utils/brand_utils.dart';
 import 'admin_ui.dart';
 import 'nav_item.dart';
 
@@ -31,9 +32,7 @@ class AdminShell extends ConsumerWidget {
 
     final brandSubtitle = role == UserRole.superAdmin
         ? 'Multi-Academy SaaS'
-        : (session.firmName?.trim().isNotEmpty == true
-            ? session.firmName!.trim()
-            : 'Academy ERP');
+        : cleanFirmName(session.firmName);
 
     Widget sidebar(bool expanded) => _Sidebar(
       items: navItems,
@@ -114,7 +113,7 @@ class _BrandMark extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.28),
         child: Image.asset(
-          'assets/images/vidyasetu_logo.jpg',
+          'assets/images/rolex_academy_logo.jpg',
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => Container(
             alignment: Alignment.center,
@@ -181,9 +180,9 @@ class _Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'VidyaSetu',
+                                  'THE ROLEX ACADEMY',
                                   style: jakarta(
-                                    textTheme.titleLarge?.copyWith(
+                                    textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.4,
                                       color: const Color(0xFF0F172A),
@@ -430,7 +429,7 @@ class _TopBar extends ConsumerWidget {
                 builder: (dialogContext) => AlertDialog(
                   title: const Text('Log out?'),
                   content: const Text(
-                    'Are you sure you want to log out of VidyaSetu?',
+                    'Are you sure you want to log out of THE ROLEX ACADEMY?',
                   ),
                   actions: [
                     TextButton(
@@ -538,9 +537,7 @@ class _TopBar extends ConsumerWidget {
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 180),
                         child: Text(
-                          session.firmName?.trim().isNotEmpty == true
-                              ? session.firmName!.trim()
-                              : 'VidyaSetu',
+                          cleanFirmName(session.firmName),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.labelMedium?.copyWith(

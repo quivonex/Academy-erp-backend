@@ -9,6 +9,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/brand_utils.dart';
 import '../data/student_portal_repository.dart';
 import 'home_banners.dart';
 import 'widgets/student_ui.dart';
@@ -17,14 +18,11 @@ class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
 
   @override
-  ConsumerState<ExploreScreen> createState() =>
-      _ExploreScreenState();
+  ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState
-    extends ConsumerState<ExploreScreen> {
-  final TextEditingController _searchController =
-  TextEditingController();
+class _ExploreScreenState extends ConsumerState<ExploreScreen> {
+  final TextEditingController _searchController = TextEditingController();
 
   Timer? _searchTimer;
 
@@ -51,9 +49,8 @@ class _ExploreScreenState
 
   Future<void> _loadCategories() async {
     try {
-      final result = await ref
-          .read(studentPortalRepositoryProvider)
-          .categories();
+      final result =
+      await ref.read(studentPortalRepositoryProvider).categories();
 
       if (!mounted) return;
 
@@ -63,9 +60,7 @@ class _ExploreScreenState
     }
   }
 
-  Future<void> _loadCourses({
-    required bool reset,
-  }) async {
+  Future<void> _loadCourses({required bool reset}) async {
     if (!reset && (_loadingMore || !_hasMore)) {
       return;
     }
@@ -87,12 +82,10 @@ class _ExploreScreenState
     });
 
     try {
-      final result = await ref
-          .read(studentPortalRepositoryProvider)
-          .publicCourses(
+      final result =
+      await ref.read(studentPortalRepositoryProvider).publicCourses(
         search: _searchController.text,
-        categoryUuid:
-        _selectedCategoryUuid,
+        categoryUuid: _selectedCategoryUuid,
         page: requestedPage,
       );
 
@@ -135,8 +128,9 @@ class _ExploreScreenState
   }
 
   bool _onScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.pixels >=
-        notification.metrics.maxScrollExtent - 300) {
+    // extentAfter वापरल्याने scroll position अचूक कळते आणि
+    // वारंवार loadMore trigger होत नाही.
+    if (notification.metrics.extentAfter < 300) {
       if (!_loading && !_loadingMore && _hasMore && _error == null) {
         _loadCourses(reset: false);
       }
@@ -171,14 +165,12 @@ class _ExploreScreenState
     final width = MediaQuery.sizeOf(context).width;
     final sidePad = width > 1264 ? (width - 1200) / 2 : 32.0;
 
-    final academyLabel = session.firmName?.trim().isNotEmpty == true
-        ? session.firmName!.trim()
-        : 'the academy';
+    final academyLabel = cleanFirmName(session.firmName);
 
     Widget section(Widget child) => Padding(
-          padding: EdgeInsets.symmetric(horizontal: sidePad),
-          child: child,
-        );
+      padding: EdgeInsets.symmetric(horizontal: sidePad),
+      child: child,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -187,10 +179,13 @@ class _ExploreScreenState
         child: _WebTopNav(
           sidePad: sidePad,
           isStudent: isStudent,
-          academyLabel: session.firmName,
+          academyLabel: academyLabel,
         ),
       ),
       body: RefreshIndicator(
+        // फक्त top वर असतानाच refresh होऊ द्या.
+        notificationPredicate: (notification) =>
+        notification.metrics.extentBefore == 0,
         onRefresh: () async {
           await Future.wait([
             _loadCategories(),
@@ -200,205 +195,208 @@ class _ExploreScreenState
         child: NotificationListener<ScrollNotification>(
           onNotification: _onScrollNotification,
           child: ListView(
+            // scroll position टिकून ठेवण्यासाठी key.
+            key: const PageStorageKey<String>('explore_web_list'),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
-            const SizedBox(height: 56),
-            section(
-              Column(
-                children: [
-                  Text(
-                    'Find your next course',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: width >= 1100 ? 52 : 42,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1.6,
-                      height: 1.1,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 620),
-                    child: Text(
-                      'Explore courses, live classes and study materials '
-                      'available at $academyLabel.',
+              const SizedBox(height: 56),
+              section(
+                Column(
+                  children: [
+                    Text(
+                      'Find your next course',
                       textAlign: TextAlign.center,
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontSize: 18,
-                        height: 1.55,
-                        color: const Color(0xFF475569),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: width >= 1100 ? 52 : 42,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.6,
+                        height: 1.1,
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 580),
-                    child: _webSearchField(context),
-                  ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    runSpacing: 8,
-                    children: [
-                      FilterPill(
-                        label: 'All',
-                        selected: _selectedCategoryUuid == null,
-                        onTap: () {
-                          _selectedCategoryUuid = null;
-                          _loadCourses(reset: true);
-                        },
+                    const SizedBox(height: 14),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 620),
+                      child: Text(
+                        'Explore courses, live classes and study materials '
+                            'available at $academyLabel.',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontSize: 18,
+                          height: 1.55,
+                          color: const Color(0xFF475569),
+                        ),
                       ),
-                      for (final category in _categories)
+                    ),
+                    const SizedBox(height: 28),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 580),
+                      child: _webSearchField(context),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      runSpacing: 8,
+                      children: [
                         FilterPill(
-                          label: category.name,
-                          selected: _selectedCategoryUuid == category.uuid,
+                          label: 'All',
+                          selected: _selectedCategoryUuid == null,
                           onTap: () {
-                            _selectedCategoryUuid = category.uuid;
+                            _selectedCategoryUuid = null;
                             _loadCourses(reset: true);
                           },
                         ),
-                    ],
-                  ),
-                ],
+                        for (final category in _categories)
+                          FilterPill(
+                            label: category.name,
+                            selected: _selectedCategoryUuid == category.uuid,
+                            onTap: () {
+                              _selectedCategoryUuid = category.uuid;
+                              _loadCourses(reset: true);
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
-            section(const HomeBanners(height: 320)),
-            const SizedBox(height: 40),
-            section(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Featured & popular',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.6,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Courses currently open at $academyLabel.',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: colors.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!_loading && _courses.isNotEmpty)
-                        TonalPill(
-                          label: _hasMore
-                              ? '${_courses.length}+ courses available'
-                              : _courses.length == 1
-                                  ? '1 course available'
-                                  : '${_courses.length} courses available',
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                  const SizedBox(height: 24),
-                  if (_loading)
-                    const StudentLoading()
-                  else if (_error != null && _courses.isEmpty)
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: StudentStateMessage(
-                          icon: Icons.wifi_off_rounded,
-                          title: 'Courses could not load',
-                          message: _error!,
-                          actionLabel: 'Try again',
-                          onAction: () => _loadCourses(reset: true),
-                          isError: true,
-                        ),
-                      ),
-                    )
-                  else if (_courses.isEmpty)
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: StudentStateMessage(
-                          icon: Icons.search_off_rounded,
-                          title: 'No courses found',
-                          message: _searchController.text.isEmpty
-                              ? 'Try another category.'
-                              : 'Try a different search or category.',
-                        ),
-                      ),
-                    )
-                  else ...[
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth >= 1000 ? 3 : 2;
-                        const gap = 24.0;
-                        final cardWidth =
-                            (constraints.maxWidth - gap * (columns - 1)) /
-                                columns;
-
-                        return Wrap(
-                          spacing: gap,
-                          runSpacing: gap,
-                          children: [
-                            for (final course in _courses)
-                              SizedBox(
-                                width: cardWidth,
-                                child: _CourseCard(
-                                  course: course,
-                                  gridMode: true,
+              const SizedBox(height: 40),
+              section(const HomeBanners(height: 320)),
+              const SizedBox(height: 40),
+              section(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Featured & popular',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.6,
+                                  color: const Color(0xFF0F172A),
                                 ),
                               ),
-                          ],
-                        );
-                      },
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      InlineError(message: 'Could not load more: $_error'),
-                    ],
-                    if (_hasMore) ...[
-                      const SizedBox(height: 24),
-                      Center(
-                        child: SizedBox(
-                          width: 280,
-                          child: LoadMoreButton(
-                            label: 'Load more courses',
-                            loading: _loadingMore,
-                            onPressed: () => _loadCourses(reset: false),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Courses currently open at $academyLabel.',
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: colors.textMuted,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        if (!_loading && _courses.isNotEmpty)
+                          TonalPill(
+                            label: _hasMore
+                                ? '${_courses.length}+ courses available'
+                                : _courses.length == 1
+                                ? '1 course available'
+                                : '${_courses.length} courses available',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 24),
+                    if (_loading)
+                      const StudentLoading()
+                    else if (_error != null && _courses.isEmpty)
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          child: StudentStateMessage(
+                            icon: Icons.wifi_off_rounded,
+                            title: 'Courses could not load',
+                            message: _error!,
+                            actionLabel: 'Try again',
+                            onAction: () => _loadCourses(reset: true),
+                            isError: true,
+                          ),
+                        ),
+                      )
+                    else if (_courses.isEmpty)
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: StudentStateMessage(
+                              icon: Icons.search_off_rounded,
+                              title: 'No courses found',
+                              message: _searchController.text.isEmpty
+                                  ? 'Try another category.'
+                                  : 'Try a different search or category.',
+                            ),
+                          ),
+                        )
+                      else ...[
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final columns =
+                              constraints.maxWidth >= 1000 ? 3 : 2;
+                              const gap = 24.0;
+                              final cardWidth = (constraints.maxWidth -
+                                  gap * (columns - 1)) /
+                                  columns;
+
+                              return Wrap(
+                                spacing: gap,
+                                runSpacing: gap,
+                                children: [
+                                  for (final course in _courses)
+                                    SizedBox(
+                                      width: cardWidth,
+                                      child: _CourseCard(
+                                        course: course,
+                                        gridMode: true,
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 12),
+                            InlineError(message: 'Could not load more: $_error'),
+                          ],
+                          if (_hasMore) ...[
+                            const SizedBox(height: 24),
+                            Center(
+                              child: SizedBox(
+                                width: 280,
+                                child: LoadMoreButton(
+                                  label: 'Load more courses',
+                                  loading: _loadingMore,
+                                  onPressed: () => _loadCourses(reset: false),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 64),
-            _WebFooter(sidePad: sidePad, isStudent: isStudent),
-          ],
+              const SizedBox(height: 64),
+              _WebFooter(sidePad: sidePad, isStudent: isStudent),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _webSearchField(BuildContext context) {
     final colors = context.colors;
     OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c, width: w),
-        );
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: c, width: w),
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -430,14 +428,14 @@ class _ExploreScreenState
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  tooltip: 'Clear search',
-                  onPressed: () {
-                    _searchController.clear();
-                    _searchTimer?.cancel();
-                    _loadCourses(reset: true);
-                  },
-                  icon: const Icon(Icons.close_rounded),
-                ),
+            tooltip: 'Clear search',
+            onPressed: () {
+              _searchController.clear();
+              _searchTimer?.cancel();
+              _loadCourses(reset: true);
+            },
+            icon: const Icon(Icons.close_rounded),
+          ),
         ),
       ),
     );
@@ -453,54 +451,59 @@ class _ExploreScreenState
 
     return Scaffold(
       backgroundColor: colors.canvas,
+      // AppBar मध्ये leading/title/actions साठी कमी जागा घेऊन overflow टाळला आहे.
       appBar: AppBar(
-        toolbarHeight: 68,
-        leadingWidth: 68,
-        titleSpacing: 4,
+        toolbarHeight: 64,
+        leadingWidth: 52,
+        titleSpacing: 0,
         leading: const Padding(
-          padding: EdgeInsets.only(left: 16),
-          child: Center(child: AcademyMark(size: 40)),
+          padding: EdgeInsets.only(left: 8),
+          child: Center(child: AcademyMark(size: 32)),
         ),
         title: StudentBarTitle(
-          eyebrow: session.firmName,
+          eyebrow: cleanFirmName(session.firmName),
           title: 'Explore',
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 8),
             child: Center(
               child: isStudent
-                ? Tooltip(
-                    message: 'Profile',
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => context.go('/student/profile'),
-                      child: CircleAvatar(
-                        radius: 20,
-                        backgroundColor: colors.primaryDeep,
-                        child: const Icon(
-                          Icons.person_rounded,
-                          size: 22,
-                          color: Colors.white,
-                        ),
-                      ),
+                  ? Tooltip(
+                message: 'Profile',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => context.go('/student/profile'),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: colors.primaryDeep,
+                    child: const Icon(
+                      Icons.person_rounded,
+                      size: 18,
+                      color: Colors.white,
                     ),
-                  )
-                : FilledButton(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 40),
-                      shape: const StadiumBorder(),
-                    ),
-                    onPressed: () => context.go('/login'),
-                    child: const Text('Sign in'),
                   ),
+                ),
+              )
+                  : FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: const StadiumBorder(),
+                ),
+                onPressed: () => context.go('/login'),
+                child: const Text('Sign in'),
+              ),
             ),
           ),
         ],
       ),
       bottomNavigationBar:
-          isStudent ? const StudentBottomNav(selectedIndex: 0) : null,
+      isStudent ? const StudentBottomNav(selectedIndex: 0) : null,
       body: RefreshIndicator(
+        // फक्त top वर असतानाच refresh होऊ द्या, अन्यथा scroll jump होतो.
+        notificationPredicate: (notification) =>
+        notification.metrics.extentBefore == 0,
         onRefresh: () async {
           await Future.wait([
             _loadCategories(),
@@ -510,6 +513,8 @@ class _ExploreScreenState
         child: NotificationListener<ScrollNotification>(
           onNotification: _onScrollNotification,
           child: ListView(
+            // scroll position टिकून ठेवण्यासाठी key.
+            key: const PageStorageKey<String>('explore_mobile_list'),
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(
               kStudentPagePadding,
@@ -518,148 +523,154 @@ class _ExploreScreenState
               24,
             ),
             children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: kStudentMaxWidth),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Find your next course',
-                      style: textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      session.firmName == null || session.firmName!.isEmpty
-                          ? 'Explore courses available at the academy.'
-                          : 'Explore courses available at ${session.firmName}.',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colors.textMuted,
+              Center(
+                child: ConstrainedBox(
+                  constraints:
+                  const BoxConstraints(maxWidth: kStudentMaxWidth),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Find your next course',
+                        style: textTheme.headlineMedium,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: colors.cardShadow,
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) {
-                          setState(() {});
-                          _onSearchChanged(value);
-                        },
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'Search courses, subjects…',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: colors.borderSubtle),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: colors.borderSubtle),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide:
-                                BorderSide(color: colors.primary, width: 2),
-                          ),
-                          suffixIcon: _searchController.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Clear search',
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _searchTimer?.cancel();
-                                    _loadCourses(reset: true);
-                                  },
-                                  icon: const Icon(Icons.close_rounded),
-                                ),
+                      const SizedBox(height: 4),
+                      Text(
+                        session.firmName == null ||
+                            session.firmName!.isEmpty
+                            ? 'Explore courses available at the academy.'
+                            : 'Explore courses available at ${session.firmName}.',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.textMuted,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      clipBehavior: Clip.none,
-                      child: Row(
-                        children: [
-                          FilterPill(
-                            label: 'All',
-                            selected: _selectedCategoryUuid == null,
-                            onTap: () {
-                              _selectedCategoryUuid = null;
-                              _loadCourses(reset: true);
-                            },
+                      const SizedBox(height: 16),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: colors.cardShadow,
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() {});
+                            _onSearchChanged(value);
+                          },
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: 'Search courses, subjects…',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide:
+                              BorderSide(color: colors.borderSubtle),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide:
+                              BorderSide(color: colors.borderSubtle),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                  color: colors.primary, width: 2),
+                            ),
+                            suffixIcon: _searchController.text.isEmpty
+                                ? null
+                                : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _searchController.clear();
+                                _searchTimer?.cancel();
+                                _loadCourses(reset: true);
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
                           ),
-                          for (final category in _categories)
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        clipBehavior: Clip.none,
+                        child: Row(
+                          children: [
                             FilterPill(
-                              label: category.name,
-                              selected: _selectedCategoryUuid == category.uuid,
+                              label: 'All',
+                              selected: _selectedCategoryUuid == null,
                               onTap: () {
-                                _selectedCategoryUuid = category.uuid;
+                                _selectedCategoryUuid = null;
                                 _loadCourses(reset: true);
                               },
                             ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const HomeBanners(),
-                    SectionHeader(
-                      title: 'Featured & popular',
-                      trailing: _loading || _courses.isEmpty
-                          ? null
-                          : TonalPill(
-                              label: _hasMore
-                                  ? '${_courses.length}+ courses'
-                                  : _courses.length == 1
-                                      ? '1 course'
-                                      : '${_courses.length} courses',
-                            ),
-                    ),
-                    if (_loading)
-                      const StudentLoading()
-                    else if (_error != null && _courses.isEmpty)
-                      StudentStateMessage(
-                        icon: Icons.wifi_off_rounded,
-                        title: 'Courses could not load',
-                        message: _error!,
-                        actionLabel: 'Try again',
-                        onAction: () => _loadCourses(reset: true),
-                        isError: true,
-                      )
-                    else if (_courses.isEmpty)
-                      StudentStateMessage(
-                        icon: Icons.search_off_rounded,
-                        title: 'No courses found',
-                        message: _searchController.text.isEmpty
-                            ? 'Try another category.'
-                            : 'Try a different search or category.',
-                      )
-                    else ...[
-                      for (final course in _courses) _CourseCard(course: course),
-                      if (_error != null)
-                        InlineError(message: 'Could not load more: $_error'),
-                      if (_hasMore)
-                        LoadMoreButton(
-                          label: 'Load more courses',
-                          loading: _loadingMore,
-                          onPressed: () => _loadCourses(reset: false),
+                            for (final category in _categories)
+                              FilterPill(
+                                label: category.name,
+                                selected:
+                                _selectedCategoryUuid == category.uuid,
+                                onTap: () {
+                                  _selectedCategoryUuid = category.uuid;
+                                  _loadCourses(reset: true);
+                                },
+                              ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 20),
+                      const HomeBanners(),
+                      SectionHeader(
+                        title: 'Featured & popular',
+                        trailing: _loading || _courses.isEmpty
+                            ? null
+                            : TonalPill(
+                          label: _hasMore
+                              ? '${_courses.length}+ courses'
+                              : _courses.length == 1
+                              ? '1 course'
+                              : '${_courses.length} courses',
+                        ),
+                      ),
+                      if (_loading)
+                        const StudentLoading()
+                      else if (_error != null && _courses.isEmpty)
+                        StudentStateMessage(
+                          icon: Icons.wifi_off_rounded,
+                          title: 'Courses could not load',
+                          message: _error!,
+                          actionLabel: 'Try again',
+                          onAction: () => _loadCourses(reset: true),
+                          isError: true,
+                        )
+                      else if (_courses.isEmpty)
+                          StudentStateMessage(
+                            icon: Icons.search_off_rounded,
+                            title: 'No courses found',
+                            message: _searchController.text.isEmpty
+                                ? 'Try another category.'
+                                : 'Try a different search or category.',
+                          )
+                        else ...[
+                            for (final course in _courses)
+                              _CourseCard(course: course),
+                            if (_error != null)
+                              InlineError(message: 'Could not load more: $_error'),
+                            if (_hasMore)
+                              LoadMoreButton(
+                                label: 'Load more courses',
+                                loading: _loadingMore,
+                                onPressed: () => _loadCourses(reset: false),
+                              ),
+                          ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -685,10 +696,9 @@ class _WebTopNav extends StatelessWidget {
         padding: const EdgeInsets.only(right: 4),
         child: TextButton(
           style: TextButton.styleFrom(
-            backgroundColor:
-                active ? colors.primaryTonal : Colors.transparent,
+            backgroundColor: active ? colors.primaryTonal : Colors.transparent,
             foregroundColor:
-                active ? colors.primary : const Color(0xFF475569),
+            active ? colors.primary : const Color(0xFF475569),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -735,7 +745,7 @@ class _WebTopNav extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'VidyaSetu',
+                  'THE ROLEX ACADEMY',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -805,13 +815,13 @@ class _WebFooter extends StatelessWidget {
     );
 
     Widget link(String label, String route) => InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: () => context.go(route),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(label, style: linkStyle),
-          ),
-        );
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => context.go(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text(label, style: linkStyle),
+      ),
+    );
 
     return Container(
       padding: EdgeInsets.fromLTRB(sidePad, 40, sidePad, 28),
@@ -835,7 +845,7 @@ class _WebFooter extends StatelessWidget {
                         const AcademyMark(size: 32),
                         const SizedBox(width: 10),
                         Text(
-                          'VidyaSetu',
+                          'THE ROLEX ACADEMY',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -849,7 +859,7 @@ class _WebFooter extends StatelessWidget {
                       constraints: const BoxConstraints(maxWidth: 340),
                       child: Text(
                         'Courses, live classes and study materials '
-                        'from your academy, in one place.',
+                            'from your academy, in one place.',
                         style: textTheme.bodySmall?.copyWith(height: 1.6),
                       ),
                     ),
@@ -903,7 +913,7 @@ class _WebFooter extends StatelessWidget {
           const Divider(height: 1, color: Color(0xFFEEF0F5)),
           const SizedBox(height: 18),
           Text(
-            '© ${DateTime.now().year} VidyaSetu. All rights reserved.',
+            '© ${DateTime.now().year} THE ROLEX ACADEMY. All rights reserved.',
             style: textTheme.bodySmall?.copyWith(color: colors.textSubtle),
           ),
         ],
@@ -1018,15 +1028,14 @@ class _CourseCard extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: textTheme.labelMedium?.copyWith(
-                                  color: Colors.white
-                                      .withValues(alpha: 0.85),
+                                  color: Colors.white.withValues(alpha: 0.85),
                                 ),
                               ),
                             ),
                             TonalPill(
                               label: _prettyMode(course.deliveryMode),
                               background:
-                                  Colors.black.withValues(alpha: 0.28),
+                              Colors.black.withValues(alpha: 0.28),
                               foreground: Colors.white,
                             ),
                           ],
@@ -1040,69 +1049,75 @@ class _CourseCard extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: SizedBox(
-              height: gridMode ? 142 : null,
+            child: ConstrainedBox(
+              // gridMode मध्ये minimum height ठेवली, पण content जास्त असल्यास
+              // grow होऊ द्या — त्यामुळे overflow/glitch होणार नाही.
+              constraints: BoxConstraints(
+                minHeight: gridMode ? 120 : 0,
+              ),
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  course.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleLarge,
-                ),
-                if (course.description.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    course.description,
+                    course.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colors.textMuted,
-                    ),
+                    style: textTheme.titleLarge,
                   ),
-                ],
-                if ((course.firmName ?? '').isNotEmpty ||
-                    course.durationMonths != null) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      if ((course.firmName ?? '').isNotEmpty) ...[
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: colors.primaryTonal,
-                          child: Text(
-                            initialsOf(course.firmName!),
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colors.primary,
+                  if (course.description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      course.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colors.textMuted,
+                      ),
+                    ),
+                  ],
+                  if ((course.firmName ?? '').isNotEmpty ||
+                      course.durationMonths != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        if ((course.firmName ?? '').isNotEmpty) ...[
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: colors.primaryTonal,
+                            child: Text(
+                              initialsOf(course.firmName!),
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colors.primary,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            course.firmName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.labelLarge,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              course.firmName!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelLarge,
+                            ),
                           ),
-                        ),
-                      ] else
-                        const Spacer(),
-                      if (course.durationMonths != null)
-                        TonalPill(
-                          label: course.durationMonths == 1
-                              ? '1 month'
-                              : '${course.durationMonths} months',
-                          icon: Icons.schedule_rounded,
-                          background: colors.successBg,
-                          foreground: colors.success,
-                        ),
-                    ],
-                  ),
+                        ] else
+                          const Spacer(),
+                        if (course.durationMonths != null)
+                          Flexible(
+                            child: TonalPill(
+                              label: course.durationMonths == 1
+                                  ? '1 month'
+                                  : '${course.durationMonths} months',
+                              icon: Icons.schedule_rounded,
+                              background: colors.successBg,
+                              foreground: colors.success,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -1132,20 +1147,28 @@ class _CourseCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.primaryDeep,
-                    minimumSize: const Size(0, 44),
-                    padding: const EdgeInsets.only(left: 18, right: 12),
-                  ),
-                  onPressed: open,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('View course'),
-                      SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded, size: 20),
-                    ],
+                Flexible(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.primaryDeep,
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    onPressed: open,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'View course',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded, size: 20),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1192,16 +1215,13 @@ class _PublicCourseDetailScreenState
   }
 
   void _loadCourse() {
-    _course = ref
-        .read(studentPortalRepositoryProvider)
-        .publicCourse(widget.uuid);
+    _course =
+        ref.read(studentPortalRepositoryProvider).publicCourse(widget.uuid);
   }
 
   Future<bool> _checkAccess() async {
     try {
-      await ref
-          .read(studentPortalRepositoryProvider)
-          .myCourse(widget.uuid);
+      await ref.read(studentPortalRepositoryProvider).myCourse(widget.uuid);
       return true;
     } on ApiException catch (error) {
       if (error.statusCode == 404) return false;

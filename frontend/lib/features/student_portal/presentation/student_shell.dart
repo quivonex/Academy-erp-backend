@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/brand_utils.dart';
 import 'widgets/student_ui.dart';
 
 class StudentShell extends ConsumerWidget {
@@ -166,7 +167,7 @@ class StudentShell extends ConsumerWidget {
                 },
               ),
         title: StudentBarTitle(
-          eyebrow: session.firmName,
+          eyebrow: cleanFirmName(session.firmName),
           title: _title,
         ),
         actions: [
@@ -216,7 +217,7 @@ class StudentShell extends ConsumerWidget {
                     builder: (dialogContext) => AlertDialog(
                       title: const Text('Log out?'),
                       content: const Text(
-                        'Are you sure you want to log out of VidyaSetu?',
+                        'Are you sure you want to log out of THE ROLEX ACADEMY?',
                       ),
                       actions: [
                         TextButton(
@@ -269,7 +270,7 @@ class StudentShell extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Flexible(
                       child: Text(
-                        session.firmName ?? 'Student',
+                        cleanFirmName(session.firmName),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

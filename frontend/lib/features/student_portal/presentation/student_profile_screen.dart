@@ -81,7 +81,7 @@ class _StudentProfileScreenState
       builder: (dialogContext) => AlertDialog(
         title: const Text('Log out?'),
         content: const Text(
-          'Are you sure you want to log out of VidyaSetu?',
+          'Are you sure you want to log out of THE ROLEX ACADEMY?',
         ),
         actions: [
           TextButton(

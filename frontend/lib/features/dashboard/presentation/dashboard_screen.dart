@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/brand_utils.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../data/dashboard_repository.dart';
 
@@ -42,9 +43,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return _AcademyDashboard(
       key: ValueKey('${session.userUuid}_${session.firmUuid}'),
-      academyName: session.firmName?.trim().isNotEmpty == true
-          ? session.firmName!.trim()
-          : 'Your Academy',
+      academyName: cleanFirmName(session.firmName),
     );
   }
 }
