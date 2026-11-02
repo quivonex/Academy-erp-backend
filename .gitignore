@@ -1,6 +1,7 @@
 venv/
 __pycache__/
 *.py[cod]
+*.pyc
 
 .env
 
@@ -9,6 +10,7 @@ __pycache__/
 
 media/
 staticfiles/
+logs/*.log
 
 *.log
 
@@ -16,9 +18,3 @@ staticfiles/
 Thumbs.db
 
 db.sqlite3
-.env
-venv/
-__pycache__/
-*.pyc
-media/
-staticfiles/

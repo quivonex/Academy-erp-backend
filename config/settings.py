@@ -24,26 +24,16 @@ env = environ.Env(
 
 environ.Env.read_env(BASE_DIR / ".env")
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-@_)#+pn5ng9n)31m%u$&&%hn#uvx18j+w4lf_ycunkn)t0025&'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ["*"]
-
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 
-DEFAULT_FIRM_CODE = env("DEFAULT_FIRM_CODE", default="",)
-# DEBUG = env.bool("DJANGO_DEBUG", default=False)
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
-# ALLOWED_HOSTS = env.list(
-#     "DJANGO_ALLOWED_HOSTS",
-#     default=["127.0.0.1", "localhost"],
-# )
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=["127.0.0.1", "localhost"],
+)
+
+DEFAULT_FIRM_CODE = env("DEFAULT_FIRM_CODE", default="")
 
 
 
@@ -96,12 +86,18 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = env.bool(
+    "CORS_ALLOW_ALL_ORIGINS",
+    default=DEBUG,
+)
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-# ]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
 
 ROOT_URLCONF = 'config.urls'
 
@@ -161,27 +157,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
-USE_I18N = True
-
-USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = 'static/'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -240,6 +215,10 @@ SIMPLE_JWT = {
     ),
 }
 
+
+# =========================================================
+# INTERNATIONALIZATION
+# =========================================================
 
 LANGUAGE_CODE = "en-us"
 
@@ -304,13 +283,14 @@ if USE_S3:
     }
     
     
+# =========================================================
+# STATIC FILES
+# =========================================================
+
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
-# Development only
-CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "ngrok-skip-browser-warning",
@@ -348,4 +328,62 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="",)
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="",)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="VidyaSetu <noreply@vidyasetu.local>",)
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+
+# =========================================================
+# SECURITY (production-only when DEBUG=False)
+# =========================================================
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+    SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+
+
+# =========================================================
+# LOGGING
+# =========================================================
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": BASE_DIR / "logs" / "django.log",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"] if DEBUG else ["console", "file"],
+        "level": "DEBUG" if DEBUG else "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"] if DEBUG else ["console", "file"],
+            "level": "INFO" if DEBUG else "WARNING",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
 
