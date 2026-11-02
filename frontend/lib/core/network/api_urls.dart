@@ -168,4 +168,20 @@ class ApiUrls {
 
   // Fees (student)
   static const String studentFeeAccounts = '/student/fee-accounts/';
+
+  // Certificates (student)
+  static const String studentCertificates = '/student/certificates/';
+  static String studentCertificateStatus(String courseUuid) =>
+      '/student/courses/$courseUuid/certificate-status/';
+  static String studentCertificateDownload(String certificateUuid) =>
+      '/student/certificates/$certificateUuid/download/';
+
+  // Certificates (admin)
+  static const String certificates = '/certificates/';
+  static String certificateRevoke(String uuid) =>
+      '/certificates/$uuid/revoke/';
+
+  // Certificates (public)
+  static String publicCertificateVerify(String verificationCode) =>
+      '/public/certificates/$verificationCode/';
 }
