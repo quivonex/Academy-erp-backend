@@ -115,13 +115,13 @@ class LiveClassListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        from notifications.services import (
-            create_live_class_scheduled_notifications,
+        from notifications.tasks import (
+            send_live_class_scheduled_notifications,
         )
 
         transaction.on_commit(
-            lambda: create_live_class_scheduled_notifications(
-                live_class
+            lambda: send_live_class_scheduled_notifications.delay(
+                live_class.pk
             )
         )
         
@@ -182,13 +182,13 @@ class LiveClassStartView(LiveClassActionBaseView):
                     ),
                 )
 
-            from notifications.services import (
-                create_live_class_started_notifications,
+            from notifications.tasks import (
+                send_live_class_started_notifications,
             )
 
             transaction.on_commit(
-                lambda: create_live_class_started_notifications(
-                    live_class
+                lambda: send_live_class_started_notifications.delay(
+                    live_class.pk
                 )
             )
 
@@ -251,13 +251,13 @@ class LiveClassCancelView(LiveClassActionBaseView):
                         status.HTTP_400_BAD_REQUEST
                     ),
                 )
-        from notifications.services import (
-            create_live_class_cancelled_notifications,
+        from notifications.tasks import (
+            send_live_class_cancelled_notifications,
         )
 
         transaction.on_commit(
-            lambda: create_live_class_cancelled_notifications(
-                live_class
+            lambda: send_live_class_cancelled_notifications.delay(
+                live_class.pk
             )
         )
         
@@ -431,8 +431,8 @@ class LiveClassDetailView(APIView):
             )
 
             if changed_notification_fields:
-                from notifications.services import (
-                    create_live_class_updated_notifications,
+                from notifications.tasks import (
+                    send_live_class_updated_notifications,
                 )
 
                 schedule_changed = bool(
@@ -444,9 +444,9 @@ class LiveClassDetailView(APIView):
                 )
 
                 transaction.on_commit(
-                    lambda: create_live_class_updated_notifications(
-                        live_class,
-                        schedule_changed=schedule_changed,
+                    lambda: send_live_class_updated_notifications.delay(
+                        live_class.pk,
+                        schedule_changed,
                     )
                 )
                 

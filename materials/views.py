@@ -109,13 +109,13 @@ class LearningMaterialListCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        from notifications.services import (
-            create_material_available_notifications,
+        from notifications.tasks import (
+            send_material_available_notifications,
         )
 
         transaction.on_commit(
-            lambda: create_material_available_notifications(
-                material
+            lambda: send_material_available_notifications.delay(
+                material.pk
             )
         )
         

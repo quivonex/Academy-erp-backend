@@ -138,6 +138,43 @@ DATABASES = {
 
 AUTH_USER_MODEL = "accounts.User"
 
+
+# =========================================================
+# REDIS CACHE
+# =========================================================
+
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
+
+# =========================================================
+# CELERY
+# =========================================================
+
+CELERY_BROKER_URL = env(
+    "CELERY_BROKER_URL",
+    default=REDIS_URL,
+)
+CELERY_RESULT_BACKEND = env(
+    "CELERY_RESULT_BACKEND",
+    default=REDIS_URL,
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = env("TIME_ZONE", default="Asia/Kolkata")
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

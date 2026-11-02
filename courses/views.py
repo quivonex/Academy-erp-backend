@@ -1029,21 +1029,29 @@ class BulkStudentChapterVideoAccessView(APIView):
                     validated_data=serializer.validated_data,
                 )
 
-                from notifications.services import (
-                    create_chapter_video_access_notifications,
+                from notifications.tasks import (
+                    send_chapter_video_access_notifications,
                 )
 
                 transaction.on_commit(
                     lambda: (
-                        create_chapter_video_access_notifications(
-                            course=result["course"],
-                            students=result["students"],
-                            chapters=result["chapters"],
-                            access_start_at=(
+                        send_chapter_video_access_notifications.delay(
+                            course_id=result["course"].pk,
+                            student_ids=[
+                                s.pk for s in result["students"]
+                            ],
+                            chapter_ids=[
+                                c.pk for c in result["chapters"]
+                            ],
+                            access_start_at_iso=(
                                 result["access_start_at"]
+                                .isoformat()
                             ),
-                            access_end_at=(
+                            access_end_at_iso=(
                                 result["access_end_at"]
+                                .isoformat()
+                                if result["access_end_at"]
+                                else None
                             ),
                         )
                     )

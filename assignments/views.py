@@ -1612,13 +1612,13 @@ class AssignmentPublishView(APIView):
                 "updated_at",
             ]
         )
-        from notifications.services import (
-            create_assignment_published_notifications,
+        from notifications.tasks import (
+            send_assignment_published_notifications,
         )
 
         transaction.on_commit(
-            lambda: create_assignment_published_notifications(
-                assignment
+            lambda: send_assignment_published_notifications.delay(
+                assignment.pk
             )
         )
         
