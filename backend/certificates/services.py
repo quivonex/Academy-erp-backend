@@ -10,7 +10,7 @@ from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
-
+from reportlab.lib.utils import ImageReader
 from materials.models import LearningMaterial
 from payments.models import EnrollmentFeeAccount
 from progress.models import StudentMaterialProgress
@@ -137,137 +137,386 @@ def get_certificate_eligibility(*, enrollment):
         "fee_fully_paid": fee_fully_paid,
     }
 
-
 def build_course_certificate_pdf(
     *,
     certificate,
 ):
     buffer = BytesIO()
 
+    page_size = landscape(A4)
+    page_width, page_height = page_size
+
     pdf = canvas.Canvas(
         buffer,
-        pagesize=landscape(A4),
+        pagesize=page_size,
     )
 
-    page_width, page_height = landscape(A4)
+    # ---------------------------------------------------------
+    # COLORS
+    # ---------------------------------------------------------
 
-    pdf.setFillColor(colors.HexColor("#1E3A8A"))
+    navy = colors.HexColor("#172554")
+    blue = colors.HexColor("#1E3A8A")
+    gold = colors.HexColor("#C9A227")
+    dark = colors.HexColor("#111827")
+    gray = colors.HexColor("#4B5563")
+    light_gray = colors.HexColor("#E5E7EB")
+    background = colors.HexColor("#FFFEF8")
+
+    # ---------------------------------------------------------
+    # BACKGROUND
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(background)
     pdf.rect(
         0,
-        page_height - 105,
+        0,
         page_width,
-        105,
+        page_height,
         fill=1,
         stroke=0,
     )
 
-    pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 24)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 55,
-        "Rolex Academy",
-    )
+    # ---------------------------------------------------------
+    # OUTER CERTIFICATE BORDER
+    # ---------------------------------------------------------
 
-    pdf.setFont("Helvetica", 11)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 77,
-        "Certificate of Course Completion",
-    )
-
-    pdf.setFillColor(colors.HexColor("#111827"))
-    pdf.setFont("Helvetica", 13)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 165,
-        "This is to certify that",
-    )
-
-    pdf.setFont("Helvetica-Bold", 26)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 215,
-        certificate.student_name,
-    )
-
-    pdf.setFont("Helvetica", 13)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 255,
-        "has successfully completed the course",
-    )
-
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 295,
-        certificate.course_name,
-    )
-
-    pdf.setFont("Helvetica", 10)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 330,
-        (
-            "Course completion requirement: "
-            f"{certificate.required_watch_percentage}% "
-            "verified video progress"
-        ),
-    )
-
-    pdf.setFont("Helvetica", 10)
-    pdf.drawCentredString(
-        page_width / 2,
-        page_height - 350,
-        (
-            "Achieved verified video progress: "
-            f"{certificate.achieved_watch_percentage}%"
-        ),
-    )
-
-    pdf.setStrokeColor(colors.HexColor("#C9A227"))
-    pdf.setLineWidth(2)
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(4)
     pdf.rect(
-        40,
-        105,
-        page_width - 80,
-        page_height - 235,
+        20,
+        20,
+        page_width - 40,
+        page_height - 40,
         fill=0,
         stroke=1,
     )
 
-    pdf.setFillColor(colors.HexColor("#374151"))
+    # Gold inner border
+    pdf.setStrokeColor(gold)
+    pdf.setLineWidth(1.5)
+    pdf.rect(
+        28,
+        28,
+        page_width - 56,
+        page_height - 56,
+        fill=0,
+        stroke=1,
+    )
+
+    # Decorative corner lines
+    corner_length = 45
+
+    pdf.setStrokeColor(gold)
+    pdf.setLineWidth(3)
+
+    # Top left
+    pdf.line(38, page_height - 38, 38 + corner_length, page_height - 38)
+    pdf.line(38, page_height - 38, 38, page_height - 38 - corner_length)
+
+    # Top right
+    pdf.line(
+        page_width - 38,
+        page_height - 38,
+        page_width - 38 - corner_length,
+        page_height - 38,
+    )
+    pdf.line(
+        page_width - 38,
+        page_height - 38,
+        page_width - 38,
+        page_height - 38 - corner_length,
+    )
+
+    # Bottom left
+    pdf.line(38, 38, 38 + corner_length, 38)
+    pdf.line(38, 38, 38, 38 + corner_length)
+
+    # Bottom right
+    pdf.line(
+        page_width - 38,
+        38,
+        page_width - 38 - corner_length,
+        38,
+    )
+    pdf.line(
+        page_width - 38,
+        38,
+        page_width - 38,
+        38 + corner_length,
+    )
+
+    # ---------------------------------------------------------
+    # FIRM / ACADEMY LOGO
+    # ---------------------------------------------------------
+
+    firm = certificate.firm
+
+    if firm.logo:
+        try:
+            with firm.logo.open("rb") as logo_file:
+                logo_data = logo_file.read()
+
+            logo = ImageReader(
+                BytesIO(logo_data)
+            )
+
+            logo_width = 65
+            logo_height = 65
+
+            pdf.drawImage(
+                logo,
+                (page_width - logo_width) / 2,
+                page_height - 105,
+                width=logo_width,
+                height=logo_height,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+
+        except Exception:
+            # Certificate generation should not fail
+            # only because a logo cannot be loaded.
+            pass
+
+    # ---------------------------------------------------------
+    # FIRM NAME
+    # ---------------------------------------------------------
+
+    firm_name_y = page_height - 128
+
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 18)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        firm_name_y,
+        firm.name,
+    )
+
+    # ---------------------------------------------------------
+    # CERTIFICATE TITLE
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(gold)
+    pdf.setFont("Helvetica-Bold", 27)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 175,
+        "CERTIFICATE OF COMPLETION",
+    )
+
+    # Decorative line below title
+    line_width = 220
+
+    pdf.setStrokeColor(gold)
+    pdf.setLineWidth(1)
+
+    pdf.line(
+        (page_width - line_width) / 2,
+        page_height - 188,
+        (page_width + line_width) / 2,
+        page_height - 188,
+    )
+
+    # ---------------------------------------------------------
+    # CERTIFICATE MESSAGE
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(gray)
+    pdf.setFont("Helvetica", 12)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 220,
+        "This is to certify that",
+    )
+
+    # ---------------------------------------------------------
+    # STUDENT NAME
+    # ---------------------------------------------------------
+
+    student_name = certificate.student_name or "Student"
+
+    pdf.setFillColor(blue)
+    pdf.setFont("Helvetica-Bold", 25)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 260,
+        student_name,
+    )
+
+    # Student name underline
+    pdf.setStrokeColor(light_gray)
+    pdf.setLineWidth(1)
+
+    pdf.line(
+        page_width / 2 - 180,
+        page_height - 270,
+        page_width / 2 + 180,
+        page_height - 270,
+    )
+
+    # ---------------------------------------------------------
+    # COURSE COMPLETION MESSAGE
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(gray)
+    pdf.setFont("Helvetica", 12)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 300,
+        "has successfully completed the course",
+    )
+
+    # ---------------------------------------------------------
+    # COURSE NAME
+    # ---------------------------------------------------------
+
+    course_name = certificate.course_name or "Course"
+
+    # Prevent very long course names from overflowing.
+    max_course_length = 65
+
+    if len(course_name) > max_course_length:
+        course_name = (
+            course_name[:max_course_length - 3]
+            + "..."
+        )
+
+    pdf.setFillColor(dark)
+    pdf.setFont("Helvetica-Bold", 20)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 338,
+        course_name,
+    )
+
+    # ---------------------------------------------------------
+    # VERIFIED COURSE PROGRESS
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(gray)
+    pdf.setFont("Helvetica", 10)
+
+    progress_text = (
+        "Verified Course Progress: "
+        f"{certificate.achieved_watch_percentage}%"
+        "    |    "
+        "Required: "
+        f"{certificate.required_watch_percentage}%"
+    )
+
+    pdf.drawCentredString(
+        page_width / 2,
+        page_height - 370,
+        progress_text,
+    )
+
+    # ---------------------------------------------------------
+    # STUDENT / CERTIFICATE INFORMATION
+    # ---------------------------------------------------------
+
+    info_y = 135
+
+    pdf.setStrokeColor(light_gray)
+    pdf.setLineWidth(1)
+
+    pdf.line(
+        70,
+        info_y + 35,
+        page_width - 70,
+        info_y + 35,
+    )
+
+    pdf.setFillColor(gray)
     pdf.setFont("Helvetica", 9)
+
+    admission_number = (
+        certificate.admission_number
+        or "N/A"
+    )
+
     pdf.drawString(
-        55,
-        80,
-        f"Certificate No: {certificate.certificate_number}",
+        75,
+        info_y + 12,
+        f"Admission No: {admission_number}",
+    )
+
+    issued_date = (
+        certificate.issued_at.strftime(
+            "%d %b %Y"
+        )
     )
 
     pdf.drawRightString(
-        page_width - 55,
-        80,
+        page_width - 75,
+        info_y + 12,
+        f"Issue Date: {issued_date}",
+    )
+
+    # ---------------------------------------------------------
+    # CERTIFICATE NUMBER
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(dark)
+    pdf.setFont("Helvetica-Bold", 9)
+
+    pdf.drawString(
+        75,
+        info_y - 10,
         (
-            "Issued: "
-            f"{certificate.issued_at.strftime('%d %b %Y')}"
+            "Certificate No: "
+            f"{certificate.certificate_number}"
         ),
     )
 
+    # ---------------------------------------------------------
+    # VERIFICATION CODE
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(gray)
     pdf.setFont("Helvetica", 8)
+
     pdf.drawString(
-        55,
-        58,
+        75,
+        info_y - 30,
         (
-            "Verify this certificate using code: "
+            "Verification Code: "
             f"{certificate.verification_code}"
         ),
     )
+
+    # ---------------------------------------------------------
+    # FOOTER
+    # ---------------------------------------------------------
+
+    pdf.setFillColor(colors.HexColor("#6B7280"))
+    pdf.setFont("Helvetica-Oblique", 7)
+
+    pdf.drawCentredString(
+        page_width / 2,
+        55,
+        (
+            "This certificate is digitally generated "
+            "and can be verified using its unique "
+            "verification code."
+        ),
+    )
+
+    # ---------------------------------------------------------
+    # FINISH PDF
+    # ---------------------------------------------------------
 
     pdf.showPage()
     pdf.save()
 
     buffer.seek(0)
+
     return buffer.getvalue()
 
 
