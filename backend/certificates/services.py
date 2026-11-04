@@ -166,7 +166,7 @@ def build_course_certificate_pdf(
     pdf.drawCentredString(
         page_width / 2,
         page_height - 55,
-        "VIDYASETU",
+        "Rolex Academy",
     )
 
     pdf.setFont("Helvetica", 11)
