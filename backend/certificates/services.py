@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 
 from materials.models import LearningMaterial
@@ -146,10 +146,10 @@ def build_course_certificate_pdf(
 
     pdf = canvas.Canvas(
         buffer,
-        pagesize=A4,
+        pagesize=landscape(A4),
     )
 
-    page_width, page_height = A4
+    page_width, page_height = landscape(A4)
 
     pdf.setFillColor(colors.HexColor("#1E3A8A"))
     pdf.rect(
