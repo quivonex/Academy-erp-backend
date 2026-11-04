@@ -424,3 +424,10 @@ LOGGING = {
     },
 }
 
+
+
+CERTIFICATE_VERIFICATION_BASE_URL = env(
+    "CERTIFICATE_VERIFICATION_BASE_URL",
+    default="http://127.0.0.1:12000/api/v1/public/certificates",
+)
+

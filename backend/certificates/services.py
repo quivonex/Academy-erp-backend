@@ -1,7 +1,11 @@
 from decimal import Decimal
 from io import BytesIO
 import uuid as uuid_lib
+from django.conf import settings
 
+from reportlab.graphics.barcode import qr
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics import renderPDF
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -491,6 +495,82 @@ def build_course_certificate_pdf(
         ),
     )
 
+        # ---------------------------------------------------------
+    # QR CODE - PUBLIC CERTIFICATE VERIFICATION
+    # ---------------------------------------------------------
+
+    verification_base_url = getattr(
+        settings,
+        "CERTIFICATE_VERIFICATION_BASE_URL",
+        "",
+    ).rstrip("/")
+
+    if verification_base_url:
+        verification_url = (
+            f"{verification_base_url}/"
+            f"{certificate.verification_code}/"
+        )
+        
+        print(
+    "CERTIFICATE QR DEBUG:",
+    verification_url
+    )
+
+        qr_code = qr.QrCodeWidget(
+            verification_url
+        )
+
+        bounds = qr_code.getBounds()
+
+        qr_width = bounds[2] - bounds[0]
+        qr_height = bounds[3] - bounds[1]
+
+        qr_size = 75
+
+        drawing = Drawing(
+            qr_size,
+            qr_size,
+        )
+
+        scale_x = qr_size / qr_width
+        scale_y = qr_size / qr_height
+
+        qr_code.transform = [
+            scale_x,
+            0,
+            0,
+            scale_y,
+            0,
+            0,
+        ]
+
+        drawing.add(qr_code)
+
+        qr_x = page_width - 160
+        qr_y = 55
+
+        renderPDF.draw(
+            drawing,
+            pdf,
+            qr_x,
+            qr_y,
+        )
+
+        pdf.setFillColor(gray)
+        pdf.setFont(
+            "Helvetica-Bold",
+            7,
+        )
+
+        pdf.drawCentredString(
+            qr_x + (qr_size / 2),
+            qr_y - 10,
+            "Scan to verify",
+        )
+        
+        
+        
+        
     # ---------------------------------------------------------
     # FOOTER
     # ---------------------------------------------------------

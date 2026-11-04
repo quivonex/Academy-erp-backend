@@ -26,7 +26,10 @@ from .serializers import (
     CourseCompletionCertificateSerializer,
     PublicCertificateVerificationSerializer,
 )
-from .services import get_certificate_eligibility
+from .services import (
+    get_certificate_eligibility,
+    issue_certificate_if_eligible,
+)
 
 
 class StudentCertificateListView(APIView):
@@ -105,11 +108,20 @@ class StudentCertificateStatusView(APIView):
         eligibility = get_certificate_eligibility(
             enrollment=enrollment,
         )
-
+        
         try:
             certificate = enrollment.completion_certificate
         except CourseCompletionCertificate.DoesNotExist:
             certificate = None
+        
+        # Automatically issue the certificate once all
+        # certificate eligibility requirements are satisfied.
+        if certificate is None and eligibility["is_eligible"]:
+            certificate, eligibility = (
+                issue_certificate_if_eligible(
+                    enrollment=enrollment,
+                )
+            )
 
         return success_response(
             message=(
