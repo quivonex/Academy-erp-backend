@@ -495,7 +495,7 @@ def build_course_certificate_pdf(
         ),
     )
 
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
     # QR CODE - PUBLIC CERTIFICATE VERIFICATION
     # ---------------------------------------------------------
 
@@ -510,11 +510,6 @@ def build_course_certificate_pdf(
             f"{verification_base_url}/"
             f"{certificate.verification_code}/"
         )
-        
-        print(
-    "CERTIFICATE QR DEBUG:",
-    verification_url
-    )
 
         qr_code = qr.QrCodeWidget(
             verification_url
@@ -566,10 +561,9 @@ def build_course_certificate_pdf(
             qr_x + (qr_size / 2),
             qr_y - 10,
             "Scan to verify",
-        )
+        )        
         
-        
-        
+
         
     # ---------------------------------------------------------
     # FOOTER

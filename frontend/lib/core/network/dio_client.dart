@@ -6,7 +6,8 @@ import 'token_storage.dart';
 /// Android emulator with a server on the host PC can use http://10.0.2.2:8000/api/v1.
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://192.168.31.74:10000/api/v1',
+  defaultValue: 'http://13.232.127.84/api/v1/',
+  // defaultValue: 'http://192.168.31.74:10000/api/v1',
   // defaultValue: 'https://satiable-marsupial-washbasin.ngrok-free.dev/api/v1',
 );
 
@@ -46,7 +47,8 @@ Dio buildDio({
       },
       onError: (error, handler) async {
         final isAuthEndpoint = error.requestOptions.path.contains('/auth/');
-        if (error.response?.statusCode == 401 && !isAuthEndpoint &&
+        if (error.response?.statusCode == 401 &&
+            !isAuthEndpoint &&
             error.requestOptions.extra['retried'] != true) {
           final newToken = await refreshToken();
           if (newToken != null) {

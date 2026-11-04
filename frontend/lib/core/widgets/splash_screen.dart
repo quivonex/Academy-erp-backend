@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SplashScreen extends StatefulWidget {
+import '../session/session_controller.dart';
+
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -40,6 +43,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionControllerProvider);
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -179,6 +183,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (session.restoreError == null)
                   const SizedBox(
                     width: 24,
                     height: 24,
@@ -187,6 +192,20 @@ class _SplashScreenState extends State<SplashScreen>
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
                     ),
                   ),
+                  if (session.restoreError != null) ...[
+                    const Text(
+                      'Connection is taking too long.',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    TextButton(
+                      onPressed: () => ref.read(sessionControllerProvider.notifier).retryRestore(),
+                      child: const Text('Try again', style: TextStyle(color: Colors.white)),
+                    ),
+                    TextButton(
+                      onPressed: () => ref.read(sessionControllerProvider.notifier).continueAsGuest(),
+                      child: const Text('Browse courses', style: TextStyle(color: Colors.white70)),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'Powering Academy Excellence',

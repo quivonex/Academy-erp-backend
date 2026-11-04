@@ -59,9 +59,13 @@ class _TrackedVideoPlayerState
   }
 
   Future<void> _initialize() async {
-    final progress = await _api.materialProgress(
-      widget.materialUuid,
-    );
+    // Fetch resume data while the video buffers, instead of serializing them.
+    final results = await Future.wait<Object?>([
+      _api.materialProgress(widget.materialUuid),
+      _controller.initialize(),
+    ]);
+    if (!mounted) return;
+    final progress = results.first as Map<String, dynamic>;
 
     final watched =
         (progress['watched_seconds'] as num?)?.toInt() ?? 0;
@@ -72,10 +76,6 @@ class _TrackedVideoPlayerState
     _lastSavedWatchedSeconds = watched;
     _lastSavedPositionSeconds = lastPosition;
     _completionSent = progress['is_completed'] == true;
-
-    await _controller.initialize();
-
-    if (!mounted) return;
 
     final videoDuration = _controller.value.duration;
 
@@ -108,9 +108,7 @@ class _TrackedVideoPlayerState
           _markCompletedIfNeeded(),
         );
 
-        if (mounted) {
-          setState(() {});
-        }
+        // Playback controls already listen to the controller.
       },
     );
   }
@@ -313,7 +311,8 @@ class _TrackedVideoPlayerState
             stage(
               ValueListenableBuilder<VideoPlayerValue>(
                 valueListenable: _controller,
-                builder: (context, value, _) {
+                child: VideoPlayer(_controller),
+                builder: (context, value, video) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -322,7 +321,7 @@ class _TrackedVideoPlayerState
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            VideoPlayer(_controller),
+                            video!,
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: _togglePlayback,

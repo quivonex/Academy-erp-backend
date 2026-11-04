@@ -312,24 +312,31 @@ class _CreateEnrollmentDialogState
       final loadedCourses = <Course>[];
       final studentRepository = ref.read(studentRepositoryProvider);
       final courseRepository = ref.read(courseRepositoryProvider);
-      int studentPage = 1;
-      while (true) {
-        final response = await studentRepository.list(page: studentPage);
-        loadedStudents.addAll(response.results);
-        if (response.results.isEmpty || loadedStudents.length >= response.count) {
-          break;
+      Future<void> loadStudents() async {
+        var page = 1;
+        while (mounted) {
+          final response = await studentRepository.list(page: page);
+          loadedStudents.addAll(response.results);
+          if (response.results.isEmpty || loadedStudents.length >= response.count) {
+            break;
+          }
+          page++;
         }
-        studentPage++;
       }
-      int coursePage = 1;
-      while (true) {
-        final response = await courseRepository.list(page: coursePage);
-        loadedCourses.addAll(response.results);
-        if (response.results.isEmpty || loadedCourses.length >= response.count) {
-          break;
+
+      Future<void> loadCourses() async {
+        var page = 1;
+        while (mounted) {
+          final response = await courseRepository.list(page: page);
+          loadedCourses.addAll(response.results);
+          if (response.results.isEmpty || loadedCourses.length >= response.count) {
+            break;
+          }
+          page++;
         }
-        coursePage++;
       }
+
+      await Future.wait([loadStudents(), loadCourses()]);
 
       if (mounted) {
         setState(() {

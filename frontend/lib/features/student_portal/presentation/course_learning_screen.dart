@@ -27,6 +27,15 @@ class _CourseLearningScreenState
   late Future<List<Map<String, dynamic>>> _materials;
   late Future<List<Map<String, dynamic>>> _classes;
   late Future<List<Map<String, dynamic>>> _assignments;
+  int _loadRevision = 0;
+  int _materialsPage = 1;
+  int _classesPage = 1;
+  bool _hasMoreMaterials = false;
+  bool _hasMoreClasses = false;
+  bool _loadingMoreMaterials = false;
+  bool _loadingMoreClasses = false;
+  String? _materialsError;
+  String? _classesError;
 
   @override
   void initState() {
@@ -41,11 +50,83 @@ class _CourseLearningScreenState
 
     _course = api.myCourse(widget.courseUuid);
     _progress = api.courseProgress(widget.courseUuid);
-    _materials = api.materials(widget.courseUuid);
-    _classes = api.classes(widget.courseUuid);
+    final revision = ++_loadRevision;
+    _materialsPage = _classesPage = 1;
+    _hasMoreMaterials = _hasMoreClasses = false;
+    _loadingMoreMaterials = _loadingMoreClasses = false;
+    _materialsError = _classesError = null;
+    _materials = api.materialsPage(widget.courseUuid).then((page) {
+      if (mounted && revision == _loadRevision) {
+        setState(() => _hasMoreMaterials = page.hasNext);
+      }
+      return page.items;
+    });
+    _classes = api.classesPage(widget.courseUuid).then((page) {
+      if (mounted && revision == _loadRevision) {
+        setState(() => _hasMoreClasses = page.hasNext);
+      }
+      return page.items;
+    });
     _assignments = api.assignments(
       widget.courseUuid,
     );
+  }
+
+  Future<void> _loadMoreResources({required bool materials}) async {
+    if (materials ? _loadingMoreMaterials || !_hasMoreMaterials
+        : _loadingMoreClasses || !_hasMoreClasses) {
+      return;
+    }
+    final revision = _loadRevision;
+    final nextPage = (materials ? _materialsPage : _classesPage) + 1;
+    setState(() {
+      if (materials) {
+        _loadingMoreMaterials = true;
+        _materialsError = null;
+      } else {
+        _loadingMoreClasses = true;
+        _classesError = null;
+      }
+    });
+    try {
+      final existing = await (materials ? _materials : _classes);
+      final api = ref.read(studentPortalRepositoryProvider);
+      final page = await (materials
+          ? api.materialsPage(widget.courseUuid, page: nextPage)
+          : api.classesPage(widget.courseUuid, page: nextPage));
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        final combined = Future.value([...existing, ...page.items]);
+        if (materials) {
+          _materials = combined;
+          _materialsPage = nextPage;
+          _hasMoreMaterials = page.hasNext;
+        } else {
+          _classes = combined;
+          _classesPage = nextPage;
+          _hasMoreClasses = page.hasNext;
+        }
+      });
+    } catch (_) {
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        if (materials) {
+          _materialsError = 'Could not load more materials. Try again.';
+        } else {
+          _classesError = 'Could not load more sessions. Try again.';
+        }
+      });
+    } finally {
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          if (materials) {
+            _loadingMoreMaterials = false;
+          } else {
+            _loadingMoreClasses = false;
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -176,6 +257,9 @@ class _CourseLearningScreenState
                   icon: Icons.video_library_outlined,
                   countNoun: 'lesson',
                   future: _materials,
+                  onLoadMore: _hasMoreMaterials ? () => _loadMoreResources(materials: true) : null,
+                  loadingMore: _loadingMoreMaterials,
+                  loadMoreError: _materialsError,
                   emptyMessage: 'No study materials available.',
                   emptyIcon: Icons.video_library_outlined,
                   titleKey: 'title',
@@ -210,6 +294,9 @@ class _CourseLearningScreenState
                   icon: Icons.live_tv_rounded,
                   countNoun: 'session',
                   future: _classes,
+                  onLoadMore: _hasMoreClasses ? () => _loadMoreResources(materials: false) : null,
+                  loadingMore: _loadingMoreClasses,
+                  loadMoreError: _classesError,
                   emptyMessage: 'No live classes scheduled.',
                   emptyIcon: Icons.event_busy_rounded,
                   titleKey: 'title',
@@ -438,6 +525,9 @@ class _CourseLearningScreenState
     required IconData icon,
     required String countNoun,
     required Future<List<Map<String, dynamic>>> future,
+    VoidCallback? onLoadMore,
+    bool loadingMore = false,
+    String? loadMoreError,
     required String emptyMessage,
     required IconData emptyIcon,
     required String titleKey,
@@ -587,6 +677,14 @@ class _CourseLearningScreenState
             const SizedBox(height: 8),
             header,
             body,
+            if (loadMoreError != null)
+              Text(loadMoreError, style: TextStyle(color: colors.danger)),
+            if (onLoadMore != null)
+              LoadMoreButton(
+                label: 'Load more',
+                loading: loadingMore,
+                onPressed: onLoadMore,
+              ),
           ],
         );
       },

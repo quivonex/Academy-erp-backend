@@ -366,10 +366,15 @@ class _MyCoursesScreenState extends ConsumerState<MyCoursesScreen> {
               )
             else ...[
               for (final course in _courses)
-                _EnrolledCourseCard(
-                  course: course,
-                  progress: _courseProgress(course.courseUuid),
-                  onOpen: () => _openCourse(course.courseUuid),
+                Builder(
+                  key: ValueKey(course.uuid),
+                  // Start progress requests only as cards enter the viewport
+                  // (including ListView's nearby cache area).
+                  builder: (context) => _EnrolledCourseCard(
+                    course: course,
+                    progress: _courseProgress(course.courseUuid),
+                    onOpen: () => _openCourse(course.courseUuid),
+                  ),
                 ),
               if (_error != null)
                 InlineError(message: 'Could not load more: $_error'),

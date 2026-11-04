@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -18,6 +20,7 @@ class SessionState {
     this.role,
     this.firmUuid,
     this.firmName,
+    this.restoreError,
   });
 
   final bool isLoading;
@@ -26,28 +29,45 @@ class SessionState {
   final UserRole? role;
   final String? firmUuid;
   final String? firmName;
+  final String? restoreError;
 
   static const unauthenticated = SessionState(isLoading: false);
 }
 
+final sessionTokenStorageProvider = Provider<TokenStorage>(
+  (ref) => TokenStorage(const FlutterSecureStorage()),
+);
+
+final sessionAuthServiceProvider = Provider<AuthService>((ref) {
+  return AuthService(Dio(BaseOptions(
+    baseUrl: apiBaseUrl,
+    contentType: 'application/json',
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 20),
+    headers: {'ngrok-skip-browser-warning': 'true'},
+  )));
+});
+
+final sessionRestoreTimeoutProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 10),
+);
+
 class SessionController extends Notifier<SessionState> {
   late final TokenStorage _tokenStorage;
-  late final Dio _authDio;
+  CancelToken? _restoreCancelToken;
+  int _restoreRevision = 0;
   late final AuthService _authService;
   Future<String?>? _refreshInFlight;
 
   @override
   SessionState build() {
-    _tokenStorage = TokenStorage(const FlutterSecureStorage());
-    _authDio = Dio(BaseOptions(
-      baseUrl: apiBaseUrl,
-      contentType: 'application/json',
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      headers: {'ngrok-skip-browser-warning': 'true'},
-    ));
-    _authService = AuthService(_authDio);
-    Future.microtask(_restoreSession);
+    _tokenStorage = ref.read(sessionTokenStorageProvider);
+    _authService = ref.read(sessionAuthServiceProvider);
+    ref.onDispose(() {
+      _restoreRevision++;
+      _restoreCancelToken?.cancel();
+    });
+    Future.microtask(retryRestore);
     return const SessionState();
   }
 
@@ -72,31 +92,61 @@ class SessionController extends Notifier<SessionState> {
     );
   }
 
-  Future<void> _restoreSession() async {
-    try {
+  Future<void> retryRestore() async {
+    final revision = ++_restoreRevision;
+    _restoreCancelToken?.cancel();
+    final cancelToken = CancelToken();
+    _restoreCancelToken = cancelToken;
+    state = const SessionState();
+    bool current() => revision == _restoreRevision && !cancelToken.isCancelled;
+
+    Future<SessionState> restore() async {
       var access = await _tokenStorage.readAccessToken();
-      if (access == null) {
-        state = SessionState.unauthenticated;
-        return;
-      }
+      if (!current()) throw const ApiException('Session check cancelled.');
+      if (access == null) return SessionState.unauthenticated;
       Map<String, dynamic> user;
       try {
-        user = await _authService.me(access);
+        user = await _authService.me(access, cancelToken: cancelToken);
       } on DioException catch (e) {
-        if (e.response?.statusCode != 401) rethrow;
-        access = await refreshAccessToken();
-        if (access == null) {
-          await _tokenStorage.clear();
-          state = SessionState.unauthenticated;
-          return;
+        if (e.response?.statusCode != 401 || !current()) rethrow;
+        final refresh = await _tokenStorage.readRefreshToken();
+        if (!current()) rethrow;
+        if (refresh == null) return SessionState.unauthenticated;
+        final tokens = await _authService.refresh(refresh, cancelToken: cancelToken);
+        if (!current()) rethrow;
+        if (tokens.access.isEmpty) {
+          throw const ApiException('Session could not be refreshed.');
         }
-        user = await _authService.me(access);
+        await _tokenStorage.save(access: tokens.access, refresh: tokens.refresh);
+        if (!current()) rethrow;
+        access = tokens.access;
+        user = await _authService.me(access, cancelToken: cancelToken);
       }
-      state = _fromUser(user);
-    } catch (_) {
-      // A network error should not destroy a valid stored refresh token.
-      state = SessionState.unauthenticated;
+      return _fromUser(user);
     }
+
+    try {
+      final restored = await restore().timeout(ref.read(sessionRestoreTimeoutProvider));
+      if (current()) state = restored;
+    } catch (error) {
+      if (!current()) return;
+      cancelToken.cancel('Session check finished.');
+      if (error is DioException &&
+          (error.response?.statusCode == 401 || error.response?.statusCode == 403)) {
+        state = SessionState.unauthenticated;
+      } else {
+        // Preserve credentials on slow/offline networks and offer a retry.
+        state = const SessionState(
+          restoreError: 'Unable to connect. Check your connection and try again.',
+        );
+      }
+    }
+  }
+
+  void continueAsGuest() {
+    _restoreRevision++;
+    _restoreCancelToken?.cancel();
+    state = SessionState.unauthenticated;
   }
 
   Future<void> login(LoginRequest request) async {

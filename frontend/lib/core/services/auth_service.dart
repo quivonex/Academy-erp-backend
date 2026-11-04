@@ -40,10 +40,11 @@ class AuthService {
   }
 
   /// SimpleJWT returns {access: ...}; rotated refresh is optional.
-  Future<AuthTokens> refresh(String refreshToken) async {
+  Future<AuthTokens> refresh(String refreshToken, {CancelToken? cancelToken}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       ApiUrls.refresh,
       data: {'refresh': refreshToken},
+      cancelToken: cancelToken,
     );
 
     final data = response.data ?? {};
@@ -54,9 +55,10 @@ class AuthService {
     });
   }
 
-  Future<Map<String, dynamic>> me(String accessToken) async {
+  Future<Map<String, dynamic>> me(String accessToken, {CancelToken? cancelToken}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       ApiUrls.me,
+      cancelToken: cancelToken,
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
 

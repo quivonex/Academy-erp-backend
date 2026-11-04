@@ -136,6 +136,13 @@ class LiveClassPage {
   final bool hasNext;
 }
 
+class CourseResourcePage {
+  const CourseResourcePage({required this.items, required this.hasNext});
+
+  final List<Map<String, dynamic>> items;
+  final bool hasNext;
+}
+
 class StudentPortalRepository {
   StudentPortalRepository(this._dio);
 
@@ -272,6 +279,29 @@ class StudentPortalRepository {
       Map<String, dynamic>.from(response.data['data'] as Map),
     );
   });
+
+  Future<CourseResourcePage> _resourcePage(String path, int page) =>
+      _request(() async {
+        final response = await _dio.get(
+          path,
+          queryParameters: {'page': page, 'page_size': 20},
+        );
+        final body = response.data;
+        final data = body is Map ? body['data'] : null;
+        final next = data is Map ? data['next'] : null;
+        return CourseResourcePage(
+          items: _items(body)
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList(),
+          hasNext: next != null && next.toString().isNotEmpty,
+        );
+      });
+
+  Future<CourseResourcePage> materialsPage(String uuid, {int page = 1}) =>
+      _resourcePage(ApiUrls.myCourseMaterials(uuid), page);
+
+  Future<CourseResourcePage> classesPage(String uuid, {int page = 1}) =>
+      _resourcePage(ApiUrls.myCourseClasses(uuid), page);
 
   Future<List<Map<String, dynamic>>> _allPages(String path) =>
       _request(() async {
