@@ -95,3 +95,6 @@ flutter:
 
   assets:
     - assets/images/
+
+dependency_overrides:
+  archive: ^4.0.10
