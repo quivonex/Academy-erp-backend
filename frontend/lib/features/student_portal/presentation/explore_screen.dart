@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_controller.dart';
 import '../../../core/session/user_role.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/brand_utils.dart';
 import '../data/student_portal_repository.dart';
 import 'home_banners.dart';
+import 'student_enrollment_widgets.dart';
 import 'widgets/student_ui.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
@@ -1196,7 +1196,6 @@ class PublicCourseDetailScreen extends ConsumerStatefulWidget {
 class _PublicCourseDetailScreenState
     extends ConsumerState<PublicCourseDetailScreen> {
   late Future<PublicCourse> _course;
-  Future<bool>? _hasAccess;
 
   @override
   void initState() {
@@ -1210,23 +1209,12 @@ class _PublicCourseDetailScreenState
 
     if (oldWidget.uuid != widget.uuid) {
       _loadCourse();
-      _hasAccess = null;
     }
   }
 
   void _loadCourse() {
     _course =
         ref.read(studentPortalRepositoryProvider).publicCourse(widget.uuid);
-  }
-
-  Future<bool> _checkAccess() async {
-    try {
-      await ref.read(studentPortalRepositoryProvider).myCourse(widget.uuid);
-      return true;
-    } on ApiException catch (error) {
-      if (error.statusCode == 404) return false;
-      rethrow;
-    }
   }
 
   Widget _courseAction({
@@ -1283,104 +1271,9 @@ class _PublicCourseDetailScreenState
       return note('Course learning is available to student accounts.');
     }
 
-    return FutureBuilder<bool>(
-      future: _hasAccess ??= _checkAccess(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              note(
-                'Could not check course access: ${snapshot.error}',
-                icon: Icons.error_outline_rounded,
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () {
-                  setState(() => _hasAccess = _checkAccess());
-                },
-                child: const Text('Try again'),
-              ),
-            ],
-          );
-        }
-
-        if (!snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.all(8),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.data == true) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              note(
-                'You are enrolled in this course.',
-                icon: Icons.verified_rounded,
-              ),
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.primaryDeep,
-                ),
-                onPressed: () => context.go(
-                  '/student/courses/${widget.uuid}',
-                ),
-                icon: const Icon(Icons.play_circle_fill_rounded),
-                label: const Text('Continue learning'),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            note(
-              'You do not have access to this course yet.',
-              icon: Icons.lock_outline,
-            ),
-            const SizedBox(height: 14),
-            if (double.tryParse(course.price) != null &&
-                double.parse(course.price) > 0)
-              FilledButton.icon(
-                onPressed: () {
-                  final uri = Uri(
-                    path: '/student/course-payment/${course.uuid}',
-                    queryParameters: {
-                      'name': course.name,
-                      'amount': course.price,
-                    },
-                  );
-
-                  context.push(uri.toString());
-                },
-                icon: const Icon(Icons.info_outline_rounded),
-                label: const Text('Fees & Enrollment'),
-              )
-            else
-              OutlinedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Contact the academy to request course access.',
-                      ),
-                    ),
-                  );
-                },
-                child: const Text('Request Access'),
-              ),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: () => context.go('/student/courses'),
-              child: const Text('View My Courses'),
-            ),
-          ],
-        );
-      },
+    return StudentEnrollmentAction(
+      key: ValueKey('${widget.uuid}_${ref.read(sessionControllerProvider).userUuid}'),
+      courseUuid: widget.uuid,
     );
   }
 

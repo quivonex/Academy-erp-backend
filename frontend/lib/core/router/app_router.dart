@@ -126,7 +126,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
         if (session.role == UserRole.student &&
             returnTo != null &&
-            courseDetailPath.hasMatch(returnTo)) {
+            (returnTo == '/explore' || courseDetailPath.hasMatch(returnTo))) {
           return returnTo;
         }
 

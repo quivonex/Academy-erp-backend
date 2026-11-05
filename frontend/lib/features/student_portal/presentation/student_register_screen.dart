@@ -77,16 +77,12 @@ class _StudentRegisterScreenState
           ),
         );
 
-        final returnTo = widget.returnTo;
+        final returnTo = widget.returnTo ?? '/explore';
 
-        context.go(
-          returnTo == null
-              ? '/login'
-              : Uri(
-                  path: '/login',
-                  queryParameters: {'returnTo': returnTo},
-                ).toString(),
-        );
+        context.go(Uri(
+          path: '/login',
+          queryParameters: {'returnTo': returnTo},
+        ).toString());
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => error = e.message);

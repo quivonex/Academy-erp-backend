@@ -1,3 +1,6 @@
+# Local backend test environment
+/.enrollment-test-venv/
+
 # Miscellaneous
 *.class
 *.log

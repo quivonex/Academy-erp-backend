@@ -5,7 +5,11 @@ from .portal_views import (StudentMyCoursesView, StudentCourseDetailView, Studen
     StudentMaterialDetailView,)
 
 
+from .enrollment_views import StudentCourseEnrollmentView, StudentEnrollmentRequestsView
+
 urlpatterns = [
+    path("enrollments/", StudentEnrollmentRequestsView.as_view(), name="student-enrollment-requests"),
+    path("courses/<uuid:course_uuid>/enrollment/", StudentCourseEnrollmentView.as_view(), name="student-course-enrollment"),
     path("courses/", StudentMyCoursesView.as_view(), name="student-my-courses",),
     
     path("courses/<uuid:course_uuid>/", StudentCourseDetailView.as_view(), name="student-course-detail",),

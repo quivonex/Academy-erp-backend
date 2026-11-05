@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:edusphere_admin_flutter/features/student_portal/data/student_enrollment_repository.dart';
 import 'package:edusphere_admin_flutter/features/student_portal/data/student_portal_repository.dart';
 import 'package:edusphere_admin_flutter/features/student_portal/presentation/my_courses_screen.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,13 @@ class _CoursesRepository extends StudentPortalRepository {
   }
 }
 
+class _EmptyEnrollments extends StudentEnrollmentRepository {
+  _EmptyEnrollments() : super(Dio());
+  @override
+  Future<StudentEnrollmentPage> pending({int page = 1}) async =>
+      const StudentEnrollmentPage([], false);
+}
+
 void main() {
   testWidgets('progress loads near the viewport and is cached on rebuild',
       (tester) async {
@@ -41,6 +49,7 @@ void main() {
       ProviderScope(
         overrides: [
           studentPortalRepositoryProvider.overrideWithValue(repository),
+          studentEnrollmentRepositoryProvider.overrideWithValue(_EmptyEnrollments()),
         ],
         child: const MaterialApp(home: Scaffold(body: MyCoursesScreen())),
       ),

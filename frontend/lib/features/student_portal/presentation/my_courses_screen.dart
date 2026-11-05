@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/student_portal_repository.dart';
 import 'widgets/student_ui.dart';
+import 'student_enrollment_widgets.dart';
 
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -304,6 +305,7 @@ class _MyCoursesScreenState extends ConsumerState<MyCoursesScreen> {
               singular: !_hasMore && _courses.length == 1,
             ),
             const SizedBox(height: 14),
+            PendingEnrollments(refreshRevision: _requestId),
             Row(
               children: [
                 Expanded(
@@ -359,8 +361,8 @@ class _MyCoursesScreenState extends ConsumerState<MyCoursesScreen> {
               StudentStateMessage(
                 icon: Icons.school_outlined,
                 title: 'No active courses yet',
-                message: 'Contact your academy to get access, '
-                    'or browse what is on offer.',
+                message: 'Explore courses and request enrollment. '
+                    'Approved courses will appear here.',
                 actionLabel: 'Explore courses',
                 onAction: () => context.go('/explore'),
               )
