@@ -83,7 +83,7 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/rolex_academy_logo.jpeg"
+  image_path: "assets/images/rolex_academy_logo.png"
   min_sdk_android: 21
 
 flutter:
