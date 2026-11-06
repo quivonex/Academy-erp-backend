@@ -7,16 +7,10 @@ from .views import (
 
 
 urlpatterns = [
-    path(
-        "",
-        LearningMaterialListCreateView.as_view(),
-        name="material-list-create",
-    ),
+    path("", LearningMaterialListCreateView.as_view(), name="material-list-create",),
 
-    path(
-        "<uuid:material_uuid>/",
-        LearningMaterialDetailView.as_view(),
-        name="material-detail",
-    ),
+    path("<uuid:material_uuid>/", LearningMaterialDetailView.as_view(), name="material-detail",),
+    
+    
 ]
 

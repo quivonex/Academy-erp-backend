@@ -52,6 +52,10 @@ class CourseSerializer(serializers.ModelSerializer):
         max_value=Decimal("100.00"),
         required=False,
     )
+    
+    saving_amount = serializers.SerializerMethodField()
+    discount_percentage = serializers.SerializerMethodField()
+    
     class Meta:
         model = Course
 
@@ -67,6 +71,9 @@ class CourseSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "price",
+            "offer_price",
+            "saving_amount",
+            "discount_percentage",
             "delivery_mode",
             "is_published",
             "is_purchasable_online",
@@ -77,10 +84,63 @@ class CourseSerializer(serializers.ModelSerializer):
             "certificate_required_watch_percentage",
         )
 
+    def get_saving_amount(self, obj):
+        if obj.offer_price is None:
+            return None
+    
+        if obj.price <= 0:
+            return None
+    
+        return obj.price - obj.offer_price
+    
+    
+    def get_discount_percentage(self, obj):
+        if obj.offer_price is None:
+            return None
+    
+        if obj.price <= 0:
+            return None
+    
+        discount = (
+            (obj.price - obj.offer_price)
+            / obj.price
+        ) * Decimal("100")
+    
+        return round(discount, 2)
+
+    def validate(self, attrs):
+        price = attrs.get(
+            "price",
+            self.instance.price if self.instance else Decimal("0.00"),
+        )
+
+        offer_price = attrs.get(
+            "offer_price",
+            self.instance.offer_price if self.instance else None,
+        )
+
+        if offer_price is not None:
+            if offer_price < 0:
+                raise serializers.ValidationError({
+                    "offer_price": [
+                        "Offer price cannot be negative."
+                    ]
+                })
+
+            if offer_price > price:
+                raise serializers.ValidationError({
+                    "offer_price": [
+                        "Offer price cannot be greater than MRP."
+                    ]
+                })
+
+        return attrs
         read_only_fields = (
             "uuid",
             "created_at",
             "updated_at",
+            "saving_amount",
+            "discount_percentage",
         )
 
 class SubjectSerializer(serializers.ModelSerializer):

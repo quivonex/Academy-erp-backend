@@ -12,7 +12,8 @@ class PrivateMediaStorage(S3Storage):
     - Banner images
     """
 
-    location = "media"
+    # location = "media"
+    location = "academy/media"
     default_acl = None
     file_overwrite = False
     querystring_auth = True

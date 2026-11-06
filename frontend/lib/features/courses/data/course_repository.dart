@@ -174,6 +174,8 @@ class CourseRepository {
           ApiUrls.courseDetail(uuid),
           data: {
             'is_published': published,
+            // Keep both existing backend catalogue filters in sync.
+            'is_purchasable_online': published,
           },
         );
 

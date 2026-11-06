@@ -300,6 +300,7 @@ if USE_S3:
                     "AWS_S3_REGION_NAME",
                     default="ap-south-1",
                 ),
+                "endpoint_url": "https://s3.ap-south-1.amazonaws.com",
                 "signature_version": "s3v4",
                 "default_acl": None,
                 "file_overwrite": False,

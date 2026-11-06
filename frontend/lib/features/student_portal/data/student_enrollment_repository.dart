@@ -39,19 +39,18 @@ class StudentEnrollmentRepository {
   final Dio dio;
 
   Future<StudentEnrollment> status(String courseUuid) =>
-      _enrollment(courseUuid, submit: false);
+      _enrollment(courseUuid);
 
-  Future<StudentEnrollment> request(String courseUuid) =>
-      _enrollment(courseUuid, submit: true);
+  Future<StudentEnrollment> request(String courseUuid) => Future.error(
+    const ApiException('Only the Firm Admin can enroll students after verifying payment.'),
+  );
 
   Future<StudentEnrollment> _enrollment(
-    String courseUuid, {required bool submit}
+    String courseUuid,
   ) async {
     try {
       final path = '/student/courses/$courseUuid/enrollment/';
-      final response = submit
-          ? await dio.post(path, data: <String, dynamic>{})
-          : await dio.get(path);
+      final response = await dio.get(path);
       return StudentEnrollment.fromJson(
         Map<String, dynamic>.from(response.data['data'] as Map),
       );

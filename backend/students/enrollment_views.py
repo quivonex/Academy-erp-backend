@@ -1,5 +1,4 @@
-"""Student-initiated enrollment requests. Activation remains an academy action."""
-from django.db import transaction
+"""Read-only student enrollment status. Enrollment is managed by the academy."""
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -9,7 +8,6 @@ from common.permissions import IsStudent
 from common.responses import error_response, success_response
 from courses.access import student_has_course_access
 from courses.models import Course, Enrollment
-from students.models import Student
 
 
 def _course(request, course_uuid):
@@ -56,35 +54,10 @@ class StudentCourseEnrollmentView(APIView):
             },
         )
 
-    @transaction.atomic
     def post(self, request, course_uuid):
-        # Identity, academy, fees, and access status are never client controlled.
-        if request.data:
-            return error_response(
-                "Enrollment does not accept student, fee, or access overrides.",
-                {}, status.HTTP_400_BAD_REQUEST,
-            )
-        student = get_object_or_404(
-            Student.objects.select_for_update(),
-            pk=request.user.student_profile.pk,
-            firm=request.user.firm, is_active=True,
-        )
-        course = _course(request, course_uuid)
-        enrollment, created = Enrollment.objects.get_or_create(
-            student=student, course=course,
-            defaults={
-                "firm": request.user.firm,
-                "status": Enrollment.Status.PENDING,
-                "source": Enrollment.Source.FIRM_GRANTED,
-            },
-        )
-        if enrollment.firm_id != request.user.firm_id:
-            return error_response("Enrollment not available.", {}, status.HTTP_404_NOT_FOUND)
-        return success_response(
-            message="Enrollment request submitted for academy approval"
-            if created else "Enrollment already exists",
-            data=_data(enrollment),
-            status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        return error_response(
+            "Only the Firm Admin can enroll students after verifying payment.",
+            {}, status.HTTP_403_FORBIDDEN,
         )
 
 

@@ -3,23 +3,17 @@ import 'package:edusphere_admin_flutter/features/student_portal/data/student_enr
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('enrollment sends no client-controlled identity, fee or access status', () async {
+  test('student enrollment is rejected locally without an HTTP request', () async {
     final dio = Dio();
-    late RequestOptions captured;
+    var requests = 0;
     dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
-      captured = options;
-      handler.resolve(Response(requestOptions: options, data: {
-        'success': true,
-        'data': {'course_uuid': 'course', 'course_name': 'Course',
-          'status': 'PENDING', 'has_access': false},
-      }));
+      requests++;
+      handler.reject(DioException(requestOptions: options));
     }));
-    final result = await StudentEnrollmentRepository(dio).request('course');
-    expect(captured.method, 'POST');
-    expect(captured.path, '/student/courses/course/enrollment/');
-    expect(captured.data, isEmpty);
-    expect(result.isPending, isTrue);
-    expect(result.hasAccess, isFalse);
+    await expectLater(StudentEnrollmentRepository(dio).request('course'), throwsA(
+      isA<Exception>().having((e) => e.toString(), 'message', contains('Firm Admin')),
+    ));
+    expect(requests, 0);
   });
 
   test('pending enrollment pagination preserves next-page state', () async {

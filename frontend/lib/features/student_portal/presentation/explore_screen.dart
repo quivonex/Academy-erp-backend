@@ -1274,6 +1274,8 @@ class _PublicCourseDetailScreenState
     return StudentEnrollmentAction(
       key: ValueKey('${widget.uuid}_${ref.read(sessionControllerProvider).userUuid}'),
       courseUuid: widget.uuid,
+      courseName: course.name,
+      amount: course.price,
     );
   }
 

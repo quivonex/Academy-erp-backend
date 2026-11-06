@@ -81,6 +81,41 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
     }
   }
 
+  Future<void> previewCourse(Course course) async {
+    final publish = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Course preview'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(course.name, style: Theme.of(dialogContext).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text('Course fee: ₹${course.price}'),
+              if (course.categoryName != null) Text('Category: ${course.categoryName}'),
+              const SizedBox(height: 12),
+              Text(course.description.isEmpty ? 'No description added.' : course.description),
+              const SizedBox(height: 16),
+              const Text('Publishing lists this active course in Explore. The Firm Admin verifies UPI payments and enrolls students separately.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Close')),
+          if (!course.isPublished)
+            FilledButton(
+              onPressed: course.isActive ? () => Navigator.pop(dialogContext, true) : null,
+              child: const Text('Publish to Explore'),
+            ),
+        ],
+      ),
+    );
+    if (mounted && publish == true) await toggleStatus(course);
+  }
+
   Future<void> editCourse(Course course) async {
     if (busy) return;
     final repository = ref.read(courseRepositoryProvider);
@@ -221,8 +256,8 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                   ),
                   _InfoRow(label: 'Active', value: course.isActive ? 'Yes' : 'No'),
                   _InfoRow(label: 'Published', value: course.isPublished ? 'Yes' : 'No'),
-                  _InfoRow(label: 'Purchasable online',
-                      value: course.isPurchasableOnline ? 'Yes' : 'No'),
+                  _InfoRow(label: 'Shown in Explore',
+                      value: course.isActive && course.isPublished && course.isPurchasableOnline ? 'Yes' : 'No'),
                   _InfoRow(
                     label: 'Certificate enabled',
                     value: course.isCertificateEnabled ? 'Yes' : 'No',
@@ -252,15 +287,26 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                   onPressed: busy ? null : () => editCourse(course),
                 ),
                 AdminOutlineButton(
+                  label: 'Preview course',
+                  icon: Icons.preview_outlined,
+                  onPressed: busy ? null : () => previewCourse(course),
+                ),
+                AdminOutlineButton(
                   label: course.isPublished
                       ? 'Unpublish course' : 'Publish course',
                   icon: Icons.public_rounded,
                   danger: course.isPublished,
-                  onPressed: busy ? null : () => toggleStatus(course),
+                  onPressed: busy ? null : () => course.isPublished
+                      ? toggleStatus(course) : previewCourse(course),
                 ),
               ],
             ),
             const SizedBox(height: 24),
+            if (!course.isPublished)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text('Draft: add subjects, chapters and lessons below. Add materials from the Materials section, then preview and publish when ready.'),
+              ),
             _CourseCurriculumSection(course: course),
             if (busy) ...[
               const SizedBox(height: 14),
@@ -1126,8 +1172,6 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
   bool choosingCategory = false;
 
   late bool isActive = widget.course.isActive;
-  late bool isPublished = widget.course.isPublished;
-  late bool isPurchasableOnline = widget.course.isPurchasableOnline;
   late bool isFeatured = widget.course.isFeatured;
   late bool isCertificateEnabled = widget.course.isCertificateEnabled;
 
@@ -1269,8 +1313,8 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
             ? null
             : int.parse(accessDays.text.trim()),
         isActive: isActive,
-        isPublished: isPublished,
-        isPurchasableOnline: isPurchasableOnline,
+        isPublished: widget.course.isPublished,
+        isPurchasableOnline: widget.course.isPurchasableOnline,
         isFeatured: isFeatured,
         isCertificateEnabled: isCertificateEnabled,
         certificateRequiredWatchPercentage:
@@ -1459,27 +1503,6 @@ class _EditCourseDialogState extends ConsumerState<_EditCourseDialog> {
                   });
                 },
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Published'),
-                value: isPublished,
-                onChanged: saving ? null : (value) {
-                  setState(() {
-                    isPublished = value;
-                  });
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Purchasable Online'),
-                value: isPurchasableOnline,
-                onChanged: saving ? null : (value) {
-                  setState(() {
-                    isPurchasableOnline = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 10),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Enable Course Certificate'),

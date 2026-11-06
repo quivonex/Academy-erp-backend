@@ -1,55 +1,53 @@
-# Student enrollment
+# Course setup and Firm Admin enrollment
 
-The journey is Register → Sign in → Explore → Course details → Enroll →
-My Courses (pending approval) → Academy approval → Course content.
+## Course setup
 
-All self-service requests start as PENDING, including zero-price courses.
-The academy confirms payment separately and activates enrollment through the
-existing admin Enrollments screen. Submitting a request does not collect money,
-mark fees as paid, or unlock course content.
+Create a draft with a name, optional category, description and fee. Course codes
+are generated once per form unless an optional code is supplied. Advanced
+settings contain delivery mode, duration, certificates and featured ordering.
 
-Students can request published, active, online-purchasable courses within their
-own active academy. Cross-academy enrollment is deliberately rejected. Registration
-continues using the backend's DEFAULT_FIRM_CODE configuration.
+Creation saves only the course and opens its detail page. Add subjects, chapters,
+lessons and materials after saving; a content failure no longer repeats course
+creation. Preview the saved course before publishing.
 
-## Backend API
+Publishing updates both is_published and the existing is_purchasable_online
+catalogue flag in one PATCH. The backend still requires those flags plus an active
+course and academy for Explore visibility. The legacy flag does not authorize a
+student to purchase or enroll. Unpublishing clears both visibility flags.
 
-- GET /api/v1/student/courses/{course_uuid}/enrollment/: status and has_access.
-- POST the same URL with an empty JSON object: idempotently creates a PENDING
-  enrollment for the authenticated student.
-- GET /api/v1/student/enrollments/?page=1&page_size=20: paginated pending requests.
+## Enrollment
 
-Identity, academy, fee and access overrides are rejected. Existing ACTIVE,
-CANCELLED and COMPLETED records are preserved. No model migration is needed.
+Student journey: Register → Sign in → Explore → Course details → Contact academy
+for UPI details → Firm Admin verifies payment and creates enrollment → My Courses
+→ Course content.
 
-## Validation
+There is no student Enroll action, enrollment-request list or automatic free-course
+enrollment. UPI details are supplied by the academy; this change does not invent a
+UPI ID, collect payment or mark a payment as verified.
 
-Run Flutter tests with `flutter test`.
+The student enrollment POST endpoint now returns HTTP 403 without writing to the
+database. This also prevents older self-enrollment APKs from creating records.
+The local student request repository refuses submission without an HTTP call.
+Existing enrollment records and chapter-only grants are preserved.
 
-An isolated backend test environment was created at
-`.enrollment-test-venv` under frontend. From backend, run:
+GET enrollment status endpoints remain read-only for compatibility. My Courses
+uses the existing course-access API and shows content only after admin access
+is granted. Students can refresh to see newly granted access.
+
+## Validation and deployment
+
+Run Flutter checks with flutter test and flutter analyze.
+
+Backend enrollment tests use isolated in-memory SQLite settings, with no
+production .env or database connection. From backend:
 
 ```powershell
 ..\frontend\.enrollment-test-venv\Scripts\python.exe -m django test students.test_enrollment --settings=students.enrollment_test_settings --noinput
 ```
 
-These settings use an in-memory SQLite database and do not load production .env.
-They cover request authorization, tenant isolation, duplicate requests, pending
-access restrictions, cancelled records, and the existing admin activation serializer.
-Production uses MySQL; concurrent request handling should also be smoke-tested
-against staging with that database.
+Deploy the backend enrollment restriction before distributing the updated APK.
+No database migration is required. Smoke-test course drafting, content setup,
+preview/publish, UPI verification by the academy, admin enrollment and student
+access in staging before production release.
 
-## Deployment order
-
-1. Deploy backend/students/enrollment_views.py and the updated portal_urls.py
-   through the existing server deployment process, then restart the backend.
-2. Validate the endpoints with a staging student account.
-3. Build and distribute the new release APK after the backend is available.
-4. Request a course as a student. Confirm PENDING in both My Courses and the
-   admin enrollment list. Confirm content remains locked.
-5. Activate the enrollment as the academy admin. Refresh My Courses and verify
-   course materials are available.
-
-Existing chapter-only grants remain supported. Existing APKs remain compatible
-with the backend addition. A new APK requires the new backend endpoints.
-No production deployment was performed as part of this implementation.
+No production deployment is performed by these source changes.
