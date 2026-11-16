@@ -45,31 +45,37 @@ class AdminShell extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       drawer: isCompact ? Drawer(width: 264, child: sidebar(true)) : null,
-      body: Row(
-        children: [
-          if (!isCompact) sidebar(!isRailOnly),
-          Expanded(
-            child: Column(
-              children: [
-                _TopBar(showMenuButton: isCompact),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 1600),
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 16 : 32,
-                        vertical: isCompact ? 20 : 28,
+      // Keeps the header below the phone status bar on Android and iOS.
+      // Without this, the menu, notification icon and account avatar can
+      // overlap the system status icons on compact/mobile layouts.
+      body: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            if (!isCompact) sidebar(!isRailOnly),
+            Expanded(
+              child: Column(
+                children: [
+                  _TopBar(showMenuButton: isCompact),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 1600),
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 16 : 32,
+                          vertical: isCompact ? 20 : 28,
+                        ),
+                        child: child,
                       ),
-                      child: child,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
