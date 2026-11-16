@@ -271,10 +271,10 @@ class StudentAssignmentAnswerSerializer(
         max_length=1000,
     )
 
-    selected_option = serializers.CharField(
+    selected_option = serializers.ChoiceField(
+        choices=["A", "B", "C", "D"],
         required=False,
         allow_blank=True,
-        max_length=1,
     )
     
 

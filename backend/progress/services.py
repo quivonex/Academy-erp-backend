@@ -77,22 +77,27 @@ def update_material_progress(
         False,
     )
 
-    if watched_seconds is not None:
-        progress.watched_seconds = max(
-            progress.watched_seconds,
-            watched_seconds,
-        )
-
     if last_position_seconds is not None:
         progress.last_position_seconds = (
             last_position_seconds
         )
 
-    if (
+    is_video = (
         material.material_type
         == LearningMaterial.MaterialType.VIDEO
-        and material.duration_seconds
-    ):
+    )
+
+    if is_video and material.duration_seconds:
+        # For videos, unverified watched_seconds is capped at
+        # duration to prevent arbitrary inflation. The verified
+        # path (heartbeat) is the authoritative progress source.
+        if watched_seconds is not None:
+            capped = min(watched_seconds, material.duration_seconds)
+            progress.watched_seconds = max(
+                progress.watched_seconds,
+                capped,
+            )
+
         duration = material.duration_seconds
 
         percentage = (
@@ -104,11 +109,6 @@ def update_material_progress(
             percentage,
             Decimal("100.00"),
         )
-
-        if progress.completion_percentage >= Decimal(
-            "90.00"
-        ):
-            progress.is_completed = True
 
     elif mark_completed:
         progress.completion_percentage = Decimal(
@@ -123,6 +123,7 @@ def update_material_progress(
     progress.save(
         update_fields=[
             "watched_seconds",
+            "last_position_seconds",
             "completion_percentage",
             "is_completed",
             "completed_at",

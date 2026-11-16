@@ -288,6 +288,41 @@ def create_enrollment(*, firm, granted_by, validated_data):
 
 
 @transaction.atomic
+def cancel_enrollment(*, firm, enrollment_uuid, cancelled_by):
+    try:
+        enrollment = (
+            Enrollment.objects
+            .select_for_update()
+            .get(uuid=enrollment_uuid, firm=firm)
+        )
+    except Enrollment.DoesNotExist:
+        raise ValidationError({
+            "enrollment_uuid": ["Enrollment was not found."]
+        })
+
+    if enrollment.status == Enrollment.Status.CANCELLED:
+        raise ValidationError({
+            "enrollment": ["Enrollment is already cancelled."]
+        })
+
+    enrollment.status = Enrollment.Status.CANCELLED
+    enrollment.save(update_fields=["status", "updated_at"])
+
+    return enrollment
+
+
+def expire_ended_enrollments():
+    now = timezone.now()
+    expired = Enrollment.objects.filter(
+        status=Enrollment.Status.ACTIVE,
+        access_end_at__isnull=False,
+        access_end_at__lt=now,
+    ).update(status=Enrollment.Status.COMPLETED)
+
+    return expired
+
+
+@transaction.atomic
 def update_instance(instance, validated_data):
     for field, value in validated_data.items():
         setattr(instance, field, value)

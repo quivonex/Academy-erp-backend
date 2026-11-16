@@ -427,6 +427,16 @@ LOGGING = {
 
 
 
+# =========================================================
+# FIREBASE CLOUD MESSAGING (FCM)
+# =========================================================
+
+FCM_CREDENTIALS_FILE = env(
+    "FCM_CREDENTIALS_FILE",
+    default="",
+)
+
+
 CERTIFICATE_VERIFICATION_BASE_URL = env(
     "CERTIFICATE_VERIFICATION_BASE_URL",
     default=(

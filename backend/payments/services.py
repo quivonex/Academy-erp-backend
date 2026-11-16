@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from django.utils import timezone
@@ -7,6 +8,8 @@ from rest_framework.exceptions import ValidationError
 from django.db import models, transaction
 from courses.models import Course, Enrollment
 from students.models import Student
+
+logger = logging.getLogger(__name__)
 
 from .models import (
     CoursePayment,
@@ -175,11 +178,18 @@ def create_course_payment(
             )
         )
 
+    effective_price = (
+        course.offer_price
+        if course.offer_price is not None
+        and course.offer_price < course.price
+        else course.price
+    )
+
     payment = CoursePayment.objects.create(
         firm=user.firm,
         student=student,
         course=course,
-        amount=course.price,
+        amount=effective_price,
         payment_method=payment_method,
         utr_number=utr_number or None,
         payment_screenshot_key=payment_screenshot_key,
@@ -211,7 +221,17 @@ def review_course_payment(*, firm, reviewed_by, payment_uuid, validated_data):
             "payment": ["Only pending payment requests can be reviewed."]
         })
 
-    payment.status = validated_data["status"]
+    new_status = validated_data["status"]
+
+    if new_status not in (
+        CoursePayment.Status.APPROVED,
+        CoursePayment.Status.REJECTED,
+    ):
+        raise ValidationError({
+            "status": ["Status must be APPROVED or REJECTED."]
+        })
+
+    payment.status = new_status
     payment.admin_note = validated_data.get("admin_note", "")
     payment.reviewed_by = reviewed_by
     payment.reviewed_at = timezone.now()
@@ -224,7 +244,72 @@ def review_course_payment(*, firm, reviewed_by, payment_uuid, validated_data):
         "updated_at",
     ])
 
+    if new_status == CoursePayment.Status.APPROVED:
+        _create_enrollment_for_approved_payment(
+            payment=payment,
+            firm=firm,
+            granted_by=reviewed_by,
+        )
+
     return payment
+
+
+def _create_enrollment_for_approved_payment(
+    *, payment, firm, granted_by
+):
+    from datetime import timedelta
+
+    existing = Enrollment.objects.filter(
+        firm=firm,
+        student=payment.student,
+        course=payment.course,
+    ).first()
+
+    if existing:
+        if existing.status == Enrollment.Status.PENDING:
+            existing.status = Enrollment.Status.ACTIVE
+            existing.access_start_at = timezone.now()
+
+            if payment.course.access_duration_days:
+                existing.access_end_at = (
+                    existing.access_start_at
+                    + timedelta(
+                        days=payment.course.access_duration_days
+                    )
+                )
+
+            existing.save(update_fields=[
+                "status",
+                "access_start_at",
+                "access_end_at",
+                "updated_at",
+            ])
+
+        return existing
+
+    access_start_at = timezone.now()
+    access_end_at = None
+
+    if payment.course.access_duration_days:
+        access_end_at = (
+            access_start_at
+            + timedelta(
+                days=payment.course.access_duration_days
+            )
+        )
+
+    enrollment = Enrollment.objects.create(
+        firm=firm,
+        student=payment.student,
+        course=payment.course,
+        source=Enrollment.Source.ONLINE_PURCHASE,
+        granted_by=granted_by,
+        status=Enrollment.Status.ACTIVE,
+        access_start_at=access_start_at,
+        access_end_at=access_end_at,
+    )
+
+    return enrollment
 
 
 
@@ -249,8 +334,6 @@ def refresh_fee_account_summary(fee_account):
     if balance_amount < Decimal("0.00"):
         overpaid = abs(balance_amount)
         balance_amount = Decimal("0.00")
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(
             "Overpayment of %s detected on fee account %s",
             overpaid,
@@ -343,7 +426,7 @@ def create_fee_account(
 
 
 def generate_receipt_number():
-    while True:
+    for _ in range(100):
         receipt_number = (
             f"RCP-{timezone.localdate():%Y%m%d}-"
             f"{uuid.uuid4().hex[:10].upper()}"
@@ -353,6 +436,8 @@ def generate_receipt_number():
             receipt_number=receipt_number
         ).exists():
             return receipt_number
+
+    raise RuntimeError("Failed to generate unique receipt number")
 
 
 def build_installment_receipt_pdf(
@@ -384,7 +469,7 @@ def build_installment_receipt_pdf(
     pdf.drawString(
         40,
         page_height - 52,
-        "VIDYASETU",
+        firm.name,
     )
 
     pdf.setFont("Helvetica", 10)

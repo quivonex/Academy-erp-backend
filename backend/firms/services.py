@@ -1,5 +1,6 @@
-from django.db import transaction
+from django.db import models, transaction
 
+from accounts.models import User
 from .models import Firm
 
 
@@ -29,6 +30,19 @@ def deactivate_firm(firm):
             "status",
             "updated_at",
         ]
+    )
+
+    User.objects.filter(
+        firm=firm,
+        is_active=True,
+    ).update(
+        is_active=False,
+    )
+
+    User.objects.filter(
+        firm=firm,
+    ).update(
+        auth_version=models.F("auth_version") + 1,
     )
 
     return firm

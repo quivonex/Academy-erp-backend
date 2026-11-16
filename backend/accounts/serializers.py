@@ -139,6 +139,12 @@ class FirmAdminCreateSerializer(serializers.ModelSerializer):
     
         
 class StudentRegisterSerializer(serializers.Serializer):
+    firm_code = serializers.CharField(
+        max_length=50,
+        required=False,
+        allow_blank=True,
+    )
+
     first_name = serializers.CharField(
         max_length=100
     )

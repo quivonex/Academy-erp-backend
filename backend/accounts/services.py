@@ -1,4 +1,5 @@
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import password_validation
 from django.db import transaction
 from .models import User
 from rest_framework.exceptions import ValidationError
@@ -35,6 +36,15 @@ def create_firm_admin(firm, validated_data):
         "password"
     )
 
+    temp_user = User(
+        firm=firm,
+        user_type=User.UserType.FIRM_ADMIN,
+        **validated_data,
+    )
+    password_validation.validate_password(
+        password, user=temp_user
+    )
+
     user = User.objects.create_user(
         firm=firm,
         user_type=User.UserType.FIRM_ADMIN,
@@ -56,12 +66,15 @@ def register_student(validated_data):
         "password"
     )
 
-    firm_code = settings.DEFAULT_FIRM_CODE
+    firm_code = (
+        validated_data.pop("firm_code", "").strip()
+        or settings.DEFAULT_FIRM_CODE
+    )
 
     if not firm_code:
         raise ValidationError({
-            "firm": [
-                "Default academy is not configured."
+            "firm_code": [
+                "Academy code is required."
             ]
         })
 
@@ -100,6 +113,11 @@ def register_student(validated_data):
                 "A user with this email already exists."
             ]
         })
+
+    temp_user = User(email=email, firm=firm)
+    password_validation.validate_password(
+        password, user=temp_user
+    )
 
     admission_number = (
         f"WEB-{uuid.uuid4().hex[:10].upper()}"

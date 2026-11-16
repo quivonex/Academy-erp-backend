@@ -26,7 +26,7 @@ VIDEO_COMPLETION_PERCENTAGE = Decimal("90.00")
 
 
 def generate_certificate_number():
-    while True:
+    for _ in range(100):
         certificate_number = (
             f"CERT-{timezone.localdate():%Y%m%d}-"
             f"{uuid_lib.uuid4().hex[:10].upper()}"
@@ -36,6 +36,8 @@ def generate_certificate_number():
             certificate_number=certificate_number
         ).exists():
             return certificate_number
+
+    raise RuntimeError("Failed to generate unique certificate number")
 
 
 def get_verified_course_watch_percentage(*, enrollment):
