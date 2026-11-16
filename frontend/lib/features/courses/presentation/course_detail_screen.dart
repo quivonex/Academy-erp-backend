@@ -414,6 +414,11 @@ class _CourseCurriculumSectionState
               icon: Icons.add_rounded,
               onPressed: _addSubject,
             ),
+            AdminOutlineButton(
+              label: 'Add Video',
+              icon: Icons.video_call_outlined,
+              onPressed: () => context.go('/materials'),
+            ),
           ],
         ),
         const SizedBox(height: 14),
