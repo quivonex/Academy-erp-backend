@@ -32,6 +32,64 @@ class RolexAcademyApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: router,
+      builder: (context, child) => _ExitConfirmation(
+        router: router,
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+/// Handles Android system back consistently across admin, student and public
+/// screens. Normal route back navigation is preserved; only the app root
+/// requires a second press to close the app.
+class _ExitConfirmation extends StatefulWidget {
+  const _ExitConfirmation({
+    required this.router,
+    required this.child,
+  });
+
+  final RouterConfig<Object> router;
+  final Widget child;
+
+  @override
+  State<_ExitConfirmation> createState() => _ExitConfirmationState();
+}
+
+class _ExitConfirmationState extends State<_ExitConfirmation> {
+  DateTime? _lastBackPressAt;
+
+  Future<bool> _onWillPop() async {
+    if (widget.router.canPop()) {
+      widget.router.pop();
+      return false;
+    }
+
+    final now = DateTime.now();
+    final pressedRecently = _lastBackPressAt != null &&
+        now.difference(_lastBackPressAt!) < const Duration(seconds: 2);
+
+    if (pressedRecently) return true;
+
+    _lastBackPressAt = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Press back again to exit'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: widget.child,
     );
   }
 }
