@@ -56,7 +56,10 @@ class AdminShell extends ConsumerWidget {
             Expanded(
               child: Column(
                 children: [
-                  _TopBar(showMenuButton: isCompact),
+                  _TopBar(
+                  showMenuButton: isCompact,
+                  currentRoute: currentRoute,
+                ),
                   Expanded(
                     child: Align(
                       alignment: Alignment.topCenter,
@@ -369,10 +372,21 @@ class _NavTile extends StatelessWidget {
   }
 }
 
+String _pageTitleFor(String currentRoute) {
+  for (final item in kAllNavItems) {
+    if (_isSelected(item.route, currentRoute)) return item.label;
+  }
+  return currentRoute == '/dashboard' ? 'Dashboard' : 'Academy';
+}
+
 class _TopBar extends ConsumerWidget {
-  const _TopBar({required this.showMenuButton});
+  const _TopBar({
+    required this.showMenuButton,
+    required this.currentRoute,
+  });
 
   final bool showMenuButton;
+  final String currentRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -382,6 +396,7 @@ class _TopBar extends ConsumerWidget {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final roleLabel = _roleLabel(session.role);
     final initial = roleLabel.substring(0, 1).toUpperCase();
+    final pageTitle = _pageTitleFor(currentRoute);
 
     return Container(
       height: 72,
@@ -400,7 +415,36 @@ class _TopBar extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
           ],
-          const Spacer(),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'THE ROLEX ACADEMY',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: jakarta(
+                    textTheme.labelLarge?.copyWith(
+                      color: const Color(0xFF0F172A),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  pageTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colors.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
           if ((session.firmUuid ?? '').isNotEmpty)
             IconButton(
               tooltip: 'Notifications',
@@ -500,7 +544,7 @@ class _TopBar extends ConsumerWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         gradient: kAdminGradient,
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.zero,
                       ),
                       child: Text(
                         initial,
