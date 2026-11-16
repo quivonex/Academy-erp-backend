@@ -28,8 +28,8 @@ class _BannersListScreenState extends ConsumerState<BannersListScreen> {
 
   void reload() {
     result = ref.read(bannerRepositoryProvider).list(
-          page: page,
-        );
+      page: page,
+    );
   }
 
   void refresh() {
@@ -53,134 +53,343 @@ class _BannersListScreenState extends ConsumerState<BannersListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AdminPageHeader(
-          eyebrow: const AdminEyebrow(
-            section: 'Student app',
-            detail: 'Home screen banners',
-          ),
-          title: 'Banners',
-          subtitle: 'Promotional banners shown on the student Explore page.',
-          titleTrailing: [
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: refresh,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
-          actions: [
-            GradientButton(
-              label: 'Add banner',
-              icon: Icons.add_photo_alternate_outlined,
-              onPressed: _openCreate,
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: FutureBuilder<HomeBannerPage>(
-            future: result,
-            builder: (context, snapshot) {
-              final state = adminFutureState(
-                snapshot,
-                noun: 'banners',
-                onRetry: refresh,
-              );
-              final data = snapshot.data;
-              final rows = data?.results ?? const <HomeBanner>[];
-              final active = rows.where((b) => b.isActive).length;
-              final linked = rows.where((b) => b.courseName != null).length;
+    final textTheme = Theme.of(context).textTheme;
 
-              return ListView(
-                padding: const EdgeInsets.only(bottom: 24),
-                children: [
-                  AdminKpiGrid(
-                    children: [
-                      AdminKpiCard(
-                        label: 'Total banners',
-                        value: data == null ? '…' : '${data.count}',
-                        icon: Icons.view_carousel_outlined,
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header matching screenshot ("Banners" + refresh + "+ Add banner" + subtitle)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Banners',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: jakarta(
+                          textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0F172A),
+                            letterSpacing: -0.4,
+                          ),
+                        ),
                       ),
-                      AdminKpiCard(
-                        label: 'Live now',
-                        value: data == null ? '…' : '$active',
-                        icon: Icons.podcasts_rounded,
-                        iconBackground: const Color(0xFFECFDF5),
-                        iconForeground: const Color(0xFF059669),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      onPressed: refresh,
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        size: 20,
+                        color: Color(0xFF64748B),
                       ),
-                      AdminKpiCard(
-                        label: 'Inactive',
-                        value: data == null ? '…' : '${rows.length - active}',
-                        icon: Icons.visibility_off_outlined,
-                        iconBackground: const Color(0xFFF8FAFC),
-                        iconForeground: const Color(0xFF64748B),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      onPressed: _openCreate,
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Add banner'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF3730A3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 15,
+                          vertical: 11,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      AdminKpiCard(
-                        label: 'Linked to a course',
-                        value: data == null ? '…' : '$linked',
-                        icon: Icons.link_rounded,
-                        iconBackground: const Color(0xFFF5F3FF),
-                        iconForeground: const Color(0xFF7C3AED),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Promotional banners shown on the student Explore page.',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF64748B),
                   ),
-                  const SizedBox(height: 22),
-                  if (state != null)
-                    state
-                  else if (rows.isEmpty)
-                    AdminStateMessage(
-                      icon: Icons.add_photo_alternate_outlined,
-                      title: 'No banners yet',
-                      message: 'Create a banner to promote a course on the '
-                          'student app.',
-                      actionLabel: 'Add banner',
-                      onAction: _openCreate,
-                    )
-                  else
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Expanded(
+            child: FutureBuilder<HomeBannerPage>(
+              future: result,
+              builder: (context, snapshot) {
+                final state = adminFutureState(
+                  snapshot,
+                  noun: 'banners',
+                  onRetry: refresh,
+                );
+                final data = state == null ? snapshot.data : null;
+                final rows = data?.results ?? const <HomeBanner>[];
+                final active = rows.where((b) => b.isActive).length;
+                final linked = rows.where((b) => b.courseName != null).length;
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  children: [
+                    // 2x2 / Responsive KPI grid matching screenshot
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final w = constraints.maxWidth;
                         final columns = w >= 1100
-                            ? 3
+                            ? 4
                             : w >= 640
-                                ? 2
-                                : 1;
-                        const gap = 18.0;
+                            ? 2
+                            : 2;
+                        const gap = 12.0;
                         final cardWidth = (w - gap * (columns - 1)) / columns;
 
                         return Wrap(
                           spacing: gap,
                           runSpacing: gap,
                           children: [
-                            for (final banner in rows)
-                              SizedBox(
-                                width: cardWidth,
-                                child: _BannerCard(
-                                  banner: banner,
-                                  schedule: [
-                                    _date(banner.startsAt),
-                                    _date(banner.endsAt),
-                                  ].where((d) => d.isNotEmpty).join(' → '),
-                                  onTap: () async {
-                                    await context.push(
-                                      '/banners/${banner.uuid}',
-                                    );
-                                    if (mounted) refresh();
-                                  },
-                                ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _BannerStatCard(
+                                label: 'Total banners',
+                                value: data == null ? '…' : '${data.count}',
+                                icon: Icons.table_chart_outlined,
+                                iconColor: const Color(0xFF4F46E5),
+                                iconBg: const Color(0xFFEEF2FF),
                               ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _BannerStatCard(
+                                label: 'Live now',
+                                value: data == null ? '…' : '$active',
+                                icon: Icons.wifi_rounded,
+                                iconColor: const Color(0xFF059669),
+                                iconBg: const Color(0xFFECFDF5),
+                              ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _BannerStatCard(
+                                label: 'Inactive',
+                                value: data == null
+                                    ? '…'
+                                    : '${rows.length - active}',
+                                icon: Icons.visibility_off_outlined,
+                                iconColor: const Color(0xFF64748B),
+                                iconBg: const Color(0xFFF1F5F9),
+                              ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _BannerStatCard(
+                                label: 'Linked to course',
+                                value: data == null ? '…' : '$linked',
+                                icon: Icons.link_rounded,
+                                iconColor: const Color(0xFF9333EA),
+                                iconBg: const Color(0xFFFAF5FF),
+                              ),
+                            ),
                           ],
                         );
                       },
                     ),
-                ],
-              );
-            },
+
+                    const SizedBox(height: 22),
+
+                    // Section title row ("ACTIVE BANNERS [count]" + "Order priority")
+                    Row(
+                      children: [
+                        Text(
+                          'ACTIVE BANNERS',
+                          style: jakarta(
+                            textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF334155),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            data == null ? '…' : '$active',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: const Color(0xFF3730A3),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.swap_vert_rounded,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Order priority',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    if (state != null)
+                      state
+                    else if (rows.isEmpty)
+                      AdminStateMessage(
+                        icon: Icons.add_photo_alternate_outlined,
+                        title: 'No banners yet',
+                        message: 'Create a banner to promote a course on the '
+                            'student app.',
+                        actionLabel: 'Add banner',
+                        onAction: _openCreate,
+                      )
+                    else
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final w = constraints.maxWidth;
+                          final columns = w >= 1100
+                              ? 3
+                              : w >= 640
+                              ? 2
+                              : 1;
+                          const gap = 16.0;
+                          final cardWidth =
+                              (w - gap * (columns - 1)) / columns;
+
+                          return Wrap(
+                            spacing: gap,
+                            runSpacing: gap,
+                            children: [
+                              for (final banner in rows)
+                                SizedBox(
+                                  width: cardWidth,
+                                  child: _BannerCard(
+                                    banner: banner,
+                                    schedule: [
+                                      _date(banner.startsAt),
+                                      _date(banner.endsAt),
+                                    ].where((d) => d.isNotEmpty).join(' → '),
+                                    onTap: () async {
+                                      await context.push(
+                                        '/banners/${banner.uuid}',
+                                      );
+                                      if (mounted) refresh();
+                                    },
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BannerStatCard extends StatelessWidget {
+  const _BannerStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  style: jakarta(
+                    textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0F172A),
+                      fontSize: 28,
+                      letterSpacing: -0.6,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 19, color: iconColor),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -200,107 +409,276 @@ class _BannerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    final placeholder = Container(
-      decoration: const BoxDecoration(gradient: kAdminGradient),
-      alignment: Alignment.center,
-      child: const Icon(Icons.image_outlined, color: Colors.white, size: 40),
-    );
+    final hasCourse = banner.courseName != null && banner.courseName!.isNotEmpty;
+    final captionText = hasCourse
+        ? '1200 × 600 • ${banner.courseName!.toUpperCase()}'
+        : '1200 × 600 • GENERAL ANNOUNCEMENT';
 
-    return AdminCard(
-      padding: EdgeInsets.zero,
-      onTap: onTap,
+    final placeholder = Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF312E81),
+            Color(0xFF4F46E5),
+            Color(0xFF1E1B4B),
+          ],
+        ),
+      ),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(15)),
-            child: AspectRatio(
-              aspectRatio: 16 / 7,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (banner.imageUrl.isNotEmpty)
-                    Image.network(
-                      banner.imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => placeholder,
-                    )
-                  else
-                    placeholder,
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: SoftBadge(
-                      label: 'Order ${banner.displayOrder}',
-                      background: Colors.white,
-                      foreground: const Color(0xFF334155),
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: ActiveBadge(
-                      active: banner.isActive,
-                      activeLabel: 'Live',
-                    ),
-                  ),
-                ],
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.image_outlined,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            captionText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: jakarta(
+              textTheme.labelSmall?.copyWith(
+                color: Colors.white.withOpacity(0.92),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  banner.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: jakarta(
-                    textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
-                    ),
+        ],
+      ),
+    );
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(18)),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (banner.imageUrl.isNotEmpty)
+                        Image.network(
+                          banner.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => placeholder,
+                        )
+                      else
+                        placeholder,
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Order ${banner.displayOrder}',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: const Color(0xFF0F172A),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: banner.isActive
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFF475569),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                banner.isActive ? 'Live' : 'Inactive',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (banner.subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    banner.subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF475569),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    MetaChip(
-                      icon: Icons.school_outlined,
-                      label: banner.courseName ?? 'No linked course',
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            banner.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: jakarta(
+                              textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.edit_outlined,
+                          size: 17,
+                          color: Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          banner.isActive
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 17,
+                          color: const Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.more_vert_rounded,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ],
                     ),
-                    if (schedule.isNotEmpty)
-                      MetaChip(
-                        icon: Icons.event_outlined,
-                        label: schedule,
+                    if (banner.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        banner.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF475569),
+                        ),
                       ),
-                    if (banner.actionLabel.isNotEmpty)
-                      MetaChip(
-                        icon: Icons.ads_click_rounded,
-                        label: banner.actionLabel,
-                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 6,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.school_outlined,
+                              size: 15,
+                              color: Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              banner.courseName ?? 'No linked course',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF475569),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (schedule.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.event_outlined,
+                                size: 15,
+                                color: Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                schedule,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFF475569),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              banner.actionLabel.isNotEmpty
+                                  ? Icons.link_rounded
+                                  : Icons.open_in_new_rounded,
+                              size: 15,
+                              color: const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              banner.actionLabel.isNotEmpty
+                                  ? banner.actionLabel
+                                  : 'Informational only',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF475569),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

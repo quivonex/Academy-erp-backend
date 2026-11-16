@@ -45,14 +45,14 @@ const List<NavItem> kAllNavItems = [
       UserRole.academyAdmin,
     ],
   ),
-  NavItem(
-    label: 'Staff',
-    icon: Icons.badge_outlined,
-    route: '/staff',
-    roles: [
-      UserRole.academyAdmin,
-    ],
-  ),
+  // NavItem(
+  //   label: 'Staff',
+  //   icon: Icons.badge_outlined,
+  //   route: '/staff',
+  //   roles: [
+  //     UserRole.academyAdmin,
+  //   ],
+  // ),
   NavItem(
     label: 'Courses',
     icon: Icons.auto_stories_outlined,

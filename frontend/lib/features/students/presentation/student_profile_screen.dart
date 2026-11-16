@@ -99,8 +99,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           initialEmail: student.email,
         ),
       );
-      if (!mounted || enabled != true ||
-          widget.studentUuid != studentUuid) return;
+      if (!mounted || enabled != true || widget.studentUuid != studentUuid) {
+        return;
+      }
       setState(reload);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Student login enabled successfully.')),
@@ -123,9 +124,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         builder: (_) => StudentEditScreen(student: student),
       );
 
-      if (!mounted ||
-          updated == null ||
-          widget.studentUuid != uuid) {
+      if (!mounted || updated == null || widget.studentUuid != uuid) {
         return;
       }
 
@@ -245,30 +244,66 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     'Student information',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
+                  const SizedBox(height: 16),
+
+                  // Row 1: Admission number | Email
+                  _InfoPairRow(
+                    left: _FormBoxField(
+                      label: 'Admission number',
+                      value: student.admissionNumber,
+                      monospace: true,
+                    ),
+                    right: _FormBoxField(
+                      label: 'Email',
+                      value: student.email,
+                    ),
+                  ),
                   const SizedBox(height: 14),
-                  _InfoRow(
-                    label: 'Admission number',
-                    value: student.admissionNumber,
+
+                  // Row 2: Phone | Gender
+                  _InfoPairRow(
+                    left: _FormBoxField(
+                      label: 'Phone',
+                      value: student.phone,
+                    ),
+                    right: _FormBoxField(
+                      label: 'Gender',
+                      value: student.gender,
+                    ),
                   ),
-                  _InfoRow(label: 'Email', value: student.email),
-                  _InfoRow(label: 'Phone', value: student.phone),
-                  _InfoRow(label: 'Gender', value: student.gender),
-                  _InfoRow(
-                    label: 'Date of birth',
-                    value: student.dateOfBirth ?? '',
+                  const SizedBox(height: 14),
+
+                  // Row 3: Date of birth | Joined
+                  _InfoPairRow(
+                    left: _FormBoxField(
+                      label: 'Date of birth',
+                      value: student.dateOfBirth ?? '',
+                    ),
+                    right: _FormBoxField(
+                      label: 'Joined',
+                      value: student.joinedDate ?? '',
+                    ),
                   ),
-                  _InfoRow(
-                    label: 'Academy',
-                    value: student.firmName ?? '',
+                  const SizedBox(height: 14),
+
+                  // Row 4: Academy | Status
+                  _InfoPairRow(
+                    left: _FormBoxField(
+                      label: 'Academy',
+                      value: student.firmName ?? '',
+                    ),
+                    right: _FormBoxField(
+                      label: 'Status',
+                      value: student.isActive ? 'Active' : 'Inactive',
+                    ),
                   ),
-                  _InfoRow(
-                    label: 'Joined',
-                    value: student.joinedDate ?? '',
-                  ),
-                  _InfoRow(label: 'Address', value: student.address),
-                  _InfoRow(
-                    label: 'Status',
-                    value: student.isActive ? 'Active' : 'Inactive',
+                  const SizedBox(height: 14),
+
+                  // Row 5: Full-width Address
+                  _FormBoxField(
+                    label: 'Address',
+                    value: student.address,
+                    minLines: 2,
                   ),
                 ],
               ),
@@ -313,44 +348,82 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   );
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+class _InfoPairRow extends StatelessWidget {
+  const _InfoPairRow({
+    required this.left,
+    required this.right,
+  });
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    final sideBySide = MediaQuery.sizeOf(context).width >= 520;
+    if (!sideBySide) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          left,
+          const SizedBox(height: 14),
+          right,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: 14),
+        Expanded(child: right),
+      ],
+    );
+  }
+}
+
+class _FormBoxField extends StatelessWidget {
+  const _FormBoxField({
+    required this.label,
+    required this.value,
+    this.monospace = false,
+    this.minLines = 1,
+  });
 
   final String label;
   final String value;
+  final bool monospace;
+  final int minLines;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final labelWidget = Text(label, style: textTheme.bodySmall);
-    final valueWidget = SelectableText(
-      value.trim().isEmpty ? '—' : value,
-      style: textTheme.bodyMedium,
-    );
+    final displayValue = value.trim().isEmpty ? '—' : value.trim();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 480) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                labelWidget,
-                const SizedBox(height: 4),
-                valueWidget,
-              ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 160, child: labelWidget),
-              const SizedBox(width: 16),
-              Expanded(child: valueWidget),
-            ],
-          );
-        },
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minLines > 1 ? 42 : 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SelectableText(
+            displayValue,
+            style: textTheme.bodyMedium?.copyWith(
+              fontFamily: monospace ? 'monospace' : null,
+              color: displayValue == '—'
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -471,7 +544,8 @@ class _EnableLoginDialogState extends State<_EnableLoginDialog> {
                   hint: 'At least 8 characters',
                   icon: Icons.lock_outline_rounded,
                   suffix: IconButton(
-                    tooltip: obscure ? 'Show passwords' : 'Hide passwords',
+                    tooltip:
+                    obscure ? 'Show passwords' : 'Hide passwords',
                     onPressed: saving
                         ? null
                         : () => setState(() => obscure = !obscure),

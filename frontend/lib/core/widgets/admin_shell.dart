@@ -544,7 +544,7 @@ class _TopBar extends ConsumerWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         gradient: kAdminGradient,
-                        borderRadius: BorderRadius.zero,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         initial,

@@ -4,11 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
-
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
-
-
 import '../data/course.dart';
 import '../data/course_repository.dart';
 
@@ -23,6 +20,7 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
   final searchController = TextEditingController();
   late Future<CoursePage> result;
   String search = '';
+  String filterTab = 'ALL'; // ALL | PUBLISHED | ONLINE | HYBRID
   int page = 1;
   bool creating = false;
 
@@ -33,7 +31,8 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
   }
 
   void reload() {
-    result = ref.read(courseRepositoryProvider).list(search: search, page: page);
+    result =
+        ref.read(courseRepositoryProvider).list(search: search, page: page);
   }
 
   void goToPage(int next) {
@@ -62,11 +61,16 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
       setState(() {
         searchController.clear();
         search = '';
+        filterTab = 'ALL';
         page = 1;
         reload();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Draft saved. Add content, preview and publish when ready.')),
+        const SnackBar(
+          content: Text(
+            'Draft saved. Add content, preview and publish when ready.',
+          ),
+        ),
       );
       await context.push('/courses/${created.uuid}');
       if (mounted) setState(reload);
@@ -80,178 +84,16 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
     return v.isEmpty ? 'Course' : v[0].toUpperCase() + v.substring(1);
   }
 
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      AdminPageHeader(
-        eyebrow: const AdminEyebrow(
-          section: 'Curriculum',
-          detail: 'Course catalogue',
-        ),
-        title: 'Courses',
-        titleTrailing: [
-          IconButton(
-            onPressed: () => setState(reload),
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-          ),
-        ],
-        actions: [
-          GradientButton(
-            label: 'Add course',
-            icon: Icons.add_rounded,
-            onPressed: creating ? null : _openCreate,
-          ),
-        ],
-      ),
-      const SizedBox(height: 20),
-      Expanded(
-        child: FutureBuilder<CoursePage>(
-          future: result,
-          builder: (context, snapshot) {
-            final state = adminFutureState(
-              snapshot,
-              noun: 'courses',
-              onRetry: () => setState(reload),
-            );
-            final data = snapshot.connectionState == ConnectionState.done &&
-                !snapshot.hasError
-                ? snapshot.data
-                : null;
-            final rows = data?.results ?? const <Course>[];
-            final published = rows.where((c) => c.isPublished).length;
-            final featured = rows.where((c) => c.isFeatured).length;
-            final online = rows.where((c) => c.isPurchasableOnline).length;
-
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                AdminKpiGrid(
-                  children: [
-                    AdminKpiCard(
-                      label: search.isEmpty ? 'Total courses' : 'Matching courses',
-                      value: data == null ? '…' : '${data.count}',
-                      icon: Icons.auto_stories_outlined,
-                    ),
-                    AdminKpiCard(
-                      label: 'Published on this page',
-                      value: data == null ? '…' : '$published',
-                      icon: Icons.public_rounded,
-                      iconBackground: const Color(0xFFECFDF5),
-                      iconForeground: const Color(0xFF059669),
-                      caption: data == null
-                          ? null
-                          : '${rows.length - published} drafts',
-                    ),
-                    AdminKpiCard(
-                      label: 'Featured',
-                      value: data == null ? '…' : '$featured',
-                      icon: Icons.star_outline_rounded,
-                      iconBackground: const Color(0xFFFFFBEB),
-                      iconForeground: const Color(0xFFD97706),
-                      caption: 'On this page',
-                    ),
-                    AdminKpiCard(
-                      label: 'Listed for Explore',
-                      value: data == null ? '…' : '$online',
-                      icon: Icons.shopping_bag_outlined,
-                      iconBackground: const Color(0xFFF5F3FF),
-                      iconForeground: const Color(0xFF7C3AED),
-                      caption: 'On this page',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                AdminToolbar(
-                  controller: searchController,
-                  hint: 'Search by course name or code…',
-                  onSearch: applySearch,
-                ),
-                const SizedBox(height: 18),
-                if (state != null)
-                  state
-                else if (rows.isEmpty)
-                  AdminStateMessage(
-                    icon: Icons.auto_stories_outlined,
-                    title: 'No courses found',
-                    message: search.isEmpty
-                        ? 'Add your first course to the catalogue.'
-                        : 'Try a different search.',
-                  )
-                else ...[
-                    for (final course in rows)
-                      AdminListRow(
-                        title: course.name,
-                        initials: adminInitials(course.code),
-                        seed: course.code,
-                        titleBadge: course.isFeatured
-                            ? const SoftBadge(
-                          label: 'Featured',
-                          icon: Icons.star_rounded,
-                          background: Color(0xFFFFFBEB),
-                          foreground: Color(0xFFD97706),
-                        )
-                            : null,
-                        subtitle: course.description,
-                        meta: [
-                          SoftBadge(
-                            label: course.code,
-                            monospace: true,
-                            background: const Color(0xFFF1F5F9),
-                            foreground: const Color(0xFF334155),
-                          ),
-                          MetaChip(
-                            icon: Icons.devices_outlined,
-                            label: _mode(course.deliveryMode),
-                          ),
-                          if ((course.categoryName ?? '').isNotEmpty)
-                            MetaChip(
-                              icon: Icons.category_outlined,
-                              label: course.categoryName!,
-                            ),
-                          if (course.durationMonths != null)
-                            MetaChip(
-                              icon: Icons.schedule_rounded,
-                              label: '${course.durationMonths} months',
-                            ),
-                        ],
-                        trailing: [
-                          Text(
-                            '₹${course.price}',
-                            style: jakarta(
-                              Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF3525CD),
-                              ),
-                            ),
-                          ),
-                          ActiveBadge(
-                            active: course.isPublished,
-                            activeLabel: 'Published',
-                            inactiveLabel: 'Draft',
-                          ),
-                        ],
-                        onTap: () async {
-                          await context.push('/courses/${course.uuid}');
-                          if (mounted) setState(reload);
-                        },
-                      ),
-                    AdminPager(
-                      page: page,
-                      pageSize: 20,
-                      total: data!.count,
-                      noun: 'courses',
-                      onPage: goToPage,
-                    ),
-                  ],
-              ],
-            );
-          },
-        ),
-      ),
-    ],
-  );
+  IconData _modeIcon(String raw) {
+    switch (raw.toUpperCase()) {
+      case 'HYBRID':
+        return Icons.laptop_mac_rounded;
+      case 'OFFLINE':
+        return Icons.apartment_rounded;
+      default:
+        return Icons.desktop_windows_outlined;
+    }
+  }
 
   void applySearch() {
     setState(() {
@@ -259,6 +101,859 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
       page = 1;
       reload();
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top header matching screenshot ("Courses" + active badge + refresh + "+ Add course")
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: FutureBuilder<CoursePage>(
+              future: result,
+              builder: (context, snapshot) {
+                final rows = snapshot.connectionState == ConnectionState.done &&
+                    !snapshot.hasError &&
+                    snapshot.data != null
+                    ? snapshot.data!.results
+                    : const <Course>[];
+                final activeCount = rows.where((c) => c.isPublished).length;
+
+                return Row(
+                  children: [
+                    Text(
+                      'Courses',
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEEF2FF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        snapshot.connectionState == ConnectionState.done &&
+                            !snapshot.hasError &&
+                            snapshot.data != null
+                            ? '$activeCount active'
+                            : '…',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF3730A3),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      onPressed: () => setState(reload),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        size: 20,
+                        color: Color(0xFF334155),
+                      ),
+                      tooltip: 'Refresh',
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: creating ? null : _openCreate,
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Add course'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF3730A3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        textStyle: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Expanded(
+            child: FutureBuilder<CoursePage>(
+              future: result,
+              builder: (context, snapshot) {
+                final state = adminFutureState(
+                  snapshot,
+                  noun: 'courses',
+                  onRetry: () => setState(reload),
+                );
+                final data = snapshot.connectionState == ConnectionState.done &&
+                    !snapshot.hasError
+                    ? snapshot.data
+                    : null;
+                final rows = data?.results ?? const <Course>[];
+                final published = rows.where((c) => c.isPublished).length;
+                final featured = rows.where((c) => c.isFeatured).length;
+                final online = rows.where((c) => c.isPurchasableOnline).length;
+                final onlineModeCount = rows
+                    .where((c) => c.deliveryMode.toUpperCase() == 'ONLINE')
+                    .length;
+                final hybridModeCount = rows
+                    .where((c) => c.deliveryMode.toUpperCase() == 'HYBRID')
+                    .length;
+
+                final visibleCourses = switch (filterTab) {
+                  'PUBLISHED' => rows.where((c) => c.isPublished).toList(),
+                  'ONLINE' => rows
+                      .where((c) => c.deliveryMode.toUpperCase() == 'ONLINE')
+                      .toList(),
+                  'HYBRID' => rows
+                      .where((c) => c.deliveryMode.toUpperCase() == 'HYBRID')
+                      .toList(),
+                  _ => rows,
+                };
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  children: [
+                    // 2x2 / Responsive KPI grid matching screenshot
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final columns = width < 600
+                            ? 2
+                            : width < 1000
+                            ? 2
+                            : 4;
+                        const gap = 12.0;
+                        final cardWidth =
+                            (width - gap * (columns - 1)) / columns;
+                        final draftsCount = rows.length - published;
+
+                        return Wrap(
+                          spacing: gap,
+                          runSpacing: gap,
+                          children: [
+                            SizedBox(
+                              width: cardWidth,
+                              child: _CourseStatCard(
+                                label: search.isEmpty
+                                    ? 'Total courses'
+                                    : 'Matching',
+                                value: data == null ? '…' : '${data.count}',
+                                caption: 'All academy wings',
+                                icon: Icons.menu_book_outlined,
+                                iconColor: const Color(0xFF4F46E5),
+                                iconBg: const Color(0xFFEEF2FF),
+                              ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _CourseStatCard(
+                                label: 'Published',
+                                value: data == null ? '…' : '$published',
+                                valueColor: const Color(0xFF059669),
+                                caption: data == null
+                                    ? '…'
+                                    : '$draftsCount drafts pending',
+                                icon: Icons.public_rounded,
+                                iconColor: const Color(0xFF059669),
+                                iconBg: const Color(0xFFECFDF5),
+                              ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _CourseStatCard(
+                                label: 'Featured',
+                                value: data == null ? '…' : '$featured',
+                                valueColor: const Color(0xFF1D4ED8),
+                                caption: 'Highlighted banner',
+                                icon: Icons.star_border_rounded,
+                                iconColor: const Color(0xFF1D4ED8),
+                                iconBg: const Color(0xFFEFF6FF),
+                              ),
+                            ),
+                            SizedBox(
+                              width: cardWidth,
+                              child: _CourseStatCard(
+                                label: 'Explore Listed',
+                                value: data == null ? '…' : '$online',
+                                caption: 'In public app feed',
+                                icon: Icons.storefront_outlined,
+                                iconColor: const Color(0xFF4F46E5),
+                                iconBg: const Color(0xFFEEF2FF),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Search bar with blue "Search" button
+                    _CourseSearchBar(
+                      controller: searchController,
+                      onSearch: applySearch,
+                      onClear: search.isEmpty && searchController.text.isEmpty
+                          ? null
+                          : () {
+                        searchController.clear();
+                        applySearch();
+                      },
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Filter pill strip ("All", "Published", "Online", "Hybrid")
+                    if (data != null) ...[
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _CourseFilterPill(
+                              label: 'All (${rows.length})',
+                              selected: filterTab == 'ALL',
+                              onTap: () => setState(() => filterTab = 'ALL'),
+                            ),
+                            const SizedBox(width: 8),
+                            _CourseFilterPill(
+                              label: 'Published ($published)',
+                              selected: filterTab == 'PUBLISHED',
+                              onTap: () =>
+                                  setState(() => filterTab = 'PUBLISHED'),
+                            ),
+                            const SizedBox(width: 8),
+                            _CourseFilterPill(
+                              label: 'Online ($onlineModeCount)',
+                              selected: filterTab == 'ONLINE',
+                              onTap: () => setState(() => filterTab = 'ONLINE'),
+                            ),
+                            const SizedBox(width: 8),
+                            _CourseFilterPill(
+                              label: 'Hybrid ($hybridModeCount)',
+                              selected: filterTab == 'HYBRID',
+                              onTap: () => setState(() => filterTab = 'HYBRID'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    if (state != null)
+                      state
+                    else if (visibleCourses.isEmpty)
+                      AdminStateMessage(
+                        icon: Icons.auto_stories_outlined,
+                        title: 'No courses found',
+                        message: search.isEmpty
+                            ? 'Add your first course to the catalogue.'
+                            : 'Try a different search or filter.',
+                      )
+                    else ...[
+                        for (final course in visibleCourses) ...[
+                          _CourseCatalogueCard(
+                            course: course,
+                            modeLabel: _mode(course.deliveryMode),
+                            modeIcon: _modeIcon(course.deliveryMode),
+                            onTap: () async {
+                              await context.push('/courses/${course.uuid}');
+                              if (mounted) setState(reload);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        AdminPager(
+                          page: page,
+                          pageSize: 20,
+                          total: data!.count,
+                          noun: 'courses',
+                          onPage: goToPage,
+                        ),
+                      ],
+
+                    const SizedBox(height: 14),
+
+                    // Bottom Public Portal Sync status card matching screenshot
+                    _PublicPortalSyncCard(
+                      publishedCount: published,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CourseStatCard extends StatelessWidget {
+  const _CourseStatCard({
+    required this.label,
+    required this.value,
+    this.valueColor = const Color(0xFF0F172A),
+    required this.caption,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+  final String caption;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF334155),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            value,
+            style: jakarta(
+              textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: valueColor,
+                fontSize: 28,
+                letterSpacing: -0.6,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CourseSearchBar extends StatelessWidget {
+  const _CourseSearchBar({
+    required this.controller,
+    required this.onSearch,
+    this.onClear,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSearch;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => onSearch(),
+              decoration: const InputDecoration(
+                hintText: 'Search by course name or code...',
+                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          if (onClear != null)
+            IconButton(
+              onPressed: onClear,
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: Color(0xFF94A3B8),
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+          const SizedBox(width: 4),
+          FilledButton(
+            onPressed: onSearch,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF3730A3),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Search',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CourseFilterPill extends StatelessWidget {
+  const _CourseFilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFF3730A3) : Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+              selected ? const Color(0xFF3730A3) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: selected ? Colors.white : const Color(0xFF475569),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseCatalogueCard extends StatelessWidget {
+  const _CourseCatalogueCard({
+    required this.course,
+    required this.modeLabel,
+    required this.modeIcon,
+    required this.onTap,
+  });
+
+  final Course course;
+  final String modeLabel;
+  final IconData modeIcon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final avatarText = adminInitials(course.code);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top row: Avatar + Course title/featured/subtitle/code + Price & Published pill
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: course.isFeatured
+                          ? const Color(0xFF3730A3)
+                          : const Color(0xFFEEF2FF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      avatarText,
+                      style: TextStyle(
+                        color: course.isFeatured
+                            ? Colors.white
+                            : const Color(0xFF3730A3),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          course.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        if (course.isFeatured) ...[
+                          const SizedBox(height: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDBEAFE),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.star_rounded,
+                                  size: 12,
+                                  color: Color(0xFF1D4ED8),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Featured',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1D4ED8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (course.description.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            course.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            course.code,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '₹${course.price}',
+                        style: jakarta(
+                          textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: course.isPublished
+                              ? const Color(0xFFDCFCE7)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: course.isPublished
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFF64748B),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              course.isPublished ? 'Published' : 'Draft',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: course.isPublished
+                                    ? const Color(0xFF15803D)
+                                    : const Color(0xFF475569),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Bottom soft strip with mode, category, duration & chevron
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      modeIcon,
+                      size: 14,
+                      color: const Color(0xFF475569),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      modeLabel,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: const Color(0xFF334155),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if ((course.categoryName ?? '').isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '•',
+                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.record_voice_over_outlined,
+                        size: 14,
+                        color: Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          course.categoryName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: const Color(0xFF334155),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (course.durationMonths != null) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '•',
+                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${course.durationMonths} months',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: const Color(0xFF334155),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicPortalSyncCard extends StatelessWidget {
+  const _PublicPortalSyncCard({required this.publishedCount});
+
+  final int publishedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.verified_user_outlined,
+              size: 18,
+              color: Color(0xFF3730A3),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Public Portal Sync: Live',
+                  style: textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'All $publishedCount active courses are visible on mobile explorer apps.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -349,7 +1044,7 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
       await loadCategories();
       setState(() {
         selectedCategory = categories.firstWhere(
-          (c) => c.uuid == newCat.uuid,
+              (c) => c.uuid == newCat.uuid,
           orElse: () => newCat,
         );
       });
@@ -400,7 +1095,9 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
   Future<void> save() async {
     if (saving || loadingCategories) return;
     if (!(key.currentState?.validate() ?? false)) {
-      setState(() => error = 'Check the course details, including Advanced settings.');
+      setState(
+            () => error = 'Check the course details, including Advanced settings.',
+      );
       return;
     }
     FocusScope.of(context).unfocus();
@@ -430,8 +1127,9 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
         isFeatured: isFeatured,
         isCertificateEnabled: isCertificateEnabled,
         certificateRequiredWatchPercentage:
-            certificateWatchPercentage.text.trim(),
-        featuredOrder: isFeatured ? int.parse(featuredOrder.text.trim()) : 0,
+        certificateWatchPercentage.text.trim(),
+        featuredOrder:
+        isFeatured ? int.parse(featuredOrder.text.trim()) : 0,
       );
 
       if (!mounted) return;
@@ -477,9 +1175,12 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      key: ValueKey('category_dd_${categories.length}_${selectedCategory?.uuid}'),
+                      key: ValueKey(
+                        'category_dd_${categories.length}_${selectedCategory?.uuid}',
+                      ),
                       isExpanded: true,
-                      value: categories.any((c) => c.uuid == selectedCategory?.uuid)
+                      value: categories
+                          .any((c) => c.uuid == selectedCategory?.uuid)
                           ? selectedCategory?.uuid
                           : null,
                       decoration: const InputDecoration(
@@ -489,11 +1190,16 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
                           .map(
                             (category) => DropdownMenuItem<String>(
                           value: category.uuid,
-                          child: Text(category.name, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            category.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                           .toList(),
-                      onChanged: saving || loadingCategories ? null : (value) {
+                      onChanged: saving || loadingCategories
+                          ? null
+                          : (value) {
                         setState(() {
                           selectedCategory = value == null
                               ? null
@@ -506,7 +1212,8 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
                   ),
                   const SizedBox(width: 8),
                   TextButton.icon(
-                    onPressed: saving || loadingCategories ? null : _addNewCategory,
+                    onPressed:
+                    saving || loadingCategories ? null : _addNewCategory,
                     icon: const Icon(Icons.add_rounded, size: 16),
                     label: const Text('New'),
                   ),
@@ -547,114 +1254,132 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
                 controller: price,
                 enabled: !saving,
                 decoration: const InputDecoration(labelText: 'Course fee (₹)'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
                 validator: validatePrice,
               ),
               const SizedBox(height: 10),
               ExpansionTile(
                 maintainState: true,
                 title: const Text('Advanced settings'),
-                subtitle: const Text('Code, duration, certificates and featuring'),
-                children: [
-              TextFormField(
-                controller: code,
-                enabled: !saving,
-                maxLength: 50,
-                decoration: const InputDecoration(labelText: 'Course code (optional)', hintText: 'Generated automatically if left blank'),
-              ),
-              const SizedBox(height: 10),
-
-              TextFormField(
-                controller: durationMonths,
-                enabled: !saving,
-                validator: (value) => validateInteger(value, optional: true),
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Duration (Months)',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: accessDays,
-                enabled: !saving,
-                validator: (value) => validateInteger(value, optional: true),
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Student Access Duration (Days)',
-                  hintText: 'Example: 180',
-                ),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: mode,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Delivery mode'),
-                items: const [
-                  DropdownMenuItem(value: 'ONLINE', child: Text('Online')),
-                  DropdownMenuItem(value: 'OFFLINE', child: Text('Offline')),
-                  DropdownMenuItem(value: 'HYBRID', child: Text('Hybrid')),
-                ],
-                onChanged: saving ? null : (value) => setState(() => mode = value ?? mode),
-              ),
-              const SizedBox(height: 10),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Enable Course Certificate'),
                 subtitle: const Text(
-                  'Students can receive a certificate after completing the required learning progress.',
+                  'Code, duration, certificates and featuring',
                 ),
-                value: isCertificateEnabled,
-                onChanged: saving
-                    ? null
-                    : (value) {
-                        setState(() {
-                          isCertificateEnabled = value;
-                        });
-                      },
-              ),
-              if (isCertificateEnabled) ...[
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: certificateWatchPercentage,
-                  enabled: !saving,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: validateCertificateWatchPercentage,
-                  decoration: const InputDecoration(
-                    labelText: 'Required video watch percentage',
-                    hintText: 'Example: 85',
-                    suffixText: '%',
+                children: [
+                  TextFormField(
+                    controller: code,
+                    enabled: !saving,
+                    maxLength: 50,
+                    decoration: const InputDecoration(
+                      labelText: 'Course code (optional)',
+                      hintText: 'Generated automatically if left blank',
+                    ),
                   ),
-                ),
-              ],
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Featured Course'),
-                value: isFeatured,
-                onChanged: saving ? null : (value) {
-                  setState(() {
-                    isFeatured = value;
-                  });
-                },
-              ),
-              if (isFeatured) ...[
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: featuredOrder,
-                  enabled: !saving,
-                  validator: validateInteger,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Featured Order',
-                    hintText: '0 = first priority',
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: durationMonths,
+                    enabled: !saving,
+                    validator: (value) =>
+                        validateInteger(value, optional: true),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Duration (Months)',
+                    ),
                   ),
-                ),
-              ],
-
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: accessDays,
+                    enabled: !saving,
+                    validator: (value) =>
+                        validateInteger(value, optional: true),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Student Access Duration (Days)',
+                      hintText: 'Example: 180',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    isExpanded: true,
+                    decoration:
+                    const InputDecoration(labelText: 'Delivery mode'),
+                    items: const [
+                      DropdownMenuItem(value: 'ONLINE', child: Text('Online')),
+                      DropdownMenuItem(
+                        value: 'OFFLINE',
+                        child: Text('Offline'),
+                      ),
+                      DropdownMenuItem(value: 'HYBRID', child: Text('Hybrid')),
+                    ],
+                    onChanged: saving
+                        ? null
+                        : (value) => setState(() => mode = value ?? mode),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enable Course Certificate'),
+                    subtitle: const Text(
+                      'Students can receive a certificate after completing the required learning progress.',
+                    ),
+                    value: isCertificateEnabled,
+                    onChanged: saving
+                        ? null
+                        : (value) {
+                      setState(() {
+                        isCertificateEnabled = value;
+                      });
+                    },
+                  ),
+                  if (isCertificateEnabled) ...[
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: certificateWatchPercentage,
+                      enabled: !saving,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: validateCertificateWatchPercentage,
+                      decoration: const InputDecoration(
+                        labelText: 'Required video watch percentage',
+                        hintText: 'Example: 85',
+                        suffixText: '%',
+                      ),
+                    ),
+                  ],
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Featured Course'),
+                    value: isFeatured,
+                    onChanged: saving
+                        ? null
+                        : (value) {
+                      setState(() {
+                        isFeatured = value;
+                      });
+                    },
+                  ),
+                  if (isFeatured) ...[
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: featuredOrder,
+                      enabled: !saving,
+                      validator: validateInteger,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Featured Order',
+                        hintText: '0 = first priority',
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Save a draft first. Add subjects, chapters, lessons and materials on the course page, then preview and publish.'),
+                child: Text(
+                  'Save a draft first. Add subjects, chapters, lessons and materials on the course page, then preview and publish.',
+                ),
               ),
               if (error != null)
                 Padding(
@@ -672,7 +1397,7 @@ class CreateCourseDialogState extends ConsumerState<CreateCourseDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         GradientButton(
@@ -717,9 +1442,9 @@ class __CreateCategoryQuickDialogState
     });
     try {
       final created = await ref.read(courseCategoryRepositoryProvider).create(
-            name: nameController.text,
-            description: descController.text,
-          );
+        name: nameController.text,
+        description: descController.text,
+      );
       if (mounted) Navigator.of(context).pop(created);
     } on ApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -742,7 +1467,8 @@ class __CreateCategoryQuickDialogState
             TextFormField(
               controller: nameController,
               decoration: const InputDecoration(labelText: 'Category Name *'),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              validator: (v) =>
+              v == null || v.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -759,17 +1485,17 @@ class __CreateCategoryQuickDialogState
       ),
       actions: [
         TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: saving ? null : _save,
           child: saving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : const Text('Save Category'),
         ),
       ],

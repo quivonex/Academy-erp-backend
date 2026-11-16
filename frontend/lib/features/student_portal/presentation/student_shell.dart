@@ -334,15 +334,19 @@ class StudentShell extends ConsumerWidget {
               child: Tooltip(
                 message: 'Profile',
                 child: InkWell(
-                  customBorder: const CircleBorder(),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () {
                     context.go('/student/profile');
                   },
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: selected == 3
-                        ? colors.primaryTonal
-                        : colors.primaryDeep,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: selected == 3
+                          ? colors.primaryTonal
+                          : colors.primaryDeep,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Icon(
                       Icons.person_rounded,
                       size: 22,

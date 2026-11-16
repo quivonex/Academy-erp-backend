@@ -472,11 +472,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   ? Tooltip(
                 message: 'Profile',
                 child: InkWell(
-                  customBorder: const CircleBorder(),
+                  borderRadius: BorderRadius.circular(10),
                   onTap: () => context.go('/student/profile'),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: colors.primaryDeep,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: colors.primaryDeep,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     child: const Icon(
                       Icons.person_rounded,
                       size: 18,
@@ -536,10 +540,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        session.firmName == null ||
-                            session.firmName!.isEmpty
-                            ? 'Explore courses available at the academy.'
-                            : 'Explore courses available at ${session.firmName}.',
+                        'Explore courses available at ${cleanFirmName(session.firmName)}.',
                         style: textTheme.bodyMedium?.copyWith(
                           color: colors.textMuted,
                         ),
@@ -766,11 +767,15 @@ class _WebTopNav extends StatelessWidget {
               Tooltip(
                 message: 'Profile',
                 child: InkWell(
-                  customBorder: const CircleBorder(),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () => context.go('/student/profile'),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: colors.primaryDeep,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: colors.primaryDeep,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: const Icon(
                       Icons.person_rounded,
                       size: 22,
