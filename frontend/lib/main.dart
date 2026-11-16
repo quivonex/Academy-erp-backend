@@ -42,7 +42,7 @@ class RolexAcademyApp extends ConsumerWidget {
 }
 
 /// Handles Android system back consistently across admin, student and public
-/// screens. Normal route back navigation is preserved; only the app root
+/// screens. Back always returns to the dashboard; only the dashboard itself
 /// requires a second press to close the app.
 class _ExitConfirmation extends StatefulWidget {
   const _ExitConfirmation({
@@ -61,8 +61,13 @@ class _ExitConfirmationState extends State<_ExitConfirmation> {
   DateTime? _lastBackPressAt;
 
   Future<bool> _onWillPop() async {
-    if (widget.router.canPop()) {
-      widget.router.pop();
+    final currentPath =
+        widget.router.routerDelegate.currentConfiguration.uri.path;
+
+    // Every in-app back action returns to the dashboard instead of reopening
+    // the previous screen in the navigation history.
+    if (currentPath != '/dashboard') {
+      widget.router.go('/dashboard');
       return false;
     }
 
