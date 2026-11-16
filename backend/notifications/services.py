@@ -1,14 +1,33 @@
 import hashlib
+from itertools import islice
 
 from django.db.models import Q
 from django.utils import timezone
 
 from .models import DeviceToken, Notification
 
+NOTIFICATION_CHUNK_SIZE = 500
+
 
 def _idempotency_key(notification_type, recipient_id, event_id):
     raw = f"{notification_type}:{recipient_id}:{event_id}"
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _bulk_create_notifications(notifications_iter):
+    """Create notifications from an iterator in fixed-size chunks."""
+    total = 0
+    while True:
+        chunk = list(islice(notifications_iter, NOTIFICATION_CHUNK_SIZE))
+        if not chunk:
+            break
+        Notification.objects.bulk_create(
+            chunk,
+            batch_size=NOTIFICATION_CHUNK_SIZE,
+            ignore_conflicts=True,
+        )
+        total += len(chunk)
+    return total
 
 
 def get_token_hash(token):
@@ -191,37 +210,29 @@ def create_assignment_published_notifications(assignment):
     ntype = Notification.NotificationType.ASSIGNMENT
     event_id = f"assignment:{assignment.uuid}"
 
-    notifications = [
-        Notification(
-            firm=assignment.firm,
-            recipient=enrollment.student.user,
-            notification_type=ntype,
-            title="New assignment available",
-            body=body,
-            data={
-                "assignment_uuid": str(assignment.uuid),
-                "course_uuid": str(assignment.course.uuid),
-                "due_at": (
-                    assignment.due_at.isoformat()
-                    if assignment.due_at
-                    else None
+    def _gen():
+        for enrollment in enrollments.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
+                firm=assignment.firm,
+                recipient=enrollment.student.user,
+                notification_type=ntype,
+                title="New assignment available",
+                body=body,
+                data={
+                    "assignment_uuid": str(assignment.uuid),
+                    "course_uuid": str(assignment.course.uuid),
+                    "due_at": (
+                        assignment.due_at.isoformat()
+                        if assignment.due_at
+                        else None
+                    ),
+                },
+                idempotency_key=_idempotency_key(
+                    ntype, enrollment.student.user_id, event_id,
                 ),
-            },
-            idempotency_key=_idempotency_key(
-                ntype, enrollment.student.user_id, event_id,
-            ),
-        )
-        for enrollment in enrollments
-    ]
+            )
 
-    if notifications:
-        Notification.objects.bulk_create(
-            notifications,
-            batch_size=500,
-            ignore_conflicts=True,
-        )
-
-    return len(notifications)
+    return _bulk_create_notifications(_gen())
 
 
 
@@ -262,38 +273,30 @@ def create_live_class_scheduled_notifications(live_class):
     ntype = Notification.NotificationType.LIVE_CLASS
     event_id = f"live_class_scheduled:{live_class.uuid}"
 
-    notifications = [
-        Notification(
-            firm=live_class.firm,
-            recipient=enrollment.student.user,
-            notification_type=ntype,
-            title="Live class scheduled",
-            body=body,
-            data={
-                "live_class_uuid": str(live_class.uuid),
-                "course_uuid": str(live_class.course.uuid),
-                "scheduled_start_at": (
-                    live_class.scheduled_start_at.isoformat()
+    def _gen():
+        for enrollment in enrollments.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
+                firm=live_class.firm,
+                recipient=enrollment.student.user,
+                notification_type=ntype,
+                title="Live class scheduled",
+                body=body,
+                data={
+                    "live_class_uuid": str(live_class.uuid),
+                    "course_uuid": str(live_class.course.uuid),
+                    "scheduled_start_at": (
+                        live_class.scheduled_start_at.isoformat()
+                    ),
+                    "scheduled_end_at": (
+                        live_class.scheduled_end_at.isoformat()
+                    ),
+                },
+                idempotency_key=_idempotency_key(
+                    ntype, enrollment.student.user_id, event_id,
                 ),
-                "scheduled_end_at": (
-                    live_class.scheduled_end_at.isoformat()
-                ),
-            },
-            idempotency_key=_idempotency_key(
-                ntype, enrollment.student.user_id, event_id,
-            ),
-        )
-        for enrollment in enrollments
-    ]
+            )
 
-    if notifications:
-        Notification.objects.bulk_create(
-            notifications,
-            batch_size=500,
-            ignore_conflicts=True,
-        )
-
-    return len(notifications)
+    return _bulk_create_notifications(_gen())
 
 
 
@@ -335,35 +338,27 @@ def create_live_class_cancelled_notifications(live_class):
     ntype = Notification.NotificationType.LIVE_CLASS
     event_id = f"live_class_cancelled:{live_class.uuid}"
 
-    notifications = [
-        Notification(
-            firm=live_class.firm,
-            recipient=enrollment.student.user,
-            notification_type=ntype,
-            title="Live class cancelled",
-            body=body,
-            data={
-                "live_class_uuid": str(live_class.uuid),
-                "course_uuid": str(live_class.course.uuid),
-                "scheduled_start_at": (
-                    live_class.scheduled_start_at.isoformat()
+    def _gen():
+        for enrollment in enrollments.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
+                firm=live_class.firm,
+                recipient=enrollment.student.user,
+                notification_type=ntype,
+                title="Live class cancelled",
+                body=body,
+                data={
+                    "live_class_uuid": str(live_class.uuid),
+                    "course_uuid": str(live_class.course.uuid),
+                    "scheduled_start_at": (
+                        live_class.scheduled_start_at.isoformat()
+                    ),
+                },
+                idempotency_key=_idempotency_key(
+                    ntype, enrollment.student.user_id, event_id,
                 ),
-            },
-            idempotency_key=_idempotency_key(
-                ntype, enrollment.student.user_id, event_id,
-            ),
-        )
-        for enrollment in enrollments
-    ]
+            )
 
-    if notifications:
-        Notification.objects.bulk_create(
-            notifications,
-            batch_size=500,
-            ignore_conflicts=True,
-        )
-
-    return len(notifications)
+    return _bulk_create_notifications(_gen())
 
 
 def create_material_available_notifications(material):
@@ -444,35 +439,28 @@ def create_material_available_notifications(material):
     ntype = Notification.NotificationType.MATERIAL
     event_id = f"material:{material.uuid}"
 
-    notifications = [
-        Notification(
-            firm=material.firm,
-            recipient_id=user_id,
-            notification_type=ntype,
-            title=title,
-            body=(
-                f"'{material.title}' is now available in "
-                f"{material.course.name}."
-            ),
-            data={
-                "material_uuid": str(material.uuid),
-                "course_uuid": str(material.course.uuid),
-                "material_type": material.material_type,
-            },
-            idempotency_key=_idempotency_key(
-                ntype, user_id, event_id,
-            ),
-        )
-        for user_id in recipient_user_ids
-    ]
+    def _gen():
+        for user_id in recipient_user_ids:
+            yield Notification(
+                firm=material.firm,
+                recipient_id=user_id,
+                notification_type=ntype,
+                title=title,
+                body=(
+                    f"'{material.title}' is now available in "
+                    f"{material.course.name}."
+                ),
+                data={
+                    "material_uuid": str(material.uuid),
+                    "course_uuid": str(material.course.uuid),
+                    "material_type": material.material_type,
+                },
+                idempotency_key=_idempotency_key(
+                    ntype, user_id, event_id,
+                ),
+            )
 
-    Notification.objects.bulk_create(
-        notifications,
-        batch_size=500,
-        ignore_conflicts=True,
-    )
-
-    return len(notifications)
+    return _bulk_create_notifications(_gen())
 
 
 
@@ -573,38 +561,28 @@ def create_live_class_started_notifications(live_class):
     ntype = Notification.NotificationType.LIVE_CLASS
     event_id = f"live_class_started:{live_class.uuid}"
 
-    notifications = [
-        Notification(
-            firm=live_class.firm,
-            recipient_id=user_id,
-            notification_type=ntype,
-            title="Live class started",
-            body=(
-                f"'{live_class.title}' is live now. "
-                "Join the class from your course."
-            ),
-            data={
-                "live_class_uuid": str(live_class.uuid),
-                "course_uuid": str(live_class.course.uuid),
-                "meeting_url": live_class.meeting_url,
-            },
-            idempotency_key=_idempotency_key(
-                ntype, user_id, event_id,
-            ),
-        )
-        for user_id in recipient_user_ids
-    ]
+    def _gen():
+        for user_id in recipient_user_ids.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
+                firm=live_class.firm,
+                recipient_id=user_id,
+                notification_type=ntype,
+                title="Live class started",
+                body=(
+                    f"'{live_class.title}' is live now. "
+                    "Join the class from your course."
+                ),
+                data={
+                    "live_class_uuid": str(live_class.uuid),
+                    "course_uuid": str(live_class.course.uuid),
+                    "meeting_url": live_class.meeting_url,
+                },
+                idempotency_key=_idempotency_key(
+                    ntype, user_id, event_id,
+                ),
+            )
 
-    if not notifications:
-        return 0
-
-    Notification.objects.bulk_create(
-        notifications,
-        batch_size=500,
-        ignore_conflicts=True,
-    )
-
-    return len(notifications)
+    return _bulk_create_notifications(_gen())
 
 
 def create_live_class_updated_notifications(
@@ -659,9 +637,9 @@ def create_live_class_updated_notifications(
     ntype = Notification.NotificationType.LIVE_CLASS
     event_id = f"live_class_updated:{live_class.uuid}"
 
-    Notification.objects.bulk_create(
-        [
-            Notification(
+    def _gen():
+        for user_id in recipient_user_ids.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
                 firm=live_class.firm,
                 recipient_id=user_id,
                 notification_type=ntype,
@@ -681,13 +659,8 @@ def create_live_class_updated_notifications(
                     ntype, user_id, event_id,
                 ),
             )
-            for user_id in recipient_user_ids
-        ],
-        batch_size=500,
-        ignore_conflicts=True,
-    )
 
-    return len(recipient_user_ids)
+    return _bulk_create_notifications(_gen())
 
 
 def create_chapter_video_access_notifications(
@@ -744,9 +717,11 @@ def create_chapter_video_access_notifications(
     )
     event_id = f"chapter_video:{course.uuid}:{chapter_uuids_str}"
 
-    Notification.objects.bulk_create(
-        [
-            Notification(
+    chapter_uuid_list = [str(chapter.uuid) for chapter in chapters]
+
+    def _gen():
+        for user_id in recipient_user_ids.iterator(chunk_size=NOTIFICATION_CHUNK_SIZE):
+            yield Notification(
                 firm=course.firm,
                 recipient_id=user_id,
                 notification_type=ntype,
@@ -754,10 +729,7 @@ def create_chapter_video_access_notifications(
                 body=body,
                 data={
                     "course_uuid": str(course.uuid),
-                    "chapter_uuids": [
-                        str(chapter.uuid)
-                        for chapter in chapters
-                    ],
+                    "chapter_uuids": chapter_uuid_list,
                     "access_start_at": access_start_at.isoformat(),
                     "access_end_at": (
                         access_end_at.isoformat()
@@ -769,12 +741,7 @@ def create_chapter_video_access_notifications(
                     ntype, user_id, event_id,
                 ),
             )
-            for user_id in recipient_user_ids
-        ],
-        batch_size=500,
-        ignore_conflicts=True,
-    )
 
-    return len(recipient_user_ids)
+    return _bulk_create_notifications(_gen())
 
 
