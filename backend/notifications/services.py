@@ -5,6 +5,12 @@ from django.utils import timezone
 
 from .models import DeviceToken, Notification
 
+
+def _idempotency_key(notification_type, recipient_id, event_id):
+    raw = f"{notification_type}:{recipient_id}:{event_id}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def get_token_hash(token):
     return hashlib.sha256(
         token.encode("utf-8")
@@ -46,6 +52,7 @@ def create_notification(
     body,
     action_url="",
     data=None,
+    idempotency_key="",
 ):
     return Notification.objects.create(
         firm=firm,
@@ -55,6 +62,7 @@ def create_notification(
         body=body,
         action_url=action_url,
         data=data or {},
+        idempotency_key=idempotency_key,
     )
     
     
@@ -180,11 +188,14 @@ def create_assignment_published_notifications(assignment):
             f"{assignment.due_at.strftime('%d %b %Y, %I:%M %p')}."
         )
 
+    ntype = Notification.NotificationType.ASSIGNMENT
+    event_id = f"assignment:{assignment.uuid}"
+
     notifications = [
         Notification(
             firm=assignment.firm,
             recipient=enrollment.student.user,
-            notification_type=Notification.NotificationType.ASSIGNMENT,
+            notification_type=ntype,
             title="New assignment available",
             body=body,
             data={
@@ -196,6 +207,9 @@ def create_assignment_published_notifications(assignment):
                     else None
                 ),
             },
+            idempotency_key=_idempotency_key(
+                ntype, enrollment.student.user_id, event_id,
+            ),
         )
         for enrollment in enrollments
     ]
@@ -204,6 +218,7 @@ def create_assignment_published_notifications(assignment):
         Notification.objects.bulk_create(
             notifications,
             batch_size=500,
+            ignore_conflicts=True,
         )
 
     return len(notifications)
@@ -244,11 +259,14 @@ def create_live_class_scheduled_notifications(live_class):
         f"{scheduled_start_at.strftime('%d %b %Y, %I:%M %p')}."
     )
 
+    ntype = Notification.NotificationType.LIVE_CLASS
+    event_id = f"live_class_scheduled:{live_class.uuid}"
+
     notifications = [
         Notification(
             firm=live_class.firm,
             recipient=enrollment.student.user,
-            notification_type=Notification.NotificationType.LIVE_CLASS,
+            notification_type=ntype,
             title="Live class scheduled",
             body=body,
             data={
@@ -261,6 +279,9 @@ def create_live_class_scheduled_notifications(live_class):
                     live_class.scheduled_end_at.isoformat()
                 ),
             },
+            idempotency_key=_idempotency_key(
+                ntype, enrollment.student.user_id, event_id,
+            ),
         )
         for enrollment in enrollments
     ]
@@ -269,6 +290,7 @@ def create_live_class_scheduled_notifications(live_class):
         Notification.objects.bulk_create(
             notifications,
             batch_size=500,
+            ignore_conflicts=True,
         )
 
     return len(notifications)
@@ -310,11 +332,14 @@ def create_live_class_cancelled_notifications(live_class):
         f"has been cancelled."
     )
 
+    ntype = Notification.NotificationType.LIVE_CLASS
+    event_id = f"live_class_cancelled:{live_class.uuid}"
+
     notifications = [
         Notification(
             firm=live_class.firm,
             recipient=enrollment.student.user,
-            notification_type=Notification.NotificationType.LIVE_CLASS,
+            notification_type=ntype,
             title="Live class cancelled",
             body=body,
             data={
@@ -324,6 +349,9 @@ def create_live_class_cancelled_notifications(live_class):
                     live_class.scheduled_start_at.isoformat()
                 ),
             },
+            idempotency_key=_idempotency_key(
+                ntype, enrollment.student.user_id, event_id,
+            ),
         )
         for enrollment in enrollments
     ]
@@ -332,6 +360,7 @@ def create_live_class_cancelled_notifications(live_class):
         Notification.objects.bulk_create(
             notifications,
             batch_size=500,
+            ignore_conflicts=True,
         )
 
     return len(notifications)
@@ -412,11 +441,14 @@ def create_material_available_notifications(material):
         else "New study material available"
     )
 
+    ntype = Notification.NotificationType.MATERIAL
+    event_id = f"material:{material.uuid}"
+
     notifications = [
         Notification(
             firm=material.firm,
             recipient_id=user_id,
-            notification_type=Notification.NotificationType.MATERIAL,
+            notification_type=ntype,
             title=title,
             body=(
                 f"'{material.title}' is now available in "
@@ -427,6 +459,9 @@ def create_material_available_notifications(material):
                 "course_uuid": str(material.course.uuid),
                 "material_type": material.material_type,
             },
+            idempotency_key=_idempotency_key(
+                ntype, user_id, event_id,
+            ),
         )
         for user_id in recipient_user_ids
     ]
@@ -434,6 +469,7 @@ def create_material_available_notifications(material):
     Notification.objects.bulk_create(
         notifications,
         batch_size=500,
+        ignore_conflicts=True,
     )
 
     return len(notifications)
@@ -534,11 +570,14 @@ def create_live_class_started_notifications(live_class):
         .distinct()
     )
 
+    ntype = Notification.NotificationType.LIVE_CLASS
+    event_id = f"live_class_started:{live_class.uuid}"
+
     notifications = [
         Notification(
             firm=live_class.firm,
             recipient_id=user_id,
-            notification_type=Notification.NotificationType.LIVE_CLASS,
+            notification_type=ntype,
             title="Live class started",
             body=(
                 f"'{live_class.title}' is live now. "
@@ -549,6 +588,9 @@ def create_live_class_started_notifications(live_class):
                 "course_uuid": str(live_class.course.uuid),
                 "meeting_url": live_class.meeting_url,
             },
+            idempotency_key=_idempotency_key(
+                ntype, user_id, event_id,
+            ),
         )
         for user_id in recipient_user_ids
     ]
@@ -559,6 +601,7 @@ def create_live_class_started_notifications(live_class):
     Notification.objects.bulk_create(
         notifications,
         batch_size=500,
+        ignore_conflicts=True,
     )
 
     return len(notifications)
@@ -613,12 +656,15 @@ def create_live_class_updated_notifications(
             "have been updated. Please check your course."
         )
 
+    ntype = Notification.NotificationType.LIVE_CLASS
+    event_id = f"live_class_updated:{live_class.uuid}"
+
     Notification.objects.bulk_create(
         [
             Notification(
                 firm=live_class.firm,
                 recipient_id=user_id,
-                notification_type=Notification.NotificationType.LIVE_CLASS,
+                notification_type=ntype,
                 title=title,
                 body=body,
                 data={
@@ -631,10 +677,14 @@ def create_live_class_updated_notifications(
                         live_class.scheduled_end_at.isoformat()
                     ),
                 },
+                idempotency_key=_idempotency_key(
+                    ntype, user_id, event_id,
+                ),
             )
             for user_id in recipient_user_ids
         ],
         batch_size=500,
+        ignore_conflicts=True,
     )
 
     return len(recipient_user_ids)
@@ -688,12 +738,18 @@ def create_chapter_video_access_notifications(
             f"starts on {start_at.strftime('%d %b %Y, %I:%M %p')}."
         )
 
+    ntype = Notification.NotificationType.MATERIAL
+    chapter_uuids_str = ",".join(
+        sorted(str(c.uuid) for c in chapters)
+    )
+    event_id = f"chapter_video:{course.uuid}:{chapter_uuids_str}"
+
     Notification.objects.bulk_create(
         [
             Notification(
                 firm=course.firm,
                 recipient_id=user_id,
-                notification_type=Notification.NotificationType.MATERIAL,
+                notification_type=ntype,
                 title="Chapter video access granted",
                 body=body,
                 data={
@@ -709,10 +765,14 @@ def create_chapter_video_access_notifications(
                         else None
                     ),
                 },
+                idempotency_key=_idempotency_key(
+                    ntype, user_id, event_id,
+                ),
             )
             for user_id in recipient_user_ids
         ],
         batch_size=500,
+        ignore_conflicts=True,
     )
 
     return len(recipient_user_ids)

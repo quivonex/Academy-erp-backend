@@ -140,6 +140,13 @@ class Notification(models.Model):
         blank=True,
     )
 
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
     is_read = models.BooleanField(
         default=False,
         db_index=True,
@@ -166,6 +173,16 @@ class Notification(models.Model):
                     "recipient",
                     "is_read",
                 ]
+            ),
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient", "idempotency_key"],
+                name="unique_notification_idempotency",
+                condition=models.Q(
+                    idempotency_key__gt=""
+                ),
             ),
         ]
 
