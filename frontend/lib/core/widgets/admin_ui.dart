@@ -486,14 +486,25 @@ class AdminPageHeader extends StatelessWidget {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
-              title,
-              style: jakarta(
-                textTheme.headlineLarge?.copyWith(
-                  fontSize: compact ? 24 : 30,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                  color: const Color(0xFF0F172A),
+            // Long screen titles must wrap on narrow phones rather than
+            // overflowing alongside badges or action controls.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: compact
+                    ? MediaQuery.sizeOf(context).width - 32
+                    : double.infinity,
+              ),
+              child: Text(
+                title,
+                maxLines: compact ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: jakarta(
+                  textTheme.headlineLarge?.copyWith(
+                    fontSize: compact ? 24 : 30,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.6,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
               ),
             ),
