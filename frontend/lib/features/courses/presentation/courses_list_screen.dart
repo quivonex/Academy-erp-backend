@@ -125,70 +125,104 @@ class _CoursesListScreenState extends ConsumerState<CoursesListScreen> {
                     : const <Course>[];
                 final activeCount = rows.where((c) => c.isPublished).length;
 
-                return Row(
-                  children: [
-                    Text(
-                      'Courses',
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEEF2FF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        snapshot.connectionState == ConnectionState.done &&
+                final activeBadge = Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEEF2FF),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    snapshot.connectionState == ConnectionState.done &&
                             !snapshot.hasError &&
                             snapshot.data != null
-                            ? '$activeCount active'
-                            : '…',
-                        style: textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF3730A3),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                        ? '$activeCount active'
+                        : '…',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF3730A3),
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      onPressed: () => setState(reload),
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        size: 20,
-                        color: Color(0xFF334155),
-                      ),
-                      tooltip: 'Refresh',
-                      visualDensity: VisualDensity.compact,
+                  ),
+                );
+
+                final refreshButton = IconButton(
+                  onPressed: () => setState(reload),
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Color(0xFF334155),
+                  ),
+                  tooltip: 'Refresh',
+                  visualDensity: VisualDensity.compact,
+                );
+
+                final addCourseButton = FilledButton.icon(
+                  onPressed: creating ? null : _openCreate,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add course'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF3730A3),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 46),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: creating ? null : _openCreate,
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add course'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF3730A3),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        textStyle: textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    textStyle: textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                );
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final mobile = constraints.maxWidth < 520;
+
+                    final titleAndControls = Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Courses',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        activeBadge,
+                        const SizedBox(width: 2),
+                        refreshButton,
+                      ],
+                    );
+
+                    if (mobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          titleAndControls,
+                          const SizedBox(height: 12),
+                          SizedBox(width: double.infinity, child: addCourseButton),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: titleAndControls),
+                        const SizedBox(width: 16),
+                        addCourseButton,
+                      ],
+                    );
+                  },
                 );
               },
             ),
