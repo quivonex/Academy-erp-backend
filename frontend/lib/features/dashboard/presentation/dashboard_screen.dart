@@ -162,59 +162,57 @@ class _AcademyDashboardState extends ConsumerState<_AcademyDashboard> {
                 trailingColor: Color(0xFF64748B),
               ),
               const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _QuickActionChip(
-                      label: 'Add Student',
-                      icon: Icons.person_add_alt_1_outlined,
-                      iconColor: const Color(0xFF4F46E5),
-                      iconBg: const Color(0xFFEEF2FF),
-                      onTap: () => _open('/students'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickActionChip(
-                      label: 'Register Faculty',
-                      icon: Icons.badge_outlined,
-                      iconColor: const Color(0xFF4F46E5),
-                      iconBg: const Color(0xFFEEF2FF),
-                      onTap: () => _open('/teachers'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickActionChip(
-                      label: 'Collect Fee',
-                      icon: Icons.account_balance_wallet_outlined,
-                      iconColor: const Color(0xFF059669),
-                      iconBg: const Color(0xFFECFDF5),
-                      onTap: () => _open('/fees'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickActionChip(
-                      label: 'Create Course',
-                      icon: Icons.add_circle_outline_rounded,
-                      iconColor: const Color(0xFF0284C7),
-                      iconBg: const Color(0xFFF0F9FF),
-                      onTap: () => _open('/courses'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickActionChip(
-                      label: 'Schedule Class',
-                      icon: Icons.add_to_queue_outlined,
-                      iconColor: const Color(0xFF7C3AED),
-                      iconBg: const Color(0xFFF5F3FF),
-                      onTap: () => _open('/live-classes'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickActionChip(
-                      label: 'Upload Material',
-                      icon: Icons.upload_file_outlined,
-                      iconColor: const Color(0xFF4F46E5),
-                      iconBg: const Color(0xFFEEF2FF),
-                      onTap: () => _open('/materials'),
-                    ),
-                  ],
-                ),
+              // Keep all quick actions inside the phone width instead of
+              // using a horizontally clipped action row.
+              _ResponsiveGrid(
+                phoneColumns: 2,
+                tabletColumns: 3,
+                desktopColumns: 3,
+                gap: 10,
+                children: [
+                  _QuickActionChip(
+                    label: 'Add Student',
+                    icon: Icons.person_add_alt_1_outlined,
+                    iconColor: const Color(0xFF4F46E5),
+                    iconBg: const Color(0xFFEEF2FF),
+                    onTap: () => _open('/students'),
+                  ),
+                  _QuickActionChip(
+                    label: 'Register Faculty',
+                    icon: Icons.badge_outlined,
+                    iconColor: const Color(0xFF4F46E5),
+                    iconBg: const Color(0xFFEEF2FF),
+                    onTap: () => _open('/teachers'),
+                  ),
+                  _QuickActionChip(
+                    label: 'Collect Fee',
+                    icon: Icons.account_balance_wallet_outlined,
+                    iconColor: const Color(0xFF059669),
+                    iconBg: const Color(0xFFECFDF5),
+                    onTap: () => _open('/fees'),
+                  ),
+                  _QuickActionChip(
+                    label: 'Create Course',
+                    icon: Icons.add_circle_outline_rounded,
+                    iconColor: const Color(0xFF0284C7),
+                    iconBg: const Color(0xFFF0F9FF),
+                    onTap: () => _open('/courses'),
+                  ),
+                  _QuickActionChip(
+                    label: 'Schedule Class',
+                    icon: Icons.add_to_queue_outlined,
+                    iconColor: const Color(0xFF7C3AED),
+                    iconBg: const Color(0xFFF5F3FF),
+                    onTap: () => _open('/live-classes'),
+                  ),
+                  _QuickActionChip(
+                    label: 'Upload Material',
+                    icon: Icons.upload_file_outlined,
+                    iconColor: const Color(0xFF4F46E5),
+                    iconBg: const Color(0xFFEEF2FF),
+                    onTap: () => _open('/materials'),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 22),
@@ -835,13 +833,13 @@ class _QuickActionChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 30,
@@ -852,12 +850,16 @@ class _QuickActionChip extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 17, color: iconColor),
               ),
-              const SizedBox(width: 9),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF0F172A),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
               ),
             ],
