@@ -1172,6 +1172,22 @@ class _RecentActivitySection extends StatelessWidget {
           ),
           child: Column(
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 14, color: const Color(0xFF64748B)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Sample data — connect to notifications API',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const _ActivityItem(
                 icon: Icons.school_outlined,
                 iconColor: Color(0xFF4F46E5),
@@ -1286,6 +1302,7 @@ class _WeeklyAttendanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    // TODO: replace with real attendance data once backend attendance module exists.
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const points = [0.22, 0.42, 0.54, 0.72, 0.76, 0.84];
 

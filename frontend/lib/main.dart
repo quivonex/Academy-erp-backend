@@ -32,6 +32,7 @@ class RolexAcademyApp extends ConsumerWidget {
       title: 'THE ROLEX ACADEMY',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       routerConfig: router,
       builder: (context, child) => _ExitConfirmation(
         router: router,
@@ -60,22 +61,25 @@ class _ExitConfirmation extends StatefulWidget {
 class _ExitConfirmationState extends State<_ExitConfirmation> {
   DateTime? _lastBackPressAt;
 
-  Future<bool> _onWillPop() async {
+  void _onPopInvoked(bool didPop) {
+    if (didPop) return;
+
     final currentPath =
         widget.router.routerDelegate.currentConfiguration.uri.path;
 
-    // Every in-app back action returns to the dashboard instead of reopening
-    // the previous screen in the navigation history.
     if (currentPath != '/dashboard') {
       widget.router.go('/dashboard');
-      return false;
+      return;
     }
 
     final now = DateTime.now();
     final pressedRecently = _lastBackPressAt != null &&
         now.difference(_lastBackPressAt!) < const Duration(seconds: 2);
 
-    if (pressedRecently) return true;
+    if (pressedRecently) {
+      Navigator.of(context).pop();
+      return;
+    }
 
     _lastBackPressAt = now;
     ScaffoldMessenger.of(context)
@@ -87,14 +91,13 @@ class _ExitConfirmationState extends State<_ExitConfirmation> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-    return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) => _onPopInvoked(didPop),
       child: widget.child,
     );
   }

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../enrollment/data/enrollment_repository.dart';
 import '../../students/data/student_repository.dart';
 import '../data/attendance_models.dart';
 import '../data/attendance_repository.dart';
@@ -18,7 +17,6 @@ class AttendanceMarkingScreen extends ConsumerStatefulWidget {
 }
 
 class _AttendanceMarkingScreenState extends ConsumerState<AttendanceMarkingScreen> {
-  int? _batchId;
   final List<AttendanceMark> _marks = [];
   final _searchController = TextEditingController();
   bool _isSubmitting = false;
@@ -30,22 +28,22 @@ class _AttendanceMarkingScreenState extends ConsumerState<AttendanceMarkingScree
     final results = page.results;
     if (results.isEmpty || !mounted) return;
     final student = results.first;
-    if (_marks.any((m) => m.studentId == student.id)) return;
+    if (_marks.any((m) => m.studentUuid == student.uuid)) return;
     setState(() {
-      _marks.add(AttendanceMark(studentId: student.id, studentName: student.fullName));
+      _marks.add(AttendanceMark(studentUuid: student.uuid, studentName: student.fullName));
       _searchController.clear();
     });
   }
 
   Future<void> _submit() async {
-    if (_batchId == null || _marks.isEmpty) return;
+    if (_marks.isEmpty) return;
     setState(() {
       _isSubmitting = true;
       _feedback = null;
     });
     try {
       await ref.read(attendanceRepositoryProvider).submitAttendance(
-            batchId: _batchId!,
+            courseUuid: '',
             sessionDate: DateTime.now(),
             marks: _marks,
           );
@@ -59,23 +57,31 @@ class _AttendanceMarkingScreenState extends ConsumerState<AttendanceMarkingScree
 
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(batchOptionsProvider);
     final colors = context.colors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Batch Daily Attendance', style: Theme.of(context).textTheme.displayMedium),
-        const SizedBox(height: 16),
-        batchesAsync.when(
-          data: (batches) => DropdownButtonFormField<int>(
-            initialValue: _batchId,
-            decoration: const InputDecoration(labelText: 'Batch'),
-            items: [for (final b in batches) DropdownMenuItem(value: b.id, child: Text(b.name))],
-            onChanged: (value) => setState(() => _batchId = value),
+        Text('Daily Attendance', style: Theme.of(context).textTheme.displayMedium),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.warningBg,
+            borderRadius: BorderRadius.circular(8),
           ),
-          loading: () => const LinearProgressIndicator(),
-          error: (e, _) => Text('Could not load batches: $e'),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: colors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Attendance tracking is coming soon. The backend module is under development.',
+                  style: TextStyle(fontSize: 13, color: colors.warning),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -113,7 +119,7 @@ class _AttendanceMarkingScreenState extends ConsumerState<AttendanceMarkingScree
         Align(
           alignment: Alignment.centerRight,
           child: ElevatedButton(
-            onPressed: (_batchId == null || _marks.isEmpty || _isSubmitting) ? null : _submit,
+            onPressed: (_marks.isEmpty || _isSubmitting) ? null : _submit,
             child: _isSubmitting
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('Save & Submit Attendance'),

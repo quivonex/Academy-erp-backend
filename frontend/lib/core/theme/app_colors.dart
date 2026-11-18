@@ -186,6 +186,29 @@ class AppColors extends ThemeExtension<AppColors> {
       infoBg: l(infoBg, other.infoBg),
     );
   }
+  static const dark = AppColors(
+    canvas: Color(0xFF121218),
+    surface: Color(0xFF1E1E2A),
+    borderSubtle: Color(0xFF2E2E3E),
+    textPrimary: Color(0xFFE8E8F0),
+    textMuted: Color(0xFF9898B0),
+    textSubtle: Color(0xFF6E6E88),
+    primary: Color(0xFF7C73FF),
+    primaryHover: Color(0xFF6E63F0),
+    primaryDeep: Color(0xFF5B4FE0),
+    primaryTonal: Color(0xFF1E1A3A),
+    primaryTonalBorder: Color(0xFF3D3870),
+    secondary: Color(0xFF8B8DF7),
+    accentPurple: Color(0xFFA78BFA),
+    success: Color(0xFF34D399),
+    successBg: Color(0xFF0D2818),
+    warning: Color(0xFFFBBF24),
+    warningBg: Color(0xFF2A1F06),
+    danger: Color(0xFFEF6B6B),
+    dangerBg: Color(0xFF2A0F0F),
+    info: Color(0xFF60A5FA),
+    infoBg: Color(0xFF0D1A2E),
+  );
 }
 
 /// Convenience accessor: `context.colors.primary` instead of the full

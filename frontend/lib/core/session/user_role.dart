@@ -24,7 +24,9 @@ enum UserRole {
 
   /// Whether this role uses the Enterprise ERP shell (vs. Faculty Workspace).
   bool get isEnterpriseShell =>
-      this == UserRole.superAdmin || this == UserRole.academyAdmin;
+      this == UserRole.superAdmin ||
+      this == UserRole.academyAdmin ||
+      this == UserRole.firmStaff;
 
   bool get isFacultyShell => this == UserRole.teacher;
 }

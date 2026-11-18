@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -44,7 +45,7 @@ final sessionAuthServiceProvider = Provider<AuthService>((ref) {
     contentType: 'application/json',
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 20),
-    headers: {'ngrok-skip-browser-warning': 'true'},
+    headers: kDebugMode ? {'ngrok-skip-browser-warning': 'true'} : {},
   )));
 });
 
@@ -76,9 +77,9 @@ class SessionController extends Notifier<SessionState> {
       user['user_type'].toString(),
     );
 
-    if (role != UserRole.student && !role.isEnterpriseShell) {
+    if (role != UserRole.student && !role.isEnterpriseShell && !role.isFacultyShell) {
       throw const ApiException(
-        'This app currently supports students and academy admins.',
+        'This app does not support your account type.',
       );
     }
 

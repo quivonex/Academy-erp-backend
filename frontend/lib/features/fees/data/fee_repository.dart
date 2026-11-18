@@ -65,10 +65,12 @@ class FeeRepository {
 
   /// Loads every fee account (all pages). Used to hide enrollments that
   /// already have one in the "create fee account" picker.
+  static const _maxFeeAccountPages = 10;
+
   Future<List<FeeAccount>> allFeeAccounts() async {
     final all = <FeeAccount>[];
     var page = 1;
-    while (true) {
+    while (page <= _maxFeeAccountPages) {
       final result = await feeAccounts(page: page, size: 100);
       all.addAll(result.results);
       if (result.results.isEmpty || all.length >= result.count) break;

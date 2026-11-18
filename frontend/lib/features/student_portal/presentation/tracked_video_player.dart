@@ -50,9 +50,6 @@ class _TrackedVideoPlayerState
 
     _controller = VideoPlayerController.networkUrl(
       Uri.parse(widget.url),
-      httpHeaders: const {
-        'ngrok-skip-browser-warning': 'true',
-      },
     );
 
     _initialization = _initialize();
@@ -237,9 +234,21 @@ class _TrackedVideoPlayerState
     _samplePlayback();
     _timer?.cancel();
 
-    // Save any remaining watched time when leaving the screen.
-    unawaited(_saveProgress());
+    // Capture position before controller disposal to avoid reading stale data.
+    final watchedSeconds = _watchedMilliseconds ~/ 1000;
+    final positionSeconds = _controller.value.isInitialized
+        ? _controller.value.position.inSeconds
+        : _lastSavedPositionSeconds;
     _controller.dispose();
+
+    if (watchedSeconds != _lastSavedWatchedSeconds ||
+        positionSeconds != _lastSavedPositionSeconds) {
+      unawaited(_api.saveMaterialProgress(
+        materialUuid: widget.materialUuid,
+        watchedSeconds: watchedSeconds,
+        lastPositionSeconds: positionSeconds,
+      ));
+    }
 
     super.dispose();
   }

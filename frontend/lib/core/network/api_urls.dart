@@ -157,6 +157,7 @@ class ApiUrls {
   static const String payments =
       '/payments/';
 
+  @Deprecated('Backend retired the payment review flow — returns 410 Gone')
   static String paymentReview(String uuid) =>
       '/payments/$uuid/review/';
 

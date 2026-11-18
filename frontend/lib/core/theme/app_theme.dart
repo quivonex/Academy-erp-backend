@@ -8,6 +8,28 @@ import 'app_colors.dart';
 class AppTheme {
   AppTheme._();
 
+  static ThemeData dark() {
+    const colors = AppColors.dark;
+    final lightTheme = light();
+    return lightTheme.copyWith(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: colors.canvas,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: colors.primary,
+        brightness: Brightness.dark,
+      ).copyWith(
+        primary: colors.primary,
+        onPrimary: Colors.white,
+        secondary: colors.secondary,
+        surface: colors.surface,
+        onSurface: colors.textPrimary,
+        error: colors.danger,
+        errorContainer: colors.dangerBg,
+      ),
+      extensions: [colors],
+    );
+  }
+
   static ThemeData light() {
     const colors = AppColors.light;
 
