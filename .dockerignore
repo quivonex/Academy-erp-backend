@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.env
+*.md
+.venv
+venv
+backend/.env
+backend/media/*
+backend/logs/*
+backend/staticfiles/*
+node_modules
+.claude

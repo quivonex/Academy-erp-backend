@@ -104,7 +104,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -174,6 +174,21 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = env("TIME_ZONE", default="Asia/Kolkata")
 CELERY_TASK_TRACK_STARTED = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+CELERY_BEAT_SCHEDULE = {
+    "expire-ended-enrollments": {
+        "task": "courses.tasks.expire_ended_enrollments_task",
+        "schedule": 3600,
+    },
+    "cleanup-expired-otps": {
+        "task": "accounts.tasks.cleanup_expired_otps_task",
+        "schedule": 86400,
+    },
+    "cleanup-stale-watch-sessions": {
+        "task": "progress.tasks.cleanup_stale_sessions_task",
+        "schedule": 1800,
+    },
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
