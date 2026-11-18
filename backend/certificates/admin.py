@@ -23,6 +23,5 @@ class CourseCompletionCertificateAdmin(admin.ModelAdmin):
     readonly_fields = (
         "uuid",
         "verification_code",
-        "created_at",
-        "updated_at",
+        "issued_at",
     )

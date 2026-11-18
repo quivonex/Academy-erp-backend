@@ -70,4 +70,4 @@ class InstallmentPaymentReceiptAdmin(admin.ModelAdmin):
     )
     list_filter = ("is_voided", "firm")
     search_fields = ("receipt_number", "student_name")
-    readonly_fields = ("uuid", "created_at", "updated_at")
+    readonly_fields = ("uuid",)

@@ -14,7 +14,7 @@ class AssignmentQuestionInline(admin.TabularInline):
     fields = (
         "question_text",
         "answer_type",
-        "max_marks",
+        "marks",
         "correct_option",
         "sequence",
     )
@@ -43,11 +43,11 @@ class AssignmentQuestionAdmin(admin.ModelAdmin):
         "question_text_short",
         "assignment",
         "answer_type",
-        "max_marks",
+        "marks",
         "sequence",
     )
     list_filter = ("answer_type",)
-    readonly_fields = ("uuid", "created_at", "updated_at")
+    readonly_fields = ("uuid", "created_at")
 
     def question_text_short(self, obj):
         return obj.question_text[:80] if obj.question_text else ""

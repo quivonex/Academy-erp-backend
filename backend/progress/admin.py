@@ -35,4 +35,4 @@ class StudentVideoWatchSessionAdmin(admin.ModelAdmin):
         "last_heartbeat_at",
     )
     list_filter = ("is_active", "firm")
-    readonly_fields = ("uuid", "created_at", "updated_at")
+    readonly_fields = ("uuid", "started_at")

@@ -34,4 +34,4 @@ class NotificationAdmin(admin.ModelAdmin):
     )
     list_filter = ("notification_type", "is_read", "firm")
     search_fields = ("title", "recipient__email")
-    readonly_fields = ("uuid", "created_at", "updated_at")
+    readonly_fields = ("uuid", "created_at")
