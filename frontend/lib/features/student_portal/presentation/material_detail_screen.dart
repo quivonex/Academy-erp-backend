@@ -43,8 +43,6 @@ class _MaterialDetailScreenState
   late Future<Map<String, dynamic>> _material;
   late Future<Map<String, dynamic>> _progress;
 
-  bool _saving = false;
-
   @override
   void initState() {
     super.initState();
@@ -77,47 +75,6 @@ class _MaterialDetailScreenState
           .read(studentPortalRepositoryProvider)
           .materialProgress(widget.materialUuid);
     });
-  }
-
-  Future<void> _markCompleted() async {
-    setState(() => _saving = true);
-
-    try {
-      final api = ref.read(
-        studentPortalRepositoryProvider,
-      );
-
-      await api.saveMaterialProgress(
-        materialUuid: widget.materialUuid,
-        markCompleted: true,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _progress = api.materialProgress(
-          widget.materialUuid,
-        );
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Progress saved'),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$error'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
-    }
   }
 
   Future<void> _copyLink(String url) async {
@@ -303,7 +260,7 @@ class _MaterialDetailScreenState
                       ? rawDuration.toInt()
                       : int.tryParse(rawDuration?.toString() ?? '') ?? 0;
 
-                  final requiresWatchedTime =
+                  final isVideoMaterial =
                       materialType == 'VIDEO' && durationSeconds > 0;
 
                   final percentage =
@@ -341,9 +298,9 @@ class _MaterialDetailScreenState
                                   Text(
                                     completed
                                         ? 'Completed'
-                                        : requiresWatchedTime
+                                        : isVideoMaterial
                                             ? 'Updates as you watch'
-                                            : 'Mark it done when finished',
+                                            : 'Open the material to study',
                                     style: textTheme.bodySmall,
                                   ),
                                 ],
@@ -373,8 +330,8 @@ class _MaterialDetailScreenState
                                 completed ? colors.success : colors.primary,
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        if (requiresWatchedTime && !completed)
+                        if (isVideoMaterial && !completed) ...[
+                          const SizedBox(height: 14),
                           Row(
                             children: [
                               Icon(
@@ -385,44 +342,27 @@ class _MaterialDetailScreenState
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Play the video above to update your '
-                                  'progress.',
+                                  'Watch the video to track your progress. '
+                                  'Completion is recorded automatically.',
                                   style: textTheme.bodySmall,
                                 ),
                               ),
                             ],
-                          )
-                        else
+                          ),
+                        ],
+                        if (completed) ...[
+                          const SizedBox(height: 14),
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              backgroundColor: completed
-                                  ? colors.successBg
-                                  : colors.primaryTonal,
-                              foregroundColor: completed
-                                  ? colors.success
-                                  : colors.primaryDeep,
-                              side: BorderSide(
-                                color: completed
-                                    ? colors.successBg
-                                    : colors.primaryTonalBorder,
-                              ),
+                              backgroundColor: colors.successBg,
+                              foregroundColor: colors.success,
+                              side: BorderSide(color: colors.successBg),
                             ),
-                            onPressed: completed || _saving || !hasContent
-                                ? null
-                                : _markCompleted,
-                            icon: Icon(
-                              completed
-                                  ? Icons.check_circle
-                                  : Icons.task_alt,
-                            ),
-                            label: Text(
-                              completed
-                                  ? 'Completed'
-                                  : _saving
-                                      ? 'Saving...'
-                                      : 'Mark as completed',
-                            ),
+                            onPressed: null,
+                            icon: const Icon(Icons.check_circle),
+                            label: const Text('Completed'),
                           ),
+                        ],
                       ],
                     ),
                   );
