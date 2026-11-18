@@ -6,7 +6,8 @@ import 'token_storage.dart';
 /// Override with --dart-define=API_BASE_URL=https://yourdomain.com/api/v1
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://api.rolexacademy.in/api/v1',
+  // defaultValue: 'https://api.rolexacademy.in/api/v1',
+  defaultValue: 'https://13.232.127.84/api/v1',
 );
 
 /// Builds the single Dio instance used by every repository.
