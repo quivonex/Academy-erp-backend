@@ -32,7 +32,7 @@ class RolexAcademyApp extends ConsumerWidget {
       title: 'THE ROLEX ACADEMY',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.light,
       routerConfig: router,
       builder: (context, child) => _ExitConfirmation(
         router: router,

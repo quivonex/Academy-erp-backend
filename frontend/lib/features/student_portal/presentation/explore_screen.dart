@@ -988,18 +988,25 @@ class _CourseCard extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: gradient,
                 ),
+                image: course.thumbnailUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(course.thumbnailUrl!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
               child: Stack(
                 children: [
-                  Positioned(
-                    right: -12,
-                    bottom: -18,
-                    child: Icon(
-                      Icons.auto_stories_rounded,
-                      size: 120,
-                      color: Colors.white.withValues(alpha: 0.14),
+                  if (course.thumbnailUrl == null)
+                    Positioned(
+                      right: -12,
+                      bottom: -18,
+                      child: Icon(
+                        Icons.auto_stories_rounded,
+                        size: 120,
+                        color: Colors.white.withValues(alpha: 0.14),
+                      ),
                     ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(

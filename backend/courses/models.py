@@ -127,6 +127,11 @@ class Course(models.Model):
     )
     
 
+    thumbnail_key = models.CharField(
+        max_length=1000,
+        blank=True,
+    )
+
     is_certificate_enabled = models.BooleanField(
         default=False,
         db_index=True,

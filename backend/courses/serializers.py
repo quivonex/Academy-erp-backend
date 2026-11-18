@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
+from common.storage_urls import get_private_file_url
 from .models import (
     Chapter,
     Course,
@@ -55,7 +56,11 @@ class CourseSerializer(serializers.ModelSerializer):
     
     saving_amount = serializers.SerializerMethodField()
     discount_percentage = serializers.SerializerMethodField()
-    
+    thumbnail_url = serializers.SerializerMethodField()
+
+    def get_thumbnail_url(self, obj):
+        return get_private_file_url(obj.thumbnail_key)
+
     class Meta:
         model = Course
 
@@ -82,6 +87,8 @@ class CourseSerializer(serializers.ModelSerializer):
             "access_duration_days",
             "is_certificate_enabled",
             "certificate_required_watch_percentage",
+            "thumbnail_key",
+            "thumbnail_url",
         )
 
     def get_saving_amount(self, obj):
@@ -447,6 +454,11 @@ class PublicCourseSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
+    thumbnail_url = serializers.SerializerMethodField()
+
+    def get_thumbnail_url(self, obj):
+        return get_private_file_url(obj.thumbnail_key)
+
     class Meta:
         model = Course
 
@@ -465,6 +477,7 @@ class PublicCourseSerializer(serializers.ModelSerializer):
             "access_duration_days",
             "is_featured",
             "featured_order",
+            "thumbnail_url",
         )
 
         read_only_fields = fields

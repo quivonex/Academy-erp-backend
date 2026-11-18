@@ -31,6 +31,7 @@ class PublicCourse {
     this.categoryName,
     this.firmName,
     this.durationMonths,
+    this.thumbnailUrl,
   });
 
   final String uuid;
@@ -43,6 +44,7 @@ class PublicCourse {
   final String? firmName;
   final int? durationMonths;
   final bool isFeatured;
+  final String? thumbnailUrl;
 
   factory PublicCourse.fromJson(Map<String, dynamic> json) => PublicCourse(
     uuid: json['uuid'].toString(),
@@ -57,6 +59,7 @@ class PublicCourse {
     durationMonths: json['duration_months'] is int
         ? json['duration_months'] as int
         : null,
+    thumbnailUrl: json['thumbnail_url']?.toString(),
   );
 }
 
