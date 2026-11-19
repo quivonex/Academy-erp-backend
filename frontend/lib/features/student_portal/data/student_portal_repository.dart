@@ -406,6 +406,46 @@ class StudentPortalRepository {
         );
       });
 
+  Future<Map<String, dynamic>> startVideoWatchSession(
+    String materialUuid,
+  ) =>
+      _request(() async {
+        final response = await _dio.post(
+          ApiUrls.videoWatchSessionStart(materialUuid),
+        );
+        return Map<String, dynamic>.from(
+          response.data['data'] as Map,
+        );
+      });
+
+  Future<Map<String, dynamic>> sendVideoWatchHeartbeat({
+    required String sessionUuid,
+    required int playerPositionSeconds,
+  }) =>
+      _request(() async {
+        final response = await _dio.post(
+          ApiUrls.videoWatchSessionHeartbeat(sessionUuid),
+          data: {
+            'player_position_seconds': playerPositionSeconds,
+          },
+        );
+        return Map<String, dynamic>.from(
+          response.data['data'] as Map,
+        );
+      });
+
+  Future<Map<String, dynamic>> endVideoWatchSession(
+    String sessionUuid,
+  ) =>
+      _request(() async {
+        final response = await _dio.post(
+          ApiUrls.videoWatchSessionEnd(sessionUuid),
+        );
+        return Map<String, dynamic>.from(
+          response.data['data'] as Map,
+        );
+      });
+
   Future<Map<String, dynamic>> courseProgress(
       String courseUuid,
       ) =>
