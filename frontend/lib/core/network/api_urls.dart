@@ -125,6 +125,12 @@ class ApiUrls {
 
   static String materialProgress(String uuid) =>
       '/student/materials/$uuid/progress/';
+  static String videoWatchSessionStart(String materialUuid) =>
+      '/student/materials/$materialUuid/watch-sessions/';
+  static String videoWatchSessionHeartbeat(String sessionUuid) =>
+      '/student/watch-sessions/$sessionUuid/heartbeat/';
+  static String videoWatchSessionEnd(String sessionUuid) =>
+      '/student/watch-sessions/$sessionUuid/end/';
 
   static String courseProgress(String uuid) =>
       '/student/courses/$uuid/progress/';
