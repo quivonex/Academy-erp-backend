@@ -39,12 +39,15 @@
     }
   }
 
-  Future<void> _endWatchSession() async {
+  Future<void> _endWatchSession(int finalPositionSeconds) async {
     final sessionUuid = _watchSessionUuid;
     if (sessionUuid == null || _endingWatchSession) return;
     _endingWatchSession = true;
     try {
-      await _sendWatchHeartbeatIfNeeded(force: true);
+      await _api.sendVideoWatchHeartbeat(
+        sessionUuid: sessionUuid,
+        playerPositionSeconds: finalPositionSeconds,
+      );
       await _api.endVideoWatchSession(sessionUuid);
     } catch (_) {
       // The backend closes stale sessions safely; do not block app navigation.
