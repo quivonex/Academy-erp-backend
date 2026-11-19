@@ -160,6 +160,60 @@ class CertificateRepository {
 
         return response.data['data']['download_url']?.toString() ?? '';
       });
+
+  Future<List<Certificate>> firmCertificates({
+    String? studentUuid,
+    String? courseUuid,
+    bool? revoked,
+  }) =>
+      _request(() async {
+        final response = await _dio.get(
+          ApiUrls.certificates,
+          queryParameters: {
+            if (studentUuid != null && studentUuid.isNotEmpty)
+              'student_uuid': studentUuid,
+            if (courseUuid != null && courseUuid.isNotEmpty)
+              'course_uuid': courseUuid,
+            if (revoked != null) 'is_revoked': revoked.toString(),
+          },
+        );
+        final body = response.data;
+        final data = body is Map ? body['data'] : null;
+        final rows = data is Map && data['results'] is List
+            ? data['results'] as List
+            : const <dynamic>[];
+        return rows
+            .map((item) => Certificate.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+      });
+
+  Future<Certificate> revokeCertificate({
+    required String certificateUuid,
+    required String reason,
+  }) =>
+      _request(() async {
+        final response = await _dio.patch(
+          ApiUrls.certificateRevoke(certificateUuid),
+          data: {'reason': reason.trim()},
+        );
+        return Certificate.fromJson(
+          Map<String, dynamic>.from(response.data['data'] as Map),
+        );
+      });
+
+  Future<Certificate> verifyPublicCertificate(
+    String verificationCode,
+  ) =>
+      _request(() async {
+        final response = await _dio.get(
+          ApiUrls.publicCertificateVerify(verificationCode),
+        );
+        return Certificate.fromJson(
+          Map<String, dynamic>.from(response.data['data'] as Map),
+        );
+      });
 }
 
 final certificateRepositoryProvider =
