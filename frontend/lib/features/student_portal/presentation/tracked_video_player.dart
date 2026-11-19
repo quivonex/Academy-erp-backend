@@ -41,6 +41,9 @@ class _TrackedVideoPlayerState
   bool _saving = false;
   String? _saveError;
   bool _completionSent = false;
+  String? _watchSessionUuid;
+  int _lastHeartbeatPositionSeconds = 0;
+  bool _endingWatchSession = false;
 
   @override
   void initState() {
@@ -88,6 +91,17 @@ class _TrackedVideoPlayerState
     _previousPositionMilliseconds =
         _controller.value.position.inMilliseconds;
 
+    // The backend verifies video watch time through a server-side session.
+    // Keep the existing progress updates as a compatibility fallback.
+    try {
+      final session = await _api.startVideoWatchSession(widget.materialUuid);
+      _watchSessionUuid = session['uuid']?.toString();
+      _lastHeartbeatPositionSeconds =
+          (session['resume_position_seconds'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      // Playback remains available even if secure session creation is unavailable.
+    }
+
     _timer = Timer.periodic(
       const Duration(seconds: 1),
       (_) {
@@ -104,6 +118,7 @@ class _TrackedVideoPlayerState
         unawaited(
           _markCompletedIfNeeded(),
         );
+        unawaited(_sendWatchHeartbeatIfNeeded());
 
         // Playback controls already listen to the controller.
       },
@@ -148,6 +163,41 @@ class _TrackedVideoPlayerState
           _saveError = 'Could not mark video as completed.';
         });
       }
+    }
+  }
+
+  Future<void> _sendWatchHeartbeatIfNeeded({bool force = false}) async {
+    final sessionUuid = _watchSessionUuid;
+    if (sessionUuid == null || !_controller.value.isInitialized) return;
+
+    final position = _controller.value.position.inSeconds;
+    if (!force && position - _lastHeartbeatPositionSeconds < 10) return;
+
+    try {
+      final session = await _api.sendVideoWatchHeartbeat(
+        sessionUuid: sessionUuid,
+        playerPositionSeconds: position,
+      );
+      _lastHeartbeatPositionSeconds = position;
+      if (session['is_verified_completed'] == true) {
+        _completionSent = true;
+      }
+      if (mounted) widget.onProgressChanged();
+    } catch (_) {
+      // Legacy progress writes below preserve playback when a heartbeat fails.
+    }
+  }
+
+  Future<void> _endWatchSession() async {
+    final sessionUuid = _watchSessionUuid;
+    if (sessionUuid == null || _endingWatchSession) return;
+    _endingWatchSession = true;
+    _watchSessionUuid = null;
+    try {
+      await _sendWatchHeartbeatIfNeeded(force: true);
+      await _api.endVideoWatchSession(sessionUuid);
+    } catch (_) {
+      // The backend closes stale sessions safely; do not block app navigation.
     }
   }
 
@@ -239,6 +289,7 @@ class _TrackedVideoPlayerState
     final positionSeconds = _controller.value.isInitialized
         ? _controller.value.position.inSeconds
         : _lastSavedPositionSeconds;
+    unawaited(_endWatchSession());
     _controller.dispose();
 
     if (watchedSeconds != _lastSavedWatchedSeconds ||
