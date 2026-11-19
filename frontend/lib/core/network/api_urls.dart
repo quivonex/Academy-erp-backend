@@ -110,6 +110,9 @@ class ApiUrls {
 
   static const String myCourses = '/student/courses/';
   static String myCourse(String uuid) => '/student/courses/$uuid/';
+  static String studentCourseEnrollment(String courseUuid) =>
+      '/student/courses/$courseUuid/enrollment/';
+  static const String studentEnrollmentRequests = '/student/enrollments/';
   static String myCourseMaterials(String uuid) =>
       '/student/courses/$uuid/materials/';
   static String myCourseClasses(String uuid) =>
