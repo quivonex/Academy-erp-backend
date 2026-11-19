@@ -196,7 +196,7 @@ class CertificateRepository {
       _request(() async {
         final response = await _dio.patch(
           ApiUrls.certificateRevoke(certificateUuid),
-          data: {'reason': reason.trim()},
+          data: {'revoked_reason': reason.trim()},
         );
         return Certificate.fromJson(
           Map<String, dynamic>.from(response.data['data'] as Map),
