@@ -24,35 +24,30 @@ class StudentEnrollmentAction extends ConsumerStatefulWidget {
 }
 
 class _StudentEnrollmentActionState extends ConsumerState<StudentEnrollmentAction> {
-  late Future<bool> _access;
+  late Future<Map<String, dynamic>> _enrollment;
 
   @override
   void initState() {
     super.initState();
-    _access = _load();
+    _enrollment = _load();
   }
 
-  Future<bool> _load() async {
-    try {
-      // Includes existing chapter-only grants.
-      await ref.read(studentPortalRepositoryProvider).myCourse(widget.courseUuid);
-      return true;
-    } on ApiException catch (error) {
-      if (error.statusCode == 404) return false;
-      rethrow;
-    }
+  Future<Map<String, dynamic>> _load() {
+    return ref
+        .read(studentPortalRepositoryProvider)
+        .courseEnrollmentStatus(widget.courseUuid);
   }
 
   void _refresh() {
-    final access = _load();
+    final enrollment = _load();
     setState(() {
-      _access = access;
+      _enrollment = enrollment;
     });
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<bool>(
-    future: _access,
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+    future: _enrollment,
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return Column(children: [
@@ -63,13 +58,23 @@ class _StudentEnrollmentActionState extends ConsumerState<StudentEnrollmentActio
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
-      final hasAccess = snapshot.data!;
+      final enrollment = snapshot.data!;
+      final hasAccess = enrollment['has_access'] == true;
+      final status = enrollment['status']?.toString() ?? 'NOT_ENROLLED';
+      final isPending = status == 'PENDING';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(hasAccess
-              ? 'You have access to this course.'
-              : 'Contact your academy for UPI payment details. The Firm Admin verifies payment and enrolls you. The course will then appear in My Courses.'),
+          Text(
+            hasAccess
+                ? 'You have access to this course.'
+                : isPending
+                    ? 'Your enrollment is pending academy approval. '
+                        'Course access will be enabled after verification.'
+                    : 'Contact your academy for UPI payment details. '
+                        'The Firm Admin verifies payment and enrolls you. '
+                        'The course will then appear in My Courses.',
+          ),
           const SizedBox(height: 14),
           if (hasAccess)
             FilledButton.icon(
@@ -78,7 +83,14 @@ class _StudentEnrollmentActionState extends ConsumerState<StudentEnrollmentActio
               label: const Text('Continue learning'),
             )
           else ...[
-            FilledButton.icon(
+            if (isPending)
+              OutlinedButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh enrollment status'),
+              )
+            else
+              FilledButton.icon(
               onPressed: () => context.push(Uri(
                 path: '/student/course-payment/${widget.courseUuid}',
                 queryParameters: {'name': widget.courseName, 'amount': widget.amount},
@@ -86,7 +98,10 @@ class _StudentEnrollmentActionState extends ConsumerState<StudentEnrollmentActio
               icon: const Icon(Icons.info_outline_rounded),
               label: const Text('Fees & enrollment'),
             ),
-            TextButton(onPressed: _refresh, child: const Text('Refresh course access')),
+            TextButton(
+              onPressed: _refresh,
+              child: const Text('Refresh course access'),
+            ),
           ],
           OutlinedButton(
             onPressed: () => context.go('/student/courses'),
