@@ -1,5 +1,5 @@
 from django.db import transaction
-
+from teachers.models import Teacher
 from rest_framework.exceptions import ValidationError
 import uuid
 from django.core.files.storage import default_storage
@@ -140,7 +140,22 @@ def create_material(
                     "Live class does not belong to this course."
                 ]
             })
+    
+    teacher_uuid = validated_data.pop(
+        "teacher_uuid",
+        None,
+    )
 
+    teacher = None
+
+    if teacher_uuid:
+        teacher = get_tenant_object(
+            Teacher,
+            firm=firm,
+            object_uuid=teacher_uuid,
+            field_name="teacher_uuid",
+        )
+    
     uploaded_file = validated_data.pop("file", None,)
     
     file_key = ""
@@ -166,6 +181,7 @@ def create_material(
         chapter=chapter,
         lesson=lesson,
         live_class=live_class,
+        teacher=teacher,
         file_key=file_key,
         **validated_data,
     )

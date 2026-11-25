@@ -1,5 +1,6 @@
 from rest_framework import serializers
-
+from teachers.models import Teacher
+from rest_framework.exceptions import ValidationError
 from .models import LearningMaterial
 from common.storage_urls import get_private_file_url
 MAX_MATERIAL_FILE_SIZE = 100 * 1024 * 1024
@@ -41,6 +42,26 @@ def is_valid_pdf_file(uploaded_file):
     uploaded_file.seek(current_position)
 
     return file_header == b"%PDF-"
+
+def resolve_material_teacher(*, firm, teacher_uuid):
+    if teacher_uuid is None:
+        return None
+
+    teacher = Teacher.objects.filter(
+        uuid=teacher_uuid,
+        firm=firm,
+        is_active=True,
+    ).first()
+
+    if teacher is None:
+        raise ValidationError({
+            "teacher_uuid": [
+                "Select an active teacher from your academy."
+            ]
+        })
+
+    return teacher
+
 
 class LearningMaterialSerializer(serializers.ModelSerializer):
 
@@ -103,6 +124,24 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField(
         read_only=True,)
     
+    teacher_uuid = serializers.UUIDField(
+    write_only=True,
+    required=False,
+    allow_null=True,
+    )
+
+    teacher = serializers.UUIDField(
+        source="teacher.uuid",
+        read_only=True,
+        allow_null=True,
+    )
+
+    teacher_name = serializers.CharField(
+        source="teacher.full_name",
+        read_only=True,
+        allow_null=True,
+    )
+
     class Meta:
         model = LearningMaterial
 
@@ -129,6 +168,9 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
             "sequence",
             "available_from",
             "available_until",
+            "teacher_uuid",
+            "teacher",
+            "teacher_name",
             "is_required",
             "counts_toward_progress",
             "is_active",
@@ -282,12 +324,19 @@ class LearningMaterialUpdateSerializer(
         required=False,
         allow_null=True,
     )
+    
+    teacher_uuid = serializers.UUIDField(
+    write_only=True,
+    required=False,
+    allow_null=True,
+)
 
     class Meta:
         model = LearningMaterial
 
         fields = (
             "title",
+            "teacher_uuid",
             "description",
             "external_url",
             "duration_seconds",
@@ -346,4 +395,13 @@ class LearningMaterialUpdateSerializer(
 
         return attrs
     
+    def update(self, instance, validated_data):
+        if "teacher_uuid" in validated_data:
+            teacher_uuid = validated_data.pop("teacher_uuid")
     
+            validated_data["teacher"] = resolve_material_teacher(
+                firm=instance.firm,
+                teacher_uuid=teacher_uuid,
+            )
+    
+        return super().update(instance, validated_data)

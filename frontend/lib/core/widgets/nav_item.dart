@@ -8,12 +8,14 @@ class NavItem {
     required this.icon,
     required this.route,
     required this.roles,
+    this.showInNavigation = true,
   });
 
   final String label;
   final IconData icon;
   final String route;
   final List<UserRole> roles;
+  final bool showInNavigation;
 
   bool visibleTo(UserRole role) => roles.contains(role);
 }
@@ -87,6 +89,7 @@ const List<NavItem> kAllNavItems = [
   ),
   NavItem(
     label: 'Materials',
+    showInNavigation: false,
     icon: Icons.video_library_outlined,
     route: '/materials',
     roles: [

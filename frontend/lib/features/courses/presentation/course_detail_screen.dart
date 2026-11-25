@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/admin_ui.dart';
 import '../../course_categories/data/course_category.dart';
 import '../../course_categories/data/course_category_repository.dart';
+import '../../materials/presentation/materials_list_screen.dart';
 import '../../subjects/data/chapter.dart';
 import '../../subjects/data/chapter_repository.dart';
 import '../../subjects/data/lesson.dart';
@@ -305,9 +306,21 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
             if (!course.isPublished)
               const Padding(
                 padding: EdgeInsets.only(bottom: 16),
-                child: Text('Draft: add subjects, chapters and lessons below. Add materials from the Materials section, then preview and publish when ready.'),
+                child: Text('Draft: add subjects, chapters, lessons and materials below, then preview and publish when ready.'),
               ),
             _CourseCurriculumSection(course: course),
+            const SizedBox(height: 24),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 680,
+                child: MaterialsListScreen(
+                  key: ValueKey('course-materials-${course.uuid}'),
+                  courseUuid: course.uuid,
+                  courseName: course.name,
+                ),
+              ),
+            ),
             if (busy) ...[
               const SizedBox(height: 14),
               const LinearProgressIndicator(),

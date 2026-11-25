@@ -25,7 +25,9 @@ class AdminShell extends ConsumerWidget {
     final role = session.role;
     if (role == null) return const SizedBox.shrink();
 
-    final navItems = kAllNavItems.where((item) => item.visibleTo(role)).toList();
+    final navItems = kAllNavItems
+        .where((item) => item.showInNavigation && item.visibleTo(role))
+        .toList();
 
     final isCompact = AppBreakpoints.isCompact(width);
     final isRailOnly = AppBreakpoints.isLaptopOrTabletLandscape(width);

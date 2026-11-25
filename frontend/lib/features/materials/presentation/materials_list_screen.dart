@@ -10,12 +10,14 @@ import '../../live_classes/data/live_class_repository.dart';
 import '../../subjects/data/chapter_repository.dart';
 import '../../subjects/data/lesson_repository.dart';
 import '../../subjects/data/subject_repository.dart';
-// Tumchya data folder madhil actual file naave ithe taka:
 import '../data/material.dart';
 import '../data/material_repository.dart';
 
 class MaterialsListScreen extends ConsumerStatefulWidget {
-  const MaterialsListScreen({super.key});
+  const MaterialsListScreen({super.key, this.courseUuid, this.courseName});
+
+  final String? courseUuid;
+  final String? courseName;
 
   @override
   ConsumerState<MaterialsListScreen> createState() =>
@@ -39,6 +41,18 @@ class _MaterialsListScreenState extends ConsumerState<MaterialsListScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant MaterialsListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.courseUuid != widget.courseUuid) {
+      searchController.clear();
+      search = '';
+      typeFilter = null;
+      page = 1;
+      reload();
+    }
+  }
+
+  @override
   void dispose() {
     searchController.dispose();
     super.dispose();
@@ -49,6 +63,7 @@ class _MaterialsListScreenState extends ConsumerState<MaterialsListScreen> {
       page: page,
       search: search,
       materialType: typeFilter,
+      courseUuid: widget.courseUuid,
     );
   }
 
@@ -75,7 +90,10 @@ class _MaterialsListScreenState extends ConsumerState<MaterialsListScreen> {
       final created = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const _CreateMaterialDialog(),
+        builder: (_) => _CreateMaterialDialog(
+          courseUuid: widget.courseUuid,
+          courseName: widget.courseName,
+        ),
       );
 
       if (!mounted || created != true) return;
@@ -103,7 +121,7 @@ class _MaterialsListScreenState extends ConsumerState<MaterialsListScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: const Color(0xFFEFF9F9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -787,7 +805,10 @@ class _ChoicePage {
 }
 
 class _CreateMaterialDialog extends ConsumerStatefulWidget {
-  const _CreateMaterialDialog();
+  const _CreateMaterialDialog({this.courseUuid, this.courseName});
+
+  final String? courseUuid;
+  final String? courseName;
 
   @override
   ConsumerState<_CreateMaterialDialog> createState() =>
@@ -845,7 +866,16 @@ class _CreateMaterialDialogState extends ConsumerState<_CreateMaterialDialog> {
   @override
   void initState() {
     super.initState();
-    loadOptions('course');
+    if (widget.courseUuid != null) {
+      selected['course'] = widget.courseUuid;
+      options['course'] = [
+        _Choice(widget.courseUuid!, widget.courseName ?? 'Selected course'),
+      ];
+      loadOptions('subject');
+      loadOptions('live');
+    } else {
+      loadOptions('course');
+    }
   }
 
   @override
@@ -1282,7 +1312,7 @@ class _CreateMaterialDialogState extends ConsumerState<_CreateMaterialDialog> {
                   ),
                 ),
             ],
-            onChanged: saving ||
+            onChanged: (kind == 'course' && widget.courseUuid != null) || saving ||
                 picking ||
                 loading[kind] == true ||
                 errors[kind] != null ||
@@ -1359,7 +1389,7 @@ class _CreateMaterialDialogState extends ConsumerState<_CreateMaterialDialog> {
               (value ?? '').trim().isEmpty ? 'Title is required.' : null,
             ),
             field(description, 'Description', lines: 3),
-            TextFormField(
+            if (widget.courseUuid == null) TextFormField(
               controller: courseSearch,
               enabled: !saving && !picking,
               decoration: adminFieldDecoration(

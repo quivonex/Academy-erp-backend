@@ -76,6 +76,14 @@ class LearningMaterial(models.Model):
         blank=True,
     )
 
+    teacher = models.ForeignKey(
+        "teachers.Teacher",
+        on_delete=models.SET_NULL,
+        related_name="learning_materials",
+        null=True,
+        blank=True,
+    )
+
     title = models.CharField(
         max_length=255,
     )
