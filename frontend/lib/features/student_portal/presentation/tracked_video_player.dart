@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -144,6 +145,8 @@ class _TrackedVideoPlayerState
     try {
       await _api.saveMaterialProgress(
         materialUuid: widget.materialUuid,
+=======
+>>>>>>> 34b4f548fc9fb74aa87e5aed58ba4186eb5a21ad
         watchedSeconds: _watchedMilliseconds ~/ 1000,
         lastPositionSeconds: position,
         markCompleted: true,
@@ -156,6 +159,45 @@ class _TrackedVideoPlayerState
       if (mounted) {
         setState(() => _saveError = 'Could not mark video as completed.');
       }
+    }
+  }
+
+  Future<void> _sendWatchHeartbeatIfNeeded({bool force = false}) async {
+    final sessionUuid = _watchSessionUuid;
+    if (sessionUuid == null || !_controller.value.isInitialized) return;
+
+    final position = _controller.value.position.inSeconds;
+    if (!force && position - _lastHeartbeatPositionSeconds < 10) return;
+
+    try {
+      final session = await _api.sendVideoWatchHeartbeat(
+        sessionUuid: sessionUuid,
+        playerPositionSeconds: position,
+      );
+      _lastHeartbeatPositionSeconds = position;
+      if (session['is_verified_completed'] == true) {
+        _completionSent = true;
+      }
+      if (mounted) widget.onProgressChanged();
+    } catch (_) {
+      // Legacy progress writes below preserve playback when a heartbeat fails.
+    }
+  }
+
+  Future<void> _endWatchSession(int finalPositionSeconds) async {
+    final sessionUuid = _watchSessionUuid;
+    if (sessionUuid == null || _endingWatchSession) return;
+    _endingWatchSession = true;
+    try {
+      await _api.sendVideoWatchHeartbeat(
+        sessionUuid: sessionUuid,
+        playerPositionSeconds: finalPositionSeconds,
+      );
+      await _api.endVideoWatchSession(sessionUuid);
+    } catch (_) {
+      // The backend closes stale sessions safely; do not block app navigation.
+    } finally {
+      _watchSessionUuid = null;
     }
   }
 
@@ -222,6 +264,7 @@ class _TrackedVideoPlayerState
     }
 
     if (mounted) setState(() {});
+<<<<<<< HEAD
   }
 
   Future<void> _skip(int seconds) async {
@@ -605,3 +648,6 @@ class _ControlButton extends StatelessWidget {
     );
   }
 }
+=======
+  }
+>>>>>>> 34b4f548fc9fb74aa87e5aed58ba4186eb5a21ad

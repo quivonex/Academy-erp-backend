@@ -160,6 +160,7 @@ class StudentPortalRepository {
   }
 
   Future<List<CourseCategory>> categories() => _request(() async {
+
     final response = await _dio.get(ApiUrls.publicCategories);
 
     return _items(response.data)
@@ -283,6 +284,18 @@ class StudentPortalRepository {
     );
   });
 
+  Future<Map<String, dynamic>> courseEnrollmentStatus(
+    String courseUuid,
+  ) =>
+      _request(() async {
+        final response = await _dio.get(
+          ApiUrls.studentCourseEnrollment(courseUuid),
+        );
+        return Map<String, dynamic>.from(
+          response.data['data'] as Map,
+        );
+      });
+
   Future<CourseResourcePage> _resourcePage(String path, int page) =>
       _request(() async {
         final response = await _dio.get(
@@ -321,238 +334,3 @@ class StudentPortalRepository {
           );
 
           items.addAll(
-            _items(response.data).map(
-              (item) => Map<String, dynamic>.from(item as Map),
-            ),
-          );
-
-          final body = response.data;
-          final data = body is Map ? body['data'] : null;
-          final next = data is Map ? data['next'] : null;
-
-          if (next == null || next.toString().isEmpty) {
-            break;
-          }
-
-          page++;
-        }
-
-        return items;
-      });
-
-  Future<List<Map<String, dynamic>>> materials(String uuid) =>
-      _allPages(ApiUrls.myCourseMaterials(uuid));
-
-  Future<List<Map<String, dynamic>>> classes(String uuid) =>
-      _allPages(ApiUrls.myCourseClasses(uuid));
-
-  Future<List<Map<String, dynamic>>> banners({
-    String? firmUuid,
-  }) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.publicBanners,
-          queryParameters: {
-            if (firmUuid != null) 'firm_uuid': firmUuid,
-          },
-        );
-
-        return _items(response.data)
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
-      });
-
-  Future<Map<String, dynamic>> material(String uuid) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.studentMaterial(uuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<Map<String, dynamic>> materialProgress(
-      String materialUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.materialProgress(materialUuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<Map<String, dynamic>> saveMaterialProgress({
-    required String materialUuid,
-    int? watchedSeconds,
-    int? lastPositionSeconds,
-    bool markCompleted = false,
-  }) =>
-      _request(() async {
-        final response = await _dio.post(
-          ApiUrls.materialProgress(materialUuid),
-          data: {
-            if (watchedSeconds != null)
-              'watched_seconds': watchedSeconds,
-            if (lastPositionSeconds != null)
-              'last_position_seconds': lastPositionSeconds,
-            'mark_completed': markCompleted,
-          },
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<Map<String, dynamic>> courseProgress(
-      String courseUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.courseProgress(courseUuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<Map<String, dynamic>> liveClass(
-      String liveClassUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.studentLiveClass(liveClassUuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<LiveClassPage> allLiveClasses({
-    String? status,
-    int page = 1,
-  }) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.studentLiveClasses,
-          queryParameters: {
-            if (status != null) 'status': status,
-            'page': page,
-            'page_size': 20,
-          },
-        );
-
-        final body = response.data;
-        final data = body is Map ? body['data'] : null;
-
-        if (data is! Map || data['results'] is! List) {
-          throw const ApiException('Unexpected live class list response.');
-        }
-
-        final items = (data['results'] as List)
-            .map(
-              (item) => Map<String, dynamic>.from(item as Map),
-            )
-            .toList();
-
-        final next = data['next'];
-
-        return LiveClassPage(
-          items: items,
-          hasNext: next != null && next.toString().isNotEmpty,
-        );
-      });
-
-  Future<List<Map<String, dynamic>>> assignments(
-      String courseUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.courseAssignments(courseUuid),
-        );
-
-        return _items(response.data)
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
-      });
-
-  Future<Map<String, dynamic>> assignment(
-      String assignmentUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.assignmentDetail(assignmentUuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<void> submitAssignment({
-    required String assignmentUuid,
-    required List<Map<String, dynamic>> answers,
-  }) =>
-      _request(() async {
-        await _dio.post(
-          ApiUrls.assignmentSubmit(assignmentUuid),
-          data: {'answers': answers},
-        );
-      });
-
-  Future<Map<String, dynamic>> assignmentResult(
-      String assignmentUuid,
-      ) =>
-      _request(() async {
-        final response = await _dio.get(
-          ApiUrls.assignmentResult(assignmentUuid),
-        );
-
-        return Map<String, dynamic>.from(
-          response.data['data'] as Map,
-        );
-      });
-
-  Future<List<CoursePayment>> coursePayments() => _request(() async {
-        final response = await _dio.get(
-          ApiUrls.studentCoursePayments,
-        );
-
-        final body = response.data;
-        List<dynamic> raw = [];
-
-        if (body is Map) {
-          final data = body['data'];
-
-          if (data is List) {
-            raw = data;
-          } else if (data is Map) {
-            if (data['results'] is List) {
-              raw = data['results'] as List;
-            } else if (data['data'] is List) {
-              raw = data['data'] as List;
-            }
-          }
-        }
-
-        return raw
-            .map(
-              (item) => CoursePayment.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ),
-            )
-            .toList();
-      });
-}
-
-final studentPortalRepositoryProvider =
-    Provider<StudentPortalRepository>((ref) {
-  return StudentPortalRepository(ref.watch(dioProvider));
-});
