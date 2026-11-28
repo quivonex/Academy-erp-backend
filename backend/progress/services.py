@@ -217,6 +217,10 @@ def record_verified_video_heartbeat(
         )
 
     material = session.material
+    from materials.access import available_materials, require_material_access
+    require_material_access(session.student, material)
+    if not available_materials(material.course).filter(pk=material.pk).exists():
+        raise ValueError("Video is no longer available.")
     progress = session.progress
     duration = material.duration_seconds
 

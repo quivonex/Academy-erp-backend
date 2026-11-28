@@ -44,6 +44,7 @@ from certificates.urls import (
 )
 
 urlpatterns = [
+    path("api/v1/", include("academy_ops.urls")),
     path("admin/", admin.site.urls,),
 
     path("api/schema/", SpectacularAPIView.as_view(), name="schema",),

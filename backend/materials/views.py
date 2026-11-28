@@ -25,7 +25,10 @@ class LearningMaterialListCreateView(APIView):
         IsFirmAdminOrStaff,
     ]
 
-    def get(self, request):
+    def get(self, request, course_uuid=None):
+        if course_uuid:
+            from courses.models import Course
+            get_object_or_404(Course, uuid=course_uuid, firm=request.user.firm)
         queryset = (
             LearningMaterial.objects
             .filter(
@@ -37,10 +40,11 @@ class LearningMaterialListCreateView(APIView):
                 "chapter",
                 "lesson",
                 "live_class",
+                "teacher",
             )
         )
 
-        course_uuid = request.query_params.get(
+        course_uuid = course_uuid or request.query_params.get(
             "course_uuid"
         )
 
@@ -84,9 +88,12 @@ class LearningMaterialListCreateView(APIView):
             serializer.data
         )
 
-    def post(self, request):
+    def post(self, request, course_uuid=None):
+        data = request.data.copy()
+        if course_uuid:
+            data["course_uuid"] = str(course_uuid)
         serializer = LearningMaterialSerializer(
-            data=request.data
+            data=data
         )
 
         if not serializer.is_valid():
@@ -146,6 +153,7 @@ class LearningMaterialDetailView(APIView):
                 "chapter",
                 "lesson",
                 "live_class",
+                "teacher",
             ),
             uuid=material_uuid,
             firm=request.user.firm,

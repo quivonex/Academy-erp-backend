@@ -167,6 +167,30 @@ class StudentLiveClassSerializer(serializers.ModelSerializer):
 class StudentLearningMaterialSerializer(
     serializers.ModelSerializer
 ):
+    teacher_uuid = serializers.UUIDField(source="teacher.uuid", read_only=True, allow_null=True)
+    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True, allow_null=True)
+    is_locked = serializers.SerializerMethodField()
+    lock_reason = serializers.SerializerMethodField()
+    prerequisite_material_uuid = serializers.SerializerMethodField()
+
+    def _access(self, obj):
+        from materials.access import material_access
+        request = self.context.get("request")
+        if request is None:
+            return False, "AUTHENTICATION_REQUIRED", None
+        cache = self.context.setdefault("material_access_cache", {})
+        if obj.pk not in cache:
+            cache[obj.pk] = material_access(request.user.student_profile, obj, cache=cache)
+        return cache[obj.pk]
+
+    def get_is_locked(self, obj):
+        return not self._access(obj)[0]
+
+    def get_lock_reason(self, obj):
+        return self._access(obj)[1]
+
+    def get_prerequisite_material_uuid(self, obj):
+        return self._access(obj)[2]
     course_uuid = serializers.UUIDField(
         source="course.uuid",
         read_only=True,
@@ -246,12 +270,16 @@ class StudentLearningMaterialSerializer(
             "is_required",
             "counts_toward_progress",
             "content_url",
+            "teacher_uuid", "teacher_name", "is_locked", "lock_reason",
+            "prerequisite_material_uuid",
             "created_at",
         )
 
         read_only_fields = fields
 
     def get_content_url(self, obj):
+        if not self._access(obj)[0]:
+            return None
         request = self.context.get("request")
 
         if (
@@ -364,6 +392,3 @@ class StudentChapterVideoCourseSerializer(
             obj.course_id,
             [],
         )
-        
-        
-    

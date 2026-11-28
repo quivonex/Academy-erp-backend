@@ -1,0 +1,2 @@
+# Existing requirements.txt remains unchanged (it is UTF-16).
+openpyxl>=3.1,<4

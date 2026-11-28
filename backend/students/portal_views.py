@@ -540,6 +540,7 @@ class StudentCourseMaterialListView(APIView):
                 "chapter",
                 "lesson",
                 "live_class",
+                "teacher",
             )
             .order_by(
                 "sequence",
@@ -637,6 +638,7 @@ class StudentMaterialDetailView(APIView):
                 "chapter",
                 "lesson",
                 "live_class",
+                "teacher",
             )
             .first()
         )
@@ -688,6 +690,8 @@ class StudentMaterialDetailView(APIView):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
+        from materials.access import require_material_access
+        require_material_access(student, material)
         serializer = StudentLearningMaterialSerializer(
             material,
             context={

@@ -41,7 +41,7 @@ def get_student_available_material(
 ):
     now = timezone.now()
 
-    return (
+    material = (
         LearningMaterial.objects
         .filter(
             uuid=material_uuid,
@@ -61,6 +61,10 @@ def get_student_available_material(
         )
         .first()
     )
+    if material:
+        from materials.access import require_material_access
+        require_material_access(request.user.student_profile, material)
+    return material
 
 
 class StudentMaterialProgressView(APIView):
@@ -89,7 +93,7 @@ class StudentMaterialProgressView(APIView):
             course=material.course,
         )
 
-        if not enrollment:
+        if not enrollment and material.material_type != "VIDEO":
             return error_response(
                 message="You do not have access to this material.",
                 errors={},
@@ -149,7 +153,7 @@ class StudentMaterialProgressView(APIView):
             course=material.course,
         )
 
-        if not enrollment:
+        if not enrollment and material.material_type != "VIDEO":
             return error_response(
                 message="You do not have access to this material.",
                 errors={},
@@ -228,7 +232,10 @@ class StudentCourseProgressView(APIView):
                 course=course,
                 material__counts_toward_progress=True,
                 material__is_active=True,
-                is_completed=True,
+            )
+            .filter(
+                Q(material__material_type="VIDEO", is_verified_completed=True)
+                | (~Q(material__material_type="VIDEO") & Q(is_completed=True))
             )
             .count()
         )
@@ -282,7 +289,7 @@ class StudentVideoWatchSessionStartView(APIView):
             course=material.course,
         )
 
-        if not enrollment:
+        if not enrollment and material.material_type != "VIDEO":
             return error_response(
                 message="You do not have access to this video.",
                 errors={},
