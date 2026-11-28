@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "banners",
     "payments",
     "notifications",
+    "academy_ops",
     
     
 ]

@@ -186,7 +186,7 @@ def extract_pdf_text(uploaded_file):
     ).strip()
 
 
-def parse_mcq_questions(text):
+def parse_mcq_questions(text, strict=False):
     if not text:
         return []
 
@@ -270,6 +270,8 @@ def parse_mcq_questions(text):
             option_c,
             option_d,
         ]):
+            if strict and re.search(r"(?:^|\n)\s*[ABCD][\.\)]\s*", text):
+                raise ValidationError({"pdf": [f"Question {match.group(1)} must contain all four options A-D. Download the MCQ template."]})
             continue
 
         first_option_start = min(
@@ -585,7 +587,8 @@ def import_assignment_from_pdf(
 
     parsed_questions = (
         parse_mcq_questions(
-            extracted_text
+            extracted_text,
+            strict=True,
         )
     )
 

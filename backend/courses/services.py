@@ -208,6 +208,8 @@ def create_enrollment(*, firm, granted_by, validated_data):
         firm=firm,
         student_uuid=student_uuid,
     )
+    # Serialize all grants for the same student, including concurrent bulk calls.
+    student = Student.objects.select_for_update().get(pk=student.pk)
 
     if not student.is_active:
         raise ValidationError({
@@ -254,25 +256,48 @@ def create_enrollment(*, firm, granted_by, validated_data):
                     days=course.access_duration_days
                 )
             )
-    if Enrollment.objects.filter(
+    if enrollment_status == Enrollment.Status.ACTIVE:
+        start = validated_data["access_start_at"]
+        if not validated_data.get("access_end_at") and course.duration_months:
+            from dateutil.relativedelta import relativedelta
+            validated_data["access_end_at"] = start + relativedelta(months=course.duration_months)
+        validated_data.setdefault("access_end_at", None)
+        if validated_data.get("access_end_at") and validated_data["access_end_at"] <= start:
+            raise ValidationError({"access_end_at": ["End must be after start."]})
+
+    existing = Enrollment.objects.select_for_update().filter(
         firm=firm,
         student=student,
         course=course,
-    ).exists():
+    ).first()
+    if existing and (existing.access_end_at is None or existing.access_end_at > timezone.now()):
         raise ValidationError({
             "student_uuid": [
-                "Student is already enrolled in this course."
+                "Student already has an unexpired enrollment in this course."
             ]
         })
 
-    enrollment = Enrollment.objects.create(
-        firm=firm,
-        student=student,
-        course=course,
-        source=Enrollment.Source.FIRM_GRANTED,
-        granted_by=granted_by,
-        **validated_data,
-    )
+    if existing:
+        from academy_ops.models import EnrollmentRenewal
+        EnrollmentRenewal.objects.create(
+            firm=firm, enrollment=existing, previous_start_at=existing.access_start_at,
+            previous_end_at=existing.access_end_at, previous_status=existing.status,
+            renewed_by=granted_by,
+        )
+        existing.batch_memberships.filter(left_on__isnull=True).update(
+            left_on=existing.access_end_at.date(),
+        )
+        for key, value in validated_data.items():
+            setattr(existing, key, value)
+        existing.granted_by = granted_by
+        existing.save()
+        enrollment = existing
+    else:
+        enrollment = Enrollment.objects.create(
+            firm=firm, student=student, course=course,
+            source=Enrollment.Source.FIRM_GRANTED, granted_by=granted_by,
+            **validated_data,
+        )
 
     if enrollment.status == Enrollment.Status.ACTIVE:
         from notifications.services import (
