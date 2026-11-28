@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -47,6 +46,10 @@ class _TrackedVideoPlayerState
   bool _showControls = true;
   double _playbackSpeed = 1.0;
   bool _isFullscreen = false;
+  String? _watchSessionUuid;
+  bool _endingWatchSession = false;
+  bool _heartbeatSending = false;
+  DateTime? _lastHeartbeatAt;
 
   static const _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
@@ -71,15 +74,27 @@ class _TrackedVideoPlayerState
     if (!mounted) return;
     final progress = results.first as Map<String, dynamic>;
 
+    final session = await _api.startVideoWatchSession(widget.materialUuid);
+    final sessionUuid = session['uuid']?.toString();
+    if (sessionUuid == null || sessionUuid.isEmpty) {
+      throw StateError('The server did not return a watch session.');
+    }
+    if (!mounted) {
+      await _api.endVideoWatchSession(sessionUuid);
+      return;
+    }
+    _watchSessionUuid = sessionUuid;
+    _lastHeartbeatAt = DateTime.now();
+
     final watched =
         (progress['watched_seconds'] as num?)?.toInt() ?? 0;
     final lastPosition =
-        (progress['last_position_seconds'] as num?)?.toInt() ?? 0;
+        (session['resume_position_seconds'] as num?)?.toInt() ?? 0;
 
     _watchedMilliseconds = watched * 1000;
     _lastSavedWatchedSeconds = watched;
     _lastSavedPositionSeconds = lastPosition;
-    _completionSent = progress['is_completed'] == true;
+    _completionSent = session['is_verified_completed'] == true;
 
     final videoDuration = _controller.value.duration;
 
@@ -133,54 +148,36 @@ class _TrackedVideoPlayerState
 
   Future<void> _markCompletedIfNeeded() async {
     if (_completionSent || !_controller.value.isInitialized) return;
-
-    final duration = _controller.value.duration.inSeconds;
-    final position = _controller.value.position.inSeconds;
-
-    if (duration <= 0) return;
-
-    final reachedEnd = position >= (duration * 0.95).floor();
-    if (!reachedEnd) return;
-
-    try {
-      await _api.saveMaterialProgress(
-        materialUuid: widget.materialUuid,
-=======
->>>>>>> 34b4f548fc9fb74aa87e5aed58ba4186eb5a21ad
-        watchedSeconds: _watchedMilliseconds ~/ 1000,
-        lastPositionSeconds: position,
-        markCompleted: true,
-      );
-
-      _completionSent = true;
-
-      if (mounted) widget.onProgressChanged();
-    } catch (_) {
-      if (mounted) {
-        setState(() => _saveError = 'Could not mark video as completed.');
-      }
-    }
+    await _sendWatchHeartbeatIfNeeded();
   }
 
   Future<void> _sendWatchHeartbeatIfNeeded({bool force = false}) async {
     final sessionUuid = _watchSessionUuid;
-    if (sessionUuid == null || !_controller.value.isInitialized) return;
+    if (sessionUuid == null || _heartbeatSending || _endingWatchSession ||
+        !_controller.value.isInitialized) return;
 
     final position = _controller.value.position.inSeconds;
-    if (!force && position - _lastHeartbeatPositionSeconds < 10) return;
+    final now = DateTime.now();
+    if (!force && _lastHeartbeatAt != null &&
+        now.difference(_lastHeartbeatAt!).inSeconds < 15) return;
+    _heartbeatSending = true;
+    _lastHeartbeatAt = now;
 
     try {
       final session = await _api.sendVideoWatchHeartbeat(
         sessionUuid: sessionUuid,
         playerPositionSeconds: position,
       );
-      _lastHeartbeatPositionSeconds = position;
       if (session['is_verified_completed'] == true) {
         _completionSent = true;
       }
       if (mounted) widget.onProgressChanged();
     } catch (_) {
-      // Legacy progress writes below preserve playback when a heartbeat fails.
+      if (mounted) {
+        setState(() => _saveError = 'Could not verify video progress.');
+      }
+    } finally {
+      _heartbeatSending = false;
     }
   }
 
@@ -254,6 +251,7 @@ class _TrackedVideoPlayerState
     if (_controller.value.isPlaying) {
       _samplePlayback();
       await _controller.pause();
+      await _sendWatchHeartbeatIfNeeded(force: true);
       await _saveProgress();
       setState(() => _showControls = true);
     } else {
@@ -264,7 +262,6 @@ class _TrackedVideoPlayerState
     }
 
     if (mounted) setState(() {});
-<<<<<<< HEAD
   }
 
   Future<void> _skip(int seconds) async {
@@ -328,6 +325,7 @@ class _TrackedVideoPlayerState
         ? _controller.value.position.inSeconds
         : _lastSavedPositionSeconds;
     _controller.dispose();
+    unawaited(_endWatchSession(positionSeconds));
 
     if (watchedSeconds != _lastSavedWatchedSeconds ||
         positionSeconds != _lastSavedPositionSeconds) {
@@ -648,6 +646,3 @@ class _ControlButton extends StatelessWidget {
     );
   }
 }
-=======
-  }
->>>>>>> 34b4f548fc9fb74aa87e5aed58ba4186eb5a21ad

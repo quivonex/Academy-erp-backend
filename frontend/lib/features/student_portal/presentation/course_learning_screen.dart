@@ -96,7 +96,9 @@ class _CourseLearningScreenState
           : api.classesPage(widget.courseUuid, page: nextPage));
       if (!mounted || revision != _loadRevision) return;
       setState(() {
-        final combined = Future.value([...existing, ...page.items]);
+        final combined = Future<List<Map<String, dynamic>>>.value(
+          <Map<String, dynamic>>[...existing, ...page.items],
+        );
         if (materials) {
           _materials = combined;
           _materialsPage = nextPage;
